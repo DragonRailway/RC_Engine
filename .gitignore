@@ -1,0 +1,41 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+libdeps/
+build/
+.cache/
+.dummy
+compile_commands.json
+build_log.txt
+
+# Arduino
+applet/
+*.hex
+*.bin
+*.elf
+*.lst
+*.o
+*.a
+*.s
+*.su
+*.d
+*.obj
+*.lib
+*.mod
+*.exp
+*.ilk
+*.pdb
+*.idb
+*.io
+
+# IDE / General
+.vscode/
+.vscode/.browse.vc.db
+.vscode/.c_cpp_properties.json
+.vscode/.launch.json
+.vscode/.settings.json
+*.pyc
+
+# Project specific
+/references/
