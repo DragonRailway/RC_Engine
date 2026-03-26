@@ -1,128 +1,112 @@
-#define I2S_DOUT I2S_DIN
-#define I2S_LRC I2S_LRCLK
-#define SD_PIN I2S_SD_MODE // Shutdown
-//--------------------------------------------------------------------------------------
-#include "Arduino.h"
-#include "Audio.h"
-#include "WiFi.h"
-// #include "SD.h"
-#include "FS.h"
+#include <Arduino.h>
+#include "driver/i2s.h"
+#include "RcEngineSound.h"
 
-// Digital I/O used
-// #define SD_CS 5
-// #define SPI_MOSI 6
-// #define SPI_MISO 7
-// #define SPI_SCK 8
+// Choose your vehicle preset
+#include "vehicles/ScaniaV8.h"
 
-Audio audio;
+RcEngineSound engine;
 
-String ssid = "Leap";
-String password = "awsedrft";
+void setupI2S() {
+    i2s_config_t i2s_config = {
+        .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
+        .sample_rate = 22050, 
+        .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
+        .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT, // Stereo (more robust for many DACs)
+        .communication_format = I2S_COMM_FORMAT_STAND_I2S,
+        .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
+        .dma_buf_count = 8,
+        .dma_buf_len = 128,
+        .use_apll = false
+    };
+
+    i2s_pin_config_t pin_config = {
+        .bck_io_num = I2S_BCLK,
+        .ws_io_num = I2S_LRCLK,
+        .data_out_num = I2S_DIN,
+        .data_in_num = I2S_PIN_NO_CHANGE
+    };
+
+    i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
+    i2s_set_pin(I2S_NUM_0, &pin_config);
+}
+
+void audioTask(void *pvParameters) {
+    int16_t samples[2]; // Stereo (Left, Right)
+    size_t bytes_written;
+    uint32_t total_samples = 0;
+
+    while (1) {
+        uint8_t sample8 = engine.getNextSample();
+        // Convert 8-bit unsigned (centered at 128) to 16-bit signed
+        int16_t sample16 = (int16_t)(sample8 - 128) << 8;
+        
+        // Duplicate mono sample to both channels
+        samples[0] = sample16;
+        samples[1] = sample16;
+        
+        i2s_write(I2S_NUM_0, samples, sizeof(samples), &bytes_written, portMAX_DELAY);
+        
+        total_samples++;
+        if (total_samples % 22050 == 0) {
+            Serial.printf("AudioTask: 1 second processed. Sample: %d\n", sample8);
+        }
+    }
+}
 
 void setup() {
-  // pinMode(SD_CS, OUTPUT);
-  // digitalWrite(SD_CS, HIGH);
-  Serial.begin(115200);
+    Serial.begin(115200);
+    
+    // Enable MAX98357A
+    pinMode(I2S_SD_MODE, OUTPUT);
+    digitalWrite(I2S_SD_MODE, HIGH);
 
-  pinMode(SD_PIN, OUTPUT);
-  digitalWrite(SD_PIN, HIGH);
-  WiFi.disconnect();
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid.c_str(), password.c_str());
-  while (WiFi.status() != WL_CONNECTED)
-    delay(1500);
-  audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-  // audio.setBalance(0);  // mutes the left channel
-  audio.setVolume(21); // default 0...21
-                       //  or alternative
-                       //  audio.setVolumeSteps(64); // max 255
-                       //  audio.setVolume(63);
-                       //
-                       //  *** radio streams ***
-  // audio.connecttohost("http://stream.antennethueringen.de/live/aac-64/stream.antennethueringen.de/");
-  // // aac
-  // audio.connecttohost("http://mcrscast.mcr.iol.pt/cidadefm"); // mp3
-  //  audio.connecttohost("http://www.wdr.de/wdrlive/media/einslive.m3u"); //
-  //  m3u audio.connecttohost("https://stream.srg-ssr.ch/rsp/aacp_48.asx"); //
-  //  asx audio.connecttohost("http://tuner.classical102.com/listen.pls"); //
-  //  pls
-  // audio.connecttohost("http://stream.radioparadise.com/flac"); // flac
-  /// audio.connecttohost("http://stream.sing-sing-bis.org:8000/singsingFlac");
-  /// // flac (ogg)
-  //  audio.connecttohost("http://s1.knixx.fm:5347/dein_webradio_vbr.opus"); //
-  //  opus (ogg)
-  //  audio.connecttohost("http://stream2.dancewave.online:8080/dance.ogg"); //
-  //  vorbis (ogg)
-  //  audio.connecttohost("http://26373.live.streamtheworld.com:3690/XHQQ_FMAAC/HLSTS/playlist.m3u8");
-  //  // HLS
-  //  audio.connecttohost("http://eldoradolive02.akamaized.net/hls/live/2043453/eldorado/master.m3u8");
-  //  // HLS (ts)
-  //  *** web files ***
-  //  audio.connecttohost("https://github.com/schreibfaul1/ESP32-audioI2S/raw/master/additional_info/Testfiles/Pink-Panther.wav");
-  //  // wav
-  audio.connecttohost(
-      "https://github.com/schreibfaul1/ESP32-audioI2S/raw/master/"
-      "additional_info/Testfiles/Santiano-Wellerman.flac");
-  //  // flac
-  //  audio.connecttohost("https://github.com/schreibfaul1/ESP32-audioI2S/raw/master/additional_info/Testfiles/Olsen-Banden.mp3");
-  //  // mp3
-  //  audio.connecttohost("https://github.com/schreibfaul1/ESP32-audioI2S/raw/master/additional_info/Testfiles/Miss-Marple.m4a");
-  //  // m4a (aac)
-  //  audio.connecttohost("https://github.com/schreibfaul1/ESP32-audioI2S/raw/master/additional_info/Testfiles/Collide.ogg");
-  //  // vorbis
-  //  audio.connecttohost("https://github.com/schreibfaul1/ESP32-audioI2S/raw/master/additional_info/Testfiles/sample.opus");
-  //  // opus
-  //  *** local files ***
-  //  audio.connecttoFS(SD, "/test.wav");     // SD
-  //  audio.connecttoFS(SD_MMC, "/test.wav"); // SD_MMC
-  //  audio.connecttoFS(SPIFFS, "/test.wav"); // SPIFFS
+    // 1. Pack the sounds from the included vehicle header into SoundData
+    SoundData myVehicle = {
+        .samples = (const int8_t*)samples, 
+        .sampleCount = sampleCount,
+        .sampleRate = 22050,
+        
+        .startSamples = (const int8_t*)startSamples, 
+        .startSampleCount = startSampleCount,
+        
+        .revSamples = (const int8_t*)revSamples, 
+        .revSampleCount = revSampleCount,
+        
+        .hornSamples = (const int8_t*)hornSamples, 
+        .hornSampleCount = hornSampleCount,
+        .hornSampleRate = 22050
+    };
 
-  //  audio.connecttospeech("Wenn die Hunde schlafen, kann der Wolf gut Schafe
-  //  stehlen.", "de"); // Google TTS
+    // 2. Configure engine parameters using values from ScaniaV8.h
+    RcEngineSound::Config cfg;
+    cfg.acc = acc; 
+    cfg.dec = dec; 
+    cfg.idleVolume = idleVolumePercentage;
+    cfg.revVolume = revVolumePercentage;
+    cfg.startVolume = startVolumePercentage;
+    cfg.masterVolume = 100; // Explicitly 100%
+    cfg.revSwitchPoint = revSwitchPoint;
+    cfg.idleEndPoint = idleEndPoint;
 
-  //  audio.connecttohost("http://vis.media-ice.musicradio.com/CapitalMP3");
+    // 3. Initialize and start
+    engine.begin(myVehicle, cfg);
+    engine.startEngine();
+
+    setupI2S();
+    xTaskCreatePinnedToCore(audioTask, "AudioTask", 4096, NULL, 5, NULL, 0);
 }
 
-void loop() { audio.loop(); }
+void loop() {
+    // Simulated throttle sweep (0-500)
+    static int throttle = 0;
+    static int dir = 2;
+    throttle += dir;
+    if (throttle >= 500) { dir = -2; engine.triggerHorn(true); }
+    if (throttle <= 0) { dir = 2; engine.triggerHorn(false); }
 
-// optional
-void audio_info(const char *info) {
-  Serial.print("info        ");
-  Serial.println(info);
-}
-void audio_id3data(const char *info) { // id3 metadata
-  Serial.print("id3data     ");
-  Serial.println(info);
-}
-void audio_eof_mp3(const char *info) { // end of file
-  Serial.print("eof_mp3     ");
-  Serial.println(info);
-}
-void audio_showstation(const char *info) {
-  Serial.print("station     ");
-  Serial.println(info);
-}
-void audio_showstreamtitle(const char *info) {
-  Serial.print("streamtitle ");
-  Serial.println(info);
-}
-void audio_bitrate(const char *info) {
-  Serial.print("bitrate     ");
-  Serial.println(info);
-}
-void audio_commercial(const char *info) { // duration in sec
-  Serial.print("commercial  ");
-  Serial.println(info);
-}
-void audio_icyurl(const char *info) { // homepage
-  Serial.print("icyurl      ");
-  Serial.println(info);
-}
-void audio_lasthost(const char *info) { // stream URL played
-  Serial.print("lasthost    ");
-  Serial.println(info);
-}
-void audio_eof_speech(const char *info) {
-  Serial.print("eof_speech  ");
-  Serial.println(info);
+    engine.update(throttle);
+    
+    Serial.printf("Throttle: %d, RPM: %d\n", throttle, engine.getRpm());
+    delay(20);
 }
