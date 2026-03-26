@@ -6,9 +6,15 @@ RcEngineSound::RcEngineSound() :
     currentRpmFixed(0),
     curEngineSample(0),
     curRevSample(0),
+    curTurboSample(0),
+    curKnockSample(0),
+    curWastegateSample(0),
     curStartSample(0),
     curHornSample(0),
+    lastThrottle(0),
     hornActive(false),
+    wastegateTriggered(false),
+    wastegateTriggerMillis(0),
     engineStopRequested(false),
     lastUpdateTime(0),
     attenuatorMillis(0),
@@ -41,24 +47,46 @@ void RcEngineSound::triggerHorn(bool active) {
     hornActive = active;
 }
 
+// ─── Advanced Engine State Machine ───────────────────────────────────────────
 void RcEngineSound::update(int16_t throttle) {
     uint32_t now = millis();
     if (lastUpdateTime == 0) lastUpdateTime = now;
+    uint32_t dt = now - lastUpdateTime;
     lastUpdateTime = now;
 
     int32_t targetRpm = abs(throttle);
     if (targetRpm > cfg.maxRpm) targetRpm = cfg.maxRpm;
 
     if (state == RUNNING) {
-        if (targetRpm > currentRpm + cfg.acc) {
-            currentRpm += cfg.acc;
-        } else if (targetRpm < currentRpm - cfg.dec) {
-            currentRpm -= cfg.dec;
-        } else {
-            currentRpm = targetRpm;
+        // ── Inertia-based RPM smoothing ──
+        // Higher inertia = heavier vehicle feel
+        // Uses exponential moving average: newRPM = oldRPM + (target - oldRPM) * factor
+        int32_t inertiaFactor = max((int32_t)1, (int32_t)(101 - cfg.inertia)); // 1 (sluggish) to 100 (instant)
+        int32_t diff = targetRpm - currentRpm;
+
+        if (diff > 0) {
+            // Accelerating: use acc + inertia
+            int32_t step = max((int32_t)1, (int32_t)((diff * inertiaFactor) / 200 + cfg.acc));
+            currentRpm = min(currentRpm + step, targetRpm);
+        } else if (diff < 0) {
+            // Decelerating: use dec + inertia
+            int32_t step = max((int32_t)1, (int32_t)(((-diff) * inertiaFactor) / 200 + cfg.dec));
+            currentRpm = max(currentRpm - step, targetRpm);
         }
 
-        if (engineStopRequested && currentRpm < 50) {
+        // ── Wastegate detection ──
+        // Trigger wastegate if throttle drops rapidly (> 150 units in one update cycle)
+        if (sounds.wastegateSamples && sounds.wastegateSampleCount > 0) {
+            int16_t throttleDrop = lastThrottle - throttle;
+            if (throttleDrop > 150 && currentRpmFixed > 200 && !wastegateTriggered) {
+                wastegateTriggered = true;
+                curWastegateSample = 0;
+                wastegateTriggerMillis = now;
+            }
+        }
+
+        // ── Engine stop request ──
+        if (engineStopRequested && currentRpm < 30) {
             state = STOPPING;
             engineStopRequested = false;
             attenuator = 1;
@@ -69,11 +97,16 @@ void RcEngineSound::update(int16_t throttle) {
     }
 
     currentRpmFixed = currentRpm;
+    lastThrottle = throttle;
 }
 
+// ─── Sophisticated 5-Voice Mixer ─────────────────────────────────────────────
 uint8_t RcEngineSound::getNextSample() {
     int32_t mixed = 0;
     int32_t engineSample = 0;
+    int32_t turboSample = 0;
+    int32_t knockSample = 0;
+    int32_t wastegateSample = 0;
     int32_t hornSample = 0;
 
     switch (state) {
@@ -86,6 +119,8 @@ uint8_t RcEngineSound::getNextSample() {
                 state = RUNNING;
                 curEngineSample = 0;
                 curRevSample = 0;
+                curTurboSample = 0;
+                curKnockSample = 0;
             }
             break;
 
@@ -93,54 +128,75 @@ uint8_t RcEngineSound::getNextSample() {
             int32_t idleS = 0;
             int32_t revS = 0;
 
-            // Idle sound
-            if (curEngineSample < sounds.sampleCount) {
+            // ── Voice 1: Idle sound (looping) ──
+            if (sounds.sampleCount > 0) {
+                if (curEngineSample >= sounds.sampleCount) curEngineSample = 0;
                 idleS = (int8_t)sounds.samples[curEngineSample];
                 curEngineSample++;
-            } else {
-                curEngineSample = 0;
             }
 
-            // Rev sound (optional cross-fade)
+            // ── Voice 2: Rev sound (cross-fade with idle based on RPM) ──
             if (sounds.revSamples && sounds.revSampleCount > 0) {
-                if (curRevSample < sounds.revSampleCount) {
-                    revS = (int8_t)sounds.revSamples[curRevSample];
-                    curRevSample++;
-                } else {
-                    curRevSample = 0;
-                }
+                if (curRevSample >= sounds.revSampleCount) curRevSample = 0;
+                revS = (int8_t)sounds.revSamples[curRevSample];
+                curRevSample++;
 
-                // Mixing logic similar to src.ino
+                // Cross-fade logic: 100% idle at low RPM, 100% rev at high RPM
                 int16_t idleProportion = 100;
                 if (currentRpmFixed > cfg.revSwitchPoint) {
                     idleProportion = map(currentRpmFixed, cfg.idleEndPoint, cfg.revSwitchPoint, 0, 100);
-                    if (idleProportion < 0) idleProportion = 0;
-                    if (idleProportion > 100) idleProportion = 100;
+                    idleProportion = constrain(idleProportion, 0, 100);
                 }
                 
+                // Apply per-voice volume and cross-fade proportion
                 idleS = (idleS * cfg.idleVolume / 100) * idleProportion / 100;
                 revS = (revS * cfg.revVolume / 100) * (100 - idleProportion) / 100;
                 engineSample = idleS + revS;
             } else {
                 engineSample = idleS * cfg.idleVolume / 100;
             }
+
+            // ── Voice 3: Turbo whistle (RPM-dependent volume, looping) ──
+            if (sounds.turboSamples && sounds.turboSampleCount > 0 && cfg.turboVolume > 0) {
+                if (curTurboSample >= sounds.turboSampleCount) curTurboSample = 0;
+                int32_t ts = (int8_t)sounds.turboSamples[curTurboSample];
+                curTurboSample++;
+
+                // Turbo volume scales with RPM: silent at idle, loud at max
+                int32_t turboScale = map(currentRpmFixed, 0, cfg.maxRpm, 0, 100);
+                turboScale = constrain(turboScale, 0, 100);
+                turboSample = ts * cfg.turboVolume / 100 * turboScale / 100;
+            }
+
+            // ── Voice 4: Diesel knock (load-dependent, fixed pitch, periodic) ──
+            if (sounds.knockSamples && sounds.knockSampleCount > 0 && cfg.knockVolume > 0) {
+                if (curKnockSample >= sounds.knockSampleCount) curKnockSample = 0;
+                int32_t ks = (int8_t)sounds.knockSamples[curKnockSample];
+                curKnockSample++;
+
+                // Knock volume is throttle/load dependent: louder under acceleration
+                int32_t knockScale = map(currentRpmFixed, 0, cfg.maxRpm, 20, 100);
+                knockScale = constrain(knockScale, 0, 100);
+                knockSample = ks * cfg.knockVolume / 100 * knockScale / 100;
+            }
             break;
         }
 
         case STOPPING:
-            if (curEngineSample < sounds.sampleCount) {
-                engineSample = (int8_t)sounds.samples[curEngineSample] * cfg.idleVolume / 100 / attenuator;
+            // Fade out idle sound
+            if (sounds.sampleCount > 0) {
+                if (curEngineSample >= sounds.sampleCount) curEngineSample = 0;
+                engineSample = (int8_t)sounds.samples[curEngineSample];
+                engineSample = engineSample * cfg.idleVolume / 100 / attenuator;
                 curEngineSample++;
-            } else {
-                curEngineSample = 0;
             }
 
-            if (millis() - attenuatorMillis > 100) {
+            if (millis() - attenuatorMillis > 80) { // Faster fade-out steps
                 attenuatorMillis = millis();
                 attenuator++;
             }
 
-            if (attenuator >= 50) {
+            if (attenuator >= 40) {
                 state = OFF;
             }
             break;
@@ -150,19 +206,27 @@ uint8_t RcEngineSound::getNextSample() {
             break;
     }
 
-    // Horn mixing
-    if (hornActive && sounds.hornSamples) {
-        if (curHornSample < sounds.hornSampleCount) {
-            hornSample = (int8_t)sounds.hornSamples[curHornSample] * cfg.hornVolume / 100;
-            curHornSample++;
+    // ── Wastegate one-shot (plays across any engine state while triggered) ──
+    if (wastegateTriggered && sounds.wastegateSamples) {
+        if (curWastegateSample < sounds.wastegateSampleCount) {
+            wastegateSample = (int8_t)sounds.wastegateSamples[curWastegateSample];
+            wastegateSample = wastegateSample * cfg.wastegateVolume / 100;
+            curWastegateSample++;
         } else {
-            curHornSample = 0;
+            wastegateTriggered = false; // One-shot complete
         }
     }
 
-    // Mix and apply master volume
-    mixed = engineSample + (hornSample / 2);
-    mixed = (mixed * cfg.masterVolume / 100) + 128; // Add DC offset last
+    // ── Horn (looping while active) ──
+    if (hornActive && sounds.hornSamples && sounds.hornSampleCount > 0) {
+        if (curHornSample >= sounds.hornSampleCount) curHornSample = 0;
+        hornSample = (int8_t)sounds.hornSamples[curHornSample] * cfg.hornVolume / 100;
+        curHornSample++;
+    }
+
+    // ── Final mix: sum all voices, apply master volume, add DC offset ──
+    mixed = engineSample + turboSample + knockSample + wastegateSample + (hornSample / 2);
+    mixed = (mixed * cfg.masterVolume / 100) + 128;
 
     return (uint8_t)constrain(mixed, 0, 255);
 }

@@ -17,6 +17,15 @@ struct SoundData {
     const int8_t* revSamples = nullptr;
     uint32_t revSampleCount = 0;
     
+    const int8_t* turboSamples = nullptr;
+    uint32_t turboSampleCount = 0;
+    
+    const int8_t* knockSamples = nullptr;
+    uint32_t knockSampleCount = 0;
+    
+    const int8_t* wastegateSamples = nullptr;
+    uint32_t wastegateSampleCount = 0;
+    
     const int8_t* hornSamples = nullptr;
     uint32_t hornSampleCount = 0;
     uint16_t hornSampleRate = 8000;
@@ -37,6 +46,7 @@ public:
     struct Config {
         uint8_t acc = 2;
         uint8_t dec = 2;
+        uint8_t inertia = 10; // 0-100, higher = slower RPM response
         uint16_t maxRpm = 500;
         uint16_t minRpm = 0;
         
@@ -44,6 +54,9 @@ public:
         uint8_t startVolume = 100;
         uint8_t idleVolume = 100;
         uint8_t revVolume = 100;
+        uint8_t turboVolume = 0;
+        uint8_t knockVolume = 0;
+        uint8_t wastegateVolume = 0;
         uint8_t hornVolume = 100;
 
         uint16_t revSwitchPoint = 50; // Points where rev sound starts to mix in
@@ -76,10 +89,16 @@ private:
     
     uint32_t curEngineSample;
     uint32_t curRevSample;
+    uint32_t curTurboSample;
+    uint32_t curKnockSample;
+    uint32_t curWastegateSample;
     uint32_t curStartSample;
     uint32_t curHornSample;
     
+    int16_t lastThrottle;
     bool hornActive;
+    bool wastegateTriggered;
+    uint32_t wastegateTriggerMillis;
     bool engineStopRequested;
     
     uint32_t lastUpdateTime;
