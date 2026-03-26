@@ -39,3 +39,5 @@ applet/
 
 # Project specific
 /references/
+build_output.txt
+*bak
