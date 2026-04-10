@@ -1,0 +1,27 @@
+{
+    "motor": {
+        "rampTimeFirstGear": 20, // Electronic speed controller (ESC) ramp-up time for 1st gear
+        "rampTimeSecondGear": 50, // ESC ramp-up time for 2nd gear
+        "rampTimeThirdGear": 75, // ESC ramp-up time for 3rd gear
+        "brakeSteps": 30, // How many steps/time for the ESC to reach full brake from full speed
+        "accelerationSteps": 3 // Number of internal steps per loop for ESC speed changes
+    },
+    "servos": {
+        "frequency": 50, // Output PWM frequency in Hz (typically 50 or 100)
+        "steeringRamp": 0, // 0 = instant, >0 = milliseconds for full travel (scale realism)
+        "ch1_steering": {
+            "L": 1000,
+            "C": 1500,
+            "R": 2000
+        }, // Steering endpoints in microseconds
+        "ch2_transmission": {
+            "L": 1000,
+            "C": 1500,
+            "R": 2000
+        }, // Gearbox endpoints in microseconds
+        "ch4_coupling": {
+            "L": 1350,
+            "R": 1650
+        } // Trailer hitch locked/unlocked positions
+    }
+}

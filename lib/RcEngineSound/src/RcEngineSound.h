@@ -7,28 +7,30 @@
  * @brief Structure to hold engine sound samples and metadata.
  */
 struct SoundData {
-    const int8_t* samples; // Idle samples
-    uint32_t sampleCount;
-    uint16_t sampleRate;
+    int8_t* samples = nullptr;
+    uint32_t sampleCount = 0;
+    uint16_t sampleRate = 22050;
     
-    const int8_t* startSamples;
-    uint32_t startSampleCount;
+    int8_t* startSamples = nullptr;
+    uint32_t startSampleCount = 0;
     
-    const int8_t* revSamples = nullptr;
+    int8_t* revSamples = nullptr;
     uint32_t revSampleCount = 0;
     
-    const int8_t* turboSamples = nullptr;
+    int8_t* turboSamples = nullptr;
     uint32_t turboSampleCount = 0;
     
-    const int8_t* knockSamples = nullptr;
+    int8_t* knockSamples = nullptr;
     uint32_t knockSampleCount = 0;
     
-    const int8_t* wastegateSamples = nullptr;
+    int8_t* wastegateSamples = nullptr;
     uint32_t wastegateSampleCount = 0;
     
-    const int8_t* hornSamples = nullptr;
+    int8_t* hornSamples = nullptr;
     uint32_t hornSampleCount = 0;
-    uint16_t hornSampleRate = 8000;
+    uint16_t hornSampleRate = 22050;
+
+    bool isDynamic = false; // Set to true if allocated in PSRAM/Heap
 };
 
 /**
@@ -58,12 +60,30 @@ public:
         uint8_t knockVolume = 0;
         uint8_t wastegateVolume = 0;
         uint8_t hornVolume = 100;
+        uint8_t fanVolume = 0;
+        uint8_t jakeBrakeVolume = 0;
+        uint8_t shiftingVolume = 0;
+        uint8_t brakeVolume = 0;
+        uint8_t reversingVolume = 0;
+        uint8_t sirenVolume = 0;
+        uint8_t parkingBrakeVolume = 0;
 
         uint16_t revSwitchPoint = 50; // Points where rev sound starts to mix in
         uint16_t idleEndPoint = 300;   // Point where idle sound is 0%
+
+        // Transmission & Clutch
+        bool automatic = false;
+        uint16_t clutchEngagingPoint = 100;
+        uint16_t maxRpmPercentage = 310;
+
+        struct Lights {
+            bool xenon = false;
+            bool doubleFlashBlue = false;
+        } lights;
     };
 
     RcEngineSound();
+    virtual ~RcEngineSound();
 
     void begin(const SoundData& soundData, const Config& config);
     void begin(const SoundData& soundData); // Overload to avoid default arg issue

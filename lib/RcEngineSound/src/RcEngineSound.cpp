@@ -21,6 +21,18 @@ RcEngineSound::RcEngineSound() :
     attenuator(1)
 {}
 
+RcEngineSound::~RcEngineSound() {
+    if (sounds.isDynamic) {
+        if (sounds.samples) free(sounds.samples);
+        if (sounds.startSamples) free(sounds.startSamples);
+        if (sounds.revSamples) free(sounds.revSamples);
+        if (sounds.turboSamples) free(sounds.turboSamples);
+        if (sounds.knockSamples) free(sounds.knockSamples);
+        if (sounds.wastegateSamples) free(sounds.wastegateSamples);
+        if (sounds.hornSamples) free(sounds.hornSamples);
+    }
+}
+
 void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     sounds = soundData;
     cfg = config;

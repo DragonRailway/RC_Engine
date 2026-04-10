@@ -1,9 +1,7 @@
-#include "RcEngineSound.h"
-#include "driver/i2s.h"
 #include <Arduino.h>
-
-// Choose your vehicle preset
-#include "vehicles/ScaniaV8.h"
+#include "driver/i2s.h"
+#include "RcEngineSound.h"
+#include "ConfigLoader.h"
 
 RcEngineSound engine;
 
@@ -45,153 +43,100 @@ void audioTask(void *pvParameters) {
 
     total_samples++;
     if (total_samples % 22050 == 0) {
-      Serial.printf("AudioTask: 1s | State: %d | Sample: %d\n",
-                    engine.getState(), sample8);
+      // Periodic heartbeat/check
     }
   }
 }
 
 void setup() {
   Serial.begin(115200);
+  delay(1000);
+  Serial.println("\n=== Unified RC Sound System ===");
 
-  // Enable MAX98357A
+  // Check PSRAM
+  if (psramInit()) {
+    Serial.printf("PSRAM initialized. Total: %d, Free: %d\n", ESP.getPsramSize(), ESP.getFreePsram());
+  } else {
+    Serial.println("PSRAM initialization FAILED! Static sounds fallback not implemented.");
+  }
+
+  // Enable DAC power
   pinMode(I2S_SD_MODE, OUTPUT);
   digitalWrite(I2S_SD_MODE, HIGH);
 
-  // ── Pack all ScaniaV8 sounds into SoundData ──
-  SoundData myVehicle = {.samples = (const int8_t *)samples,
-                         .sampleCount = sampleCount,
-                         .sampleRate = 22050,
+  // Mount Filesystem
+  if (!ConfigLoader::begin()) {
+    Serial.println("Critial Failure: Could not mount LittleFS.");
+    while(1) delay(100);
+  }
 
-                         .startSamples = (const int8_t *)startSamples,
-                         .startSampleCount = startSampleCount,
-
-                         .revSamples = (const int8_t *)revSamples,
-                         .revSampleCount = revSampleCount,
-
-                         .turboSamples = (const int8_t *)turboSamples,
-                         .turboSampleCount = turboSampleCount,
-
-                         .knockSamples = (const int8_t *)knockSamples,
-                         .knockSampleCount = knockSampleCount,
-
-                         .wastegateSamples = (const int8_t *)wastegateSamples,
-                         .wastegateSampleCount = wastegateSampleCount,
-
-                         .hornSamples = (const int8_t *)hornSamples,
-                         .hornSampleCount = hornSampleCount,
-                         .hornSampleRate = 22050};
-
-  // ── Configure using ScaniaV8.h values ──
+  // Load Configuration and Sounds
   RcEngineSound::Config cfg;
-  cfg.acc = acc;
-  cfg.dec = dec;
-  cfg.inertia = 30; // Heavy truck feel
-  cfg.masterVolume = 20;
-  cfg.startVolume = startVolumePercentage;
-  cfg.idleVolume = idleVolumePercentage;
-  cfg.revVolume = revVolumePercentage;
-  cfg.turboVolume = turboVolumePercentage;
-  cfg.knockVolume = dieselKnockVolumePercentage;
-  cfg.wastegateVolume = wastegateVolumePercentage;
-  cfg.hornVolume = hornVolumePercentage;
-  cfg.revSwitchPoint = revSwitchPoint;
-  cfg.idleEndPoint = idleEndPoint;
+  SoundData vehicleData;
 
-  engine.begin(myVehicle, cfg);
+  // 1. Load settings from JSON
+  if (!ConfigLoader::loadConfig("/config.json", cfg)) {
+    Serial.println("Warning: /config.json not found, using defaults.");
+  }
+
+  // 2. Load RAW samples from /sounds/ into PSRAM
+  if (!ConfigLoader::loadAllSounds(vehicleData)) {
+    Serial.println("Critical Failure: Could not load sound samples from LittleFS.");
+    while(1) delay(100);
+  }
+
+  engine.begin(vehicleData, cfg);
 
   setupI2S();
   xTaskCreatePinnedToCore(audioTask, "AudioTask", 4096, NULL, 5, NULL, 0);
 
-  delay(500);
-  Serial.println("=== Engine Sound System Ready ===");
-  Serial.println("Starting engine...");
+  Serial.println("System Ready. Starting engine simulation...");
   engine.startEngine();
 }
 
-// ── Simulated RC Input Scenario ──
-// Realistic driving pattern: idle → accelerate → cruise → rapid release
-// (wastegate) → horn → stop
 void loop() {
   static int throttle = 0;
   static int phase = 0;
   static uint32_t phaseTimer = millis();
   uint32_t elapsed = millis() - phaseTimer;
 
+  // Simple demo scenario: Startup -> Idle -> Rev -> Shutdown
   switch (phase) {
-  case 0: // Idle for 3 seconds
+  case 0: // Idle for 5s
     throttle = 0;
-    if (elapsed > 3000) {
-      phase = 1;
-      phaseTimer = millis();
-      Serial.println(">> Phase 1: Accelerating");
+    if (elapsed > 5000) {
+      phase = 1; phaseTimer = millis();
+      Serial.println(">> Accelerating...");
     }
     break;
-  case 1: // Accelerate smoothly to 400
-    throttle = min(400, (int)(elapsed / 8));
-    if (throttle >= 400) {
-      phase = 2;
-      phaseTimer = millis();
-      Serial.println(">> Phase 2: Cruising at 400");
-    }
-    break;
-  case 2: // Cruise at 400 for 3 seconds
-    throttle = 400;
-    if (elapsed > 3000) {
-      phase = 3;
-      phaseTimer = millis();
-      Serial.println(">> Phase 3: Rapid throttle release (wastegate!)");
-    }
-    break;
-  case 3: // Rapid throttle drop → triggers wastegate
-    throttle = 50;
-    if (elapsed > 2000) {
-      phase = 4;
-      phaseTimer = millis();
-      Serial.println(">> Phase 4: Full throttle + Horn");
-    }
-    break;
-  case 4: // Full throttle with horn
-    throttle = min(500, (int)(50 + elapsed / 6));
-    engine.triggerHorn(true);
+  case 1: // Rev up
+    throttle = min(500, (int)(elapsed / 8));
     if (throttle >= 500) {
-      phase = 5;
-      phaseTimer = millis();
-      Serial.println(">> Phase 5: Horn off, cruising at max");
+      phase = 2; phaseTimer = millis();
+      Serial.println(">> Cruising...");
     }
     break;
-  case 5: // Cruise at max RPM, horn off
+  case 2: // Horn test
     throttle = 500;
-    engine.triggerHorn(false);
+    engine.triggerHorn(true);
     if (elapsed > 2000) {
-      phase = 6;
-      phaseTimer = millis();
-      Serial.println(">> Phase 6: Decelerate to idle");
+      phase = 3; phaseTimer = millis();
+      engine.triggerHorn(false);
+      Serial.println(">> Decelerating...");
     }
     break;
-  case 6: // Decelerate
+  case 3: // Rev down
     throttle = max(0, 500 - (int)(elapsed / 5));
     if (throttle <= 0) {
-      phase = 7;
-      phaseTimer = millis();
-      Serial.println(">> Phase 7: Idle before shutdown");
-    }
-    break;
-  case 7: // Idle for 2 seconds before stopping
-    throttle = 0;
-    if (elapsed > 2000) {
-      phase = 8;
-      phaseTimer = millis();
-      Serial.println(">> Phase 8: Engine shutdown");
+      phase = 4; phaseTimer = millis();
+      Serial.println(">> Shutting down...");
       engine.stopEngine();
     }
     break;
-  case 8: // Wait for engine to stop, then restart cycle
-    throttle = 0;
-    if (elapsed > 5000) {
-      phase = 0;
-      phaseTimer = millis();
-      Serial.println(">> Restarting cycle...");
+  case 4: // Reset cycle
+    if (elapsed > 10000) {
+      phase = 0; phaseTimer = millis();
+      Serial.println(">> Restarting engine...");
       engine.startEngine();
     }
     break;
@@ -200,10 +145,10 @@ void loop() {
   engine.update(throttle);
 
   static uint32_t logTimer = 0;
-  if (millis() - logTimer > 500) {
+  if (millis() - logTimer > 1000) {
     logTimer = millis();
-    Serial.printf("Phase:%d Throttle:%d RPM:%d State:%d\n", phase, throttle,
-                  engine.getRpm(), engine.getState());
+    Serial.printf("State:%d RPM:%d FreePSRAM:%d\n", 
+                  engine.getState(), engine.getRpm(), ESP.getFreePsram());
   }
   delay(20);
 }
