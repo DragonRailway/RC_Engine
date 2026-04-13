@@ -3,7 +3,6 @@
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
-#include "RcEngineSound.h"
 
 class ConfigLoader {
 public:
@@ -16,108 +15,122 @@ public:
         return true;
     }
 
-    static bool loadConfig(const char* path, RcEngineSound::Config& cfg) {
+    // ── File Tree ──────────────────────────────────────────────
+    // Recursively prints the LittleFS directory structure with
+    // indentation, file sizes, and a summary of totals.
+
+    static void printFileTree(const char* dirPath = "/", int depth = 0) {
+        File root = LittleFS.open(dirPath);
+        if (!root || !root.isDirectory()) {
+            Serial.printf("%*s(cannot open %s)\n", depth * 2, "", dirPath);
+            return;
+        }
+
+        File entry = root.openNextFile();
+        while (entry) {
+            // Print indentation
+            for (int i = 0; i < depth; i++) Serial.print("│ ");
+
+            if (entry.isDirectory()) {
+                Serial.printf("├─ 📁 %s/\n", entry.name());
+                // Recurse into subdirectory
+                String subPath = String(dirPath);
+                if (!subPath.endsWith("/")) subPath += "/";
+                subPath += entry.name();
+                printFileTree(subPath.c_str(), depth + 1);
+            } else {
+                Serial.printf("├─ 📄 %-35s  %7d bytes\n", entry.name(), entry.size());
+            }
+            entry = root.openNextFile();
+        }
+    }
+
+    // Print a full filesystem summary
+    static void printFilesystemInfo() {
+        Serial.println("\n╔══════════════════════════════════════════════════╗");
+        Serial.println("║            LittleFS File Tree                    ║");
+        Serial.println("╚══════════════════════════════════════════════════╝\n");
+
+        printFileTree("/", 0);
+
+        Serial.println();
+        size_t total = LittleFS.totalBytes();
+        size_t used  = LittleFS.usedBytes();
+        Serial.println("──────────────────────────────────────────────────");
+        Serial.printf("  Total: %d bytes  |  Used: %d bytes  |  Free: %d bytes\n",
+                      total, used, total - used);
+        Serial.printf("  Usage: %.1f%%\n", (float)used / total * 100.0f);
+        Serial.println("──────────────────────────────────────────────────\n");
+    }
+
+    // ── Config File Discovery ──────────────────────────────────
+    // Lists files matching a prefix pattern in a given directory.
+    //   e.g. listFiles("/", "hardware-")  → hardware-tracklink.json
+    //   e.g. listFiles("/sounds/", "idle-") → idle-ScaniaV8.json
+
+    static int listFiles(const char* dirPath, const char* prefix = nullptr) {
+        File dir = LittleFS.open(dirPath);
+        if (!dir || !dir.isDirectory()) {
+            Serial.printf("Cannot open directory: %s\n", dirPath);
+            return 0;
+        }
+
+        int count = 0;
+        File entry = dir.openNextFile();
+        while (entry) {
+            if (!entry.isDirectory()) {
+                bool match = true;
+                if (prefix) {
+                    match = strncmp(entry.name(), prefix, strlen(prefix)) == 0;
+                }
+                if (match) {
+                    Serial.printf("  [%d] %s/%s  (%d bytes)\n",
+                                  count, dirPath, entry.name(), entry.size());
+                    count++;
+                }
+            }
+            entry = dir.openNextFile();
+        }
+        return count;
+    }
+
+    // ── JSON Parsing ───────────────────────────────────────────
+    // Opens a JSON file and prints its top-level keys and values.
+
+    static bool parseAndPrintJson(const char* path) {
         File file = LittleFS.open(path, "r");
         if (!file) {
-            Serial.printf("Failed to open %s\n", path);
+            Serial.printf("  ✗ Cannot open: %s\n", path);
             return false;
         }
+
+        Serial.printf("\n── Parsing: %s (%d bytes) ──\n", path, file.size());
 
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, file);
+        file.close();
+
         if (error) {
-            Serial.printf("JSON Parse Failed: %s\n", error.c_str());
-            file.close();
+            Serial.printf("  ✗ JSON error: %s\n", error.c_str());
             return false;
         }
 
-        // 1. Engine settings
-        JsonObject engine = doc["engine"];
-        if (!engine.isNull()) {
-            if (engine["acc"]) cfg.acc = engine["acc"];
-            if (engine["dec"]) cfg.dec = engine["dec"];
-            if (engine["inertia"]) cfg.inertia = engine["inertia"];
-            if (engine["maxRpm"]) cfg.maxRpm = engine["maxRpm"];
-            if (engine["maxRpmPercentage"]) cfg.maxRpmPercentage = engine["maxRpmPercentage"];
-            if (engine["clutchEngagingPoint"]) cfg.clutchEngagingPoint = engine["clutchEngagingPoint"];
-            if (engine["revSwitchPoint"]) cfg.revSwitchPoint = engine["revSwitchPoint"];
-            if (engine["idleEndPoint"]) cfg.idleEndPoint = engine["idleEndPoint"];
+        // Print top-level keys
+        JsonObject root = doc.as<JsonObject>();
+        for (JsonPair kv : root) {
+            if (kv.value().is<JsonObject>()) {
+                Serial.printf("  ├─ \"%s\": { ... }\n", kv.key().c_str());
+            } else if (kv.value().is<JsonArray>()) {
+                Serial.printf("  ├─ \"%s\": [ %d items ]\n",
+                              kv.key().c_str(), kv.value().as<JsonArray>().size());
+            } else {
+                // Scalar value
+                String val;
+                serializeJson(kv.value(), val);
+                Serial.printf("  ├─ \"%s\": %s\n", kv.key().c_str(), val.c_str());
+            }
         }
-        
-        // 2. Transmission settings
-        JsonObject trans = doc["transmission"];
-        if (!trans.isNull()) {
-            if (trans["automatic"]) cfg.automatic = trans["automatic"];
-        }
-
-        // 3. Sound settings
-        JsonObject sounds = doc["sounds"];
-        if (!sounds.isNull()) {
-            if (sounds["masterVolume"]) cfg.masterVolume = sounds["masterVolume"];
-            if (sounds["startVolume"]) cfg.startVolume = sounds["startVolume"];
-            if (sounds["idleVolume"]) cfg.idleVolume = sounds["idleVolume"];
-            if (sounds["revVolume"]) cfg.revVolume = sounds["revVolume"];
-            if (sounds["turboVolume"]) cfg.turboVolume = sounds["turboVolume"];
-            if (sounds["knockVolume"]) cfg.knockVolume = sounds["knockVolume"];
-            if (sounds["wastegateVolume"]) cfg.wastegateVolume = sounds["wastegateVolume"];
-            if (sounds["hornVolume"]) cfg.hornVolume = sounds["hornVolume"];
-            if (sounds["fanVolume"]) cfg.fanVolume = sounds["fanVolume"];
-            if (sounds["jakeBrakeVolume"]) cfg.jakeBrakeVolume = sounds["jakeBrakeVolume"];
-            if (sounds["shiftingVolume"]) cfg.shiftingVolume = sounds["shiftingVolume"];
-            if (sounds["brakeVolume"]) cfg.brakeVolume = sounds["brakeVolume"];
-            if (sounds["reversingVolume"]) cfg.reversingVolume = sounds["reversingVolume"];
-            if (sounds["sirenVolume"]) cfg.sirenVolume = sounds["sirenVolume"];
-            if (sounds["parkingBrakeVolume"]) cfg.parkingBrakeVolume = sounds["parkingBrakeVolume"];
-        }
-
-        // 4. Light settings
-        JsonObject lights = doc["lights"];
-        if (!lights.isNull()) {
-            if (lights["xenon"]) cfg.lights.xenon = lights["xenon"];
-            if (lights["doubleFlashBlue"]) cfg.lights.doubleFlashBlue = lights["doubleFlashBlue"];
-        }
-
-        file.close();
-        Serial.printf("Loaded config from %s\n", path);
+        Serial.printf("  ✓ OK\n");
         return true;
-    }
-
-    static int8_t* loadSoundFile(const char* path, uint32_t& count) {
-        File file = LittleFS.open(path, "r");
-        if (!file) {
-            Serial.printf("Sound file not found: %s\n", path);
-            count = 0;
-            return nullptr;
-        }
-
-        size_t size = file.size();
-        // Allocate in PSRAM
-        int8_t* buffer = (int8_t*)ps_malloc(size);
-        if (!buffer) {
-            Serial.printf("Failed to allocate %d bytes in PSRAM for %s\n", size, path);
-            file.close();
-            count = 0;
-            return nullptr;
-        }
-
-        file.readBytes((char*)buffer, size);
-        file.close();
-        
-        count = size;
-        Serial.printf("Loaded %s (%d bytes) into PSRAM\n", path, size);
-        return buffer;
-    }
-
-    static bool loadAllSounds(SoundData& data) {
-        data.isDynamic = true;
-        data.samples = loadSoundFile("/sounds/idle.raw", data.sampleCount);
-        data.startSamples = loadSoundFile("/sounds/start.raw", data.startSampleCount);
-        data.revSamples = loadSoundFile("/sounds/rev.raw", data.revSampleCount);
-        data.turboSamples = loadSoundFile("/sounds/turbo.raw", data.turboSampleCount);
-        data.knockSamples = loadSoundFile("/sounds/knock.raw", data.knockSampleCount);
-        data.wastegateSamples = loadSoundFile("/sounds/wastegate.raw", data.wastegateSampleCount);
-        data.hornSamples = loadSoundFile("/sounds/horn.raw", data.hornSampleCount);
-        
-        return (data.samples != nullptr); // At least idle must exist
     }
 };

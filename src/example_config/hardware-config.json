@@ -1,0 +1,98 @@
+{
+    "SOUND": {
+        "VOLUME": 80
+    },
+    "DRIVE_MOTOR": {
+        "HARDWARE": "HBRIDGE_A", // define the HBRIDGE name for DC motor
+        "FREQUENCY": 20000, // in hertz
+        "DIRECTION": "FORWARD", //  FORWARD, REVERSE, UNI_FORWARD, UNI_REVERSE
+        "DUTY": {
+            "MIN": 20, // the minimum percentage which the motor starts
+            "MAX": 90
+        }
+    },
+    /*
+    "GEARBOX": { // only define if your vehicle has a physical gearbox (servo controller)
+        "HARDWARE": "S2",
+        "ENDPOINTS": {
+            "N": 1000,
+            "1": 1100,
+            "2": 1200,
+            "3": 1400,
+            "4": 1500,
+            "5": 1600
+        }
+    },
+    "DRIVE_MOTOR": {
+        "HARDWARE": "S1", // define the pin name for an ESC
+        "PROTOCOL": "PPM", // can be PPM or DSHOT (not implemented)
+        "DIRECTION": "FORWARD", //  FORWARD, REVERSE, UNI_FORWARD, UNI_REVERSE
+        "ENDPOINTS": {
+            "MIN": 1000, // in micro seconds
+            "MAX": 2000,
+            "CENTER": 1500, // not used for UNI_FORWARD and UNI_REVERSE
+            "DEADBAND": 10
+        }
+    },
+    */
+    "STEERING_SERVO": {
+        "HARDWARE": "S1",
+        "FREQUENCY": 50,
+        "ENDPOINTS": {
+            "LEFT": 1350, // in micro seconds
+            "RIGHT": 1650,
+            "CENTER": 1500
+        }
+    },
+    "LIGHTS": {
+        "HEAD_LIGHT": {
+            "HARDWARE": "L1",
+            "BRIGHTNESS_MAX": 60 // in percentage
+        },
+        "TAIL_LIGHT": {
+            "HARDWARE": "L2",
+            "BRIGHTNESS_MAX": 60
+        },
+        "BRAKE_LIGHT": {
+            "HARDWARE": "L3"
+        },
+        "TURN_LIGHT": {
+            "LEFT": {
+                "HARDWARE": "L4"
+            },
+            "RIGHT": {
+                "HARDWARE": "L5"
+            },
+            "BRIGHTNESS_MAX": 60,
+            "TYPE": "BLINK", // can be FADE, BLINK, SEQUENIAL
+            "INTERVAL_ON": 500, // in milliseconds
+            "INTERVAL_OFF": 500
+        },
+        "HAZARD_LIGHT": {
+            "HARDWARE": "TURN_LIGHT"
+        },
+        "REVERSING_LIGHT": {
+            "HARDWARE": "BRAKE_LIGHT"
+        }
+        /*
+        "HIGHBEAM_LIGHT": {
+            "HARDWARE": ""
+        },
+        "CABIN_LIGHT": {
+            "HARDWARE": ""
+        },
+        "BEACON_LIGHT": {
+            "HARDWARE": ""
+        },
+        "FOG_LIGHT": {
+            "HARDWARE": ""
+        },
+        "SIDE_LIGHT": {
+            "HARDWARE": ""
+        },
+        "ROOF_LIGHT": {
+            "HARDWARE": ""
+        }
+            */
+    }
+}

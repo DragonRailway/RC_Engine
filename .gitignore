@@ -8,6 +8,7 @@ build/
 .dummy
 compile_commands.json
 build_log.txt
+.DS_Store
 
 # Arduino
 applet/
@@ -41,3 +42,5 @@ applet/
 /references/
 build_output.txt
 *bak
+
+/lib/ESP32_PWM_Fusion

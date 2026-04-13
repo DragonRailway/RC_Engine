@@ -1,0 +1,43 @@
+{
+  "VEHICLE": {
+    "NAME": "Scania V8", // Display name for the vehicle
+    "TYPE": "TRUCK" // TRUCK, CAR, TANK, EXCAVATOR, LOCOMOTIVE
+  },
+  "ENGINE": {
+    "ACCELERATION": 2, // Acceleration speed (1=slowest/heavy, 9=fastest/light)
+    "DECELERATION": 1, // Deceleration speed (1=slowest/heavy, 5=fastest/light)
+    "IDLE_RPM": 10, // Ide engine speed (not acutally RPM)
+    "CLUTCH_RPM": 100, // Speed percentage where the clutch starts engaging (sound sync)
+    "REV_SWITCH_POINT": 50, // Speed percentage where "Rev" sound begins to mix into "Idle" sound
+    "IDLE_END_POINT": 40, // Speed percentage where "Idle" sound is completely replaced by "Rev"
+    "DIESEL_KNOCK_INTERVAL": 8, // Number of "knock" pulses per engine cycle (e.g., 8 for V8)
+    "DIESEL_KNOCK_START_POINT": 30, // Speed percentage where diesel knocking sound starts to get louder
+    "JAKEBRAKE_MIN_RPM": 60, // Minimum RPM for the Jake Brake (Compression Brake) to trigger
+    "FAN_START_POINT": 0 // Speed percentage where the engine cooling fan noise begins
+  },
+  "TRANSMISSION": {
+    "TYPE": "AUTOMATIC", // AUTOMATIC, MANUAL, NONE
+    "NUMBER_OF_GEARS": 3 // For automatic simulation
+  },
+  "SOUND_VOLUME": {
+    "START": 140, // Volume of the engine start sound (%)
+    "IDLE": 80, // Volume of the engine idling sound (%)
+    "ENGINE_IDLE": 50, // Volume of the base engine block sound during idle (%)
+    "FULL_THROTTLE": 150, // Maximum volume scaling achieved at full throttle (%)
+    "REV": 100, // Volume of the engine revving sound (%)
+    "ENGINE_REV": 50, // Volume of the base engine block sound during revving (%)
+    "TURBO": 40, // Maximum volume of the turbo whistle (%)
+    "KNOCK": 200, // Volume of the diesel knocking sound effect (%)
+    "WASTEGATE": 100, // Volume of the turbo wastegate/blow-off sound (%)
+    "HORN": 100, // Volume of the main vehicle horn (%)
+    "SIREN": 100, // Volume of the emergency/additional siren (%)
+    "BRAKE": 150, // Volume of the air brake release sound (%)
+    "PARKING_BRAKE": 150, // Volume of the parking brake engage/disengage sound (%)
+    "SHIFTING": 100, // Volume of mechanical gear shift clunk sounds (%)
+    "REVERSING": 70, // Volume of the reversing beeper sound (%)
+    "INDICATOR": 100, // Volume of the turn signal clicker sound (%)
+    "COUPLING": 100, // Volume of the trailer coupling/uncoupling sounds (%)
+    "JAKEBRAKE": 150, // Volume of the jake brake sound effect (%)
+    "FAN": 0 // Volume of the engine cooling fan sound effect (%)
+  }
+}
