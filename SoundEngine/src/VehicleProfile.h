@@ -187,6 +187,10 @@ private:
         cfg.knockInterval = doc["ENGINE"]["DIESEL_KNOCK_INTERVAL"] | 8;
         cfg.knockAdaptiveVolume = doc["ENGINE"]["KNOCK_ADAPTIVE_VOLUME"] | 18;
 
+        // RPM-dependent knock volume
+        cfg.minKnockVolume = doc["ENGINE"]["MIN_KNOCK_VOLUME"] | 80;
+        cfg.knockStartRpm = doc["ENGINE"]["KNOCK_START_RPM"] | 10;
+
         // Jake brake
         cfg.jakeBrakeMinRpm = doc["ENGINE"]["JAKEBRAKE_MIN_RPM"] | 60;
         cfg.jakeBrakeDecelRate = doc["ENGINE"]["JAKEBRAKE_DECEL_RATE"] | 5;
@@ -211,6 +215,23 @@ private:
                 if (idx < 6) cfg.gearRampTimes[idx++] = val;
             }
         }
+
+        // Loop points
+        cfg.hornLoopBegin = doc["LOOP_POINTS"]["HORN_BEGIN"] | 0;
+        cfg.hornLoopEnd = doc["LOOP_POINTS"]["HORN_END"] | 0;
+        cfg.sirenLoopBegin = doc["LOOP_POINTS"]["SIREN_BEGIN"] | 0;
+        cfg.sirenLoopEnd = doc["LOOP_POINTS"]["SIREN_END"] | 0;
+        cfg.reversingLoopBegin = doc["LOOP_POINTS"]["REVERSING_BEGIN"] | 0;
+        cfg.reversingLoopEnd = doc["LOOP_POINTS"]["REVERSING_END"] | 0;
+        cfg.sound1LoopBegin = doc["LOOP_POINTS"]["SOUND1_BEGIN"] | 0;
+        cfg.sound1LoopEnd = doc["LOOP_POINTS"]["SOUND1_END"] | 0;
+
+        // Voice mixing weights
+        cfg.engineMixWeight = doc["MIX_WEIGHTS"]["ENGINE"] | 100;
+        cfg.effectMixWeight = doc["MIX_WEIGHTS"]["EFFECTS"] | 100;
+
+        // Crawler mode
+        cfg.crawlerModeThreshold = doc["SOUND_VOLUME"]["CRAWLER_MODE_THRESHOLD"] | 44;
 
         // Legacy
         cfg.clutchEngagingPoint = doc["ENGINE"]["CLUTCH_RPM"] | 100;

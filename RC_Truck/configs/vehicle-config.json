@@ -1,52 +1,69 @@
 {
   "VEHICLE": {
-    "NAME": "Scania V8", // Display name for the vehicle
-    "TYPE": "TRUCK" // TRUCK, CAR, TANK, EXCAVATOR, LOCOMOTIVE
+    "NAME": "Scania V8",
+    "TYPE": "TRUCK"
   },
   "ENGINE": {
-    "ACCELERATION": 2, // Acceleration speed (1=slowest/heavy, 9=fastest/light)
-    "DECELERATION": 1, // Deceleration speed (1=slowest/heavy, 5=fastest/light)
-    "IDLE_RPM": 10, // Idle engine speed (not actually RPM)
-    "CLUTCH_RPM": 100, // Speed percentage where the clutch starts engaging (sound sync)
-    "REV_SWITCH_POINT": 50, // Speed percentage where "Rev" sound begins to mix into "Idle" sound
-    "IDLE_END_POINT": 40, // Speed percentage where "Idle" sound is completely replaced by "Rev"
-    "DIESEL_KNOCK_INTERVAL": 8, // Number of "knock" pulses per engine cycle (e.g., 8 for V8)
-    "DIESEL_KNOCK_START_POINT": 30, // Speed percentage where diesel knocking sound starts to get louder
-    "JAKEBRAKE_MIN_RPM": 60, // Minimum RPM % for the Jake Brake (Compression Brake) to trigger
-    "JAKEBRAKE_DECEL_RATE": 5, // How fast jake brake slows engine (higher = faster)
-    "FAN_START_POINT": 0, // Speed percentage where the engine cooling fan noise begins
-    "KNOCK_PATTERN": "V8", // V8, V8_468, R6, R6_2, V2, UNIFORM - cylinder-adaptive knock pattern
-    "KNOCK_ADAPTIVE_VOLUME": 18, // Volume % for non-primary knock pulses (lower = more contrast)
-    "SUPERCHARGER_START_POINT": 10, // RPM % where supercharger becomes audible
-    "MAX_PITCH_FACTOR": 3.3 // Max pitch multiplier at full RPM (1.0 = native, 3.3 = reference default)
+    "ACCELERATION": 2,
+    "DECELERATION": 1,
+    "IDLE_RPM": 10,
+    "CLUTCH_RPM": 100,
+    "REV_SWITCH_POINT": 50,
+    "IDLE_END_POINT": 40,
+    "DIESEL_KNOCK_INTERVAL": 8,
+    "DIESEL_KNOCK_START_POINT": 30,
+    "JAKEBRAKE_MIN_RPM": 60,
+    "JAKEBRAKE_DECEL_RATE": 5,
+    "FAN_START_POINT": 0,
+    "KNOCK_PATTERN": "V8",
+    "KNOCK_ADAPTIVE_VOLUME": 18,
+    "MIN_KNOCK_VOLUME": 80,
+    "KNOCK_START_RPM": 10,
+    "SUPERCHARGER_START_POINT": 10,
+    "MAX_PITCH_FACTOR": 3.3
   },
   "TRANSMISSION": {
-    "TYPE": "AUTOMATIC", // AUTOMATIC, MANUAL, NONE
-    "NUMBER_OF_GEARS": 3, // For automatic simulation (3, 4, or 6)
-    "GEAR_RAMP_TIMES": [20, 50, 75, 75, 75, 75] // Per-gear acceleration response (lower = faster)
+    "TYPE": "AUTOMATIC",
+    "NUMBER_OF_GEARS": 3,
+    "GEAR_RAMP_TIMES": [20, 50, 75, 75, 75, 75]
+  },
+  "LOOP_POINTS": {
+    "HORN_BEGIN": 0,
+    "HORN_END": 0,
+    "SIREN_BEGIN": 0,
+    "SIREN_END": 0,
+    "REVERSING_BEGIN": 0,
+    "REVERSING_END": 0,
+    "SOUND1_BEGIN": 0,
+    "SOUND1_END": 0
+  },
+  "MIX_WEIGHTS": {
+    "ENGINE": 100,
+    "EFFECTS": 100
   },
   "SOUND_VOLUME": {
-    "START": 140, // Volume of the engine start sound (%)
-    "IDLE": 80, // Volume of the engine idling sound (%)
-    "ENGINE_IDLE": 50, // Volume of the base engine block sound during idle (%)
-    "FULL_THROTTLE": 150, // Maximum volume scaling achieved at full throttle (%)
-    "REV": 100, // Volume of the engine revving sound (%)
-    "ENGINE_REV": 50, // Volume of the base engine block sound during revving (%)
-    "TURBO": 40, // Maximum volume of the turbo whistle (%)
-    "KNOCK": 200, // Volume of the diesel knocking sound effect (%)
-    "WASTEGATE": 100, // Volume of the turbo wastegate/blow-off sound (%)
-    "HORN": 100, // Volume of the main vehicle horn (%)
-    "SIREN": 100, // Volume of the emergency/additional siren (%)
-    "BRAKE": 150, // Volume of the air brake release sound (%)
-    "PARKING_BRAKE": 150, // Volume of the parking brake engage/disengage sound (%)
-    "SHIFTING": 100, // Volume of mechanical gear shift clunk sounds (%)
-    "REVERSING": 70, // Volume of the reversing beeper sound (%)
-    "INDICATOR": 100, // Volume of the turn signal clicker sound (%)
-    "COUPLING": 100, // Volume of the trailer coupling sound (%)
-    "JAKEBRAKE": 150, // Volume of the jake brake sound effect (%)
-    "FAN": 0, // Volume of the engine cooling fan sound effect (%)
-    "SUPERCHARGER": 0, // Volume of the supercharger whine sound effect (%)
-    "UNCOUPLING": 100, // Volume of the trailer uncoupling sound (%)
-    "SOUND1": 100 // Volume of the generic extra sound channel (%)
+    "START": 140,
+    "IDLE": 80,
+    "ENGINE_IDLE": 50,
+    "FULL_THROTTLE": 150,
+    "REV": 100,
+    "ENGINE_REV": 50,
+    "TURBO": 40,
+    "KNOCK": 200,
+    "WASTEGATE": 100,
+    "HORN": 100,
+    "SIREN": 100,
+    "BRAKE": 150,
+    "PARKING_BRAKE": 150,
+    "SHIFTING": 100,
+    "REVERSING": 70,
+    "INDICATOR": 100,
+    "COUPLING": 100,
+    "JAKEBRAKE": 150,
+    "FAN": 0,
+    "SUPERCHARGER": 0,
+    "UNCOUPLING": 100,
+    "SOUND1": 100,
+    "CRAWLER_MODE_THRESHOLD": 44
   }
 }

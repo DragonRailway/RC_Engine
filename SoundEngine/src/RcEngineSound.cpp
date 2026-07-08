@@ -13,11 +13,13 @@ RcEngineSound::RcEngineSound() :
     wastegateTriggered(false),
     wastegateTriggerMillis(0),
     selectedGear(1),
+    lastGear(1),
     engineStopRequested(false),
     lastUpdateTime(0),
     attenuatorMillis(0),
     attenuator(1),
-    stopPitchFactor(1.0f)
+    stopPitchFactor(1.0f),
+    crawlerMode(false)
 {
     // Initialize all voices to inactive
     for (int i = 0; i < VOICE_COUNT; i++) {
@@ -79,15 +81,21 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     voices[VOICE_WASTEGATE].pitchShifted = false;
     voices[VOICE_WASTEGATE].loop = false;
 
+    // Horn with loop points
     voices[VOICE_HORN].samples = sounds.hornSamples;
     voices[VOICE_HORN].count = sounds.hornSampleCount;
     voices[VOICE_HORN].pitchShifted = false;
     voices[VOICE_HORN].loop = true;
+    voices[VOICE_HORN].loopBegin = cfg.hornLoopBegin;
+    voices[VOICE_HORN].loopEnd = cfg.hornLoopEnd;
 
+    // Siren with loop points
     voices[VOICE_SIREN].samples = sounds.sirenSamples;
     voices[VOICE_SIREN].count = sounds.sirenSampleCount;
     voices[VOICE_SIREN].pitchShifted = false;
     voices[VOICE_SIREN].loop = true;
+    voices[VOICE_SIREN].loopBegin = cfg.sirenLoopBegin;
+    voices[VOICE_SIREN].loopEnd = cfg.sirenLoopEnd;
 
     voices[VOICE_BRAKE].samples = sounds.brakeSamples;
     voices[VOICE_BRAKE].count = sounds.brakeSampleCount;
@@ -99,10 +107,13 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     voices[VOICE_JAKE_BRAKE].pitchShifted = true;
     voices[VOICE_JAKE_BRAKE].loop = true;
 
+    // Reversing with loop points
     voices[VOICE_REVERSING].samples = sounds.reversingSamples;
     voices[VOICE_REVERSING].count = sounds.reversingSampleCount;
     voices[VOICE_REVERSING].pitchShifted = false;
     voices[VOICE_REVERSING].loop = true;
+    voices[VOICE_REVERSING].loopBegin = cfg.reversingLoopBegin;
+    voices[VOICE_REVERSING].loopEnd = cfg.reversingLoopEnd;
 
     voices[VOICE_PARKING_BRAKE].samples = sounds.parkingBrakeSamples;
     voices[VOICE_PARKING_BRAKE].count = sounds.parkingBrakeSampleCount;
@@ -139,10 +150,13 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     voices[VOICE_UNCOUPLING].pitchShifted = false;
     voices[VOICE_UNCOUPLING].oneShot = true;
 
+    // Sound1 with loop points
     voices[VOICE_SOUND1].samples = sounds.sound1Samples;
     voices[VOICE_SOUND1].count = sounds.sound1SampleCount;
     voices[VOICE_SOUND1].pitchShifted = false;
     voices[VOICE_SOUND1].loop = true;
+    voices[VOICE_SOUND1].loopBegin = cfg.sound1LoopBegin;
+    voices[VOICE_SOUND1].loopEnd = cfg.sound1LoopEnd;
 
     // Configure default volumes
     voices[VOICE_IDLE].volume = cfg.idleVolume;
@@ -244,15 +258,14 @@ void RcEngineSound::update(int16_t throttle) {
     int32_t targetRpm = abs(throttle);
     if (targetRpm > cfg.maxRpm) targetRpm = cfg.maxRpm;
 
+    // ── Crawler Mode Detection ──
+    crawlerMode = (cfg.masterVolume <= cfg.crawlerModeThreshold);
+
     // ── Automatic Transmission Simulation ──
-    // Uses a virtual speed that increases/decreases slowly based on throttle,
-    // then maps speed to gear-limited RPM range for the characteristic
-    // rev-rise-shift-drop pattern.
     int32_t effectiveTarget = targetRpm;
     if (cfg.transmissionType == TRANS_AUTOMATIC && state == RUNNING) {
         int32_t gearSize = cfg.maxRpm / cfg.numberOfGears;
         if (gearSize > 0) {
-            // Virtual speed increases/decreases slowly (simulates vehicle inertia)
             if (throttle > virtualSpeed) {
                 virtualSpeed += max((int32_t)1, (int32_t)(cfg.acc * 2));
                 if (virtualSpeed > cfg.maxRpm) virtualSpeed = cfg.maxRpm;
@@ -260,15 +273,28 @@ void RcEngineSound::update(int16_t throttle) {
                 virtualSpeed -= max((int32_t)1, (int32_t)(cfg.dec * 2));
                 if (virtualSpeed < 0) virtualSpeed = 0;
             }
-            // Select gear based on virtual speed
             selectedGear = (uint8_t)(virtualSpeed / gearSize);
             if (selectedGear >= cfg.numberOfGears) selectedGear = cfg.numberOfGears - 1;
-            // RPM within the gear's range, based on throttle position
             int32_t gearBase = selectedGear * gearSize;
             int32_t throttleInGear = targetRpm - gearBase;
             if (throttleInGear < 0) throttleInGear = 0;
             if (throttleInGear > gearSize) throttleInGear = gearSize;
             effectiveTarget = (targetRpm < gearBase) ? targetRpm : gearBase + throttleInGear;
+        }
+    }
+
+    // ── Manual Transmission Shifting Trigger ──
+    if (cfg.transmissionType == TRANS_MANUAL && state == RUNNING) {
+        int32_t gearSize = cfg.maxRpm / cfg.numberOfGears;
+        if (gearSize > 0) {
+            uint8_t newGear = (uint8_t)(targetRpm / gearSize) + 1;
+            if (newGear > cfg.numberOfGears) newGear = cfg.numberOfGears;
+            if (newGear != lastGear && cfg.shiftingVolume > 0) {
+                voices[VOICE_SHIFTING].active = true;
+                voices[VOICE_SHIFTING].position = 0;
+            }
+            lastGear = newGear;
+            selectedGear = newGear;
         }
     }
 
@@ -290,17 +316,19 @@ void RcEngineSound::update(int16_t throttle) {
         if (jakeBrakeActive) {
             currentRpm -= cfg.jakeBrakeDecelRate;
             if (currentRpm < 0) currentRpm = 0;
+        } else if (crawlerMode) {
+            // ── Crawler mode: instant RPM response ──
+            currentRpm = effectiveTarget;
         } else {
             // ── Normal RPM calculation with inertia ──
             int32_t inertiaFactor = max((int32_t)1, (int32_t)(101 - cfg.inertia));
             int32_t diff = effectiveTarget - currentRpm;
 
-            // Use per-gear ramp time if automatic transmission
             int32_t accelStep = cfg.acc;
             int32_t decelStep = cfg.dec;
             if (cfg.transmissionType == TRANS_AUTOMATIC && selectedGear < 6) {
                 accelStep = cfg.gearRampTimes[selectedGear];
-                decelStep = accelStep; // Use same ramp for deceleration in auto mode
+                decelStep = accelStep;
             }
 
             if (diff > 0) {
@@ -342,23 +370,21 @@ void RcEngineSound::update(int16_t throttle) {
     if (state == PARKING_BRAKE && !voices[VOICE_PARKING_BRAKE].active) {
         state = OFF;
         virtualSpeed = 0;
+        lastGear = 1;
     }
 
     // ── Compute pitch factor from RPM ──
     if (state == RUNNING) {
         pitchFactor = 1.0f + ((float)currentRpmFixed / (float)cfg.maxRpm) * (cfg.maxPitchFactor - 1.0f);
     } else if (state == STOPPING) {
-        // Ramps from stopPitchFactor → 1.0 during shutdown (time-based, ~2.5 seconds)
         if (now - attenuatorMillis > 80) {
             stopPitchFactor -= 0.05f;
             if (stopPitchFactor < 1.0f) stopPitchFactor = 1.0f;
-            attenuator++; // Volume fade: divide by this value
+            attenuator++;
             attenuatorMillis = now;
         }
         pitchFactor = stopPitchFactor;
-        // Transition to PARKING_BRAKE when pitch ramp completes
         if (attenuator >= 40) {
-            // If parking brake sound is loaded, play it; otherwise skip to OFF
             if (sounds.parkingBrakeSamples && sounds.parkingBrakeSampleCount > 0) {
                 state = PARKING_BRAKE;
                 voices[VOICE_PARKING_BRAKE].active = true;
@@ -368,12 +394,12 @@ void RcEngineSound::update(int16_t throttle) {
             }
         }
     } else if (state == STARTING) {
-        pitchFactor = 1.0f; // Fixed pitch during cranking
+        pitchFactor = 1.0f;
     } else {
         pitchFactor = 1.0f;
     }
 
-    // ── Idle/Rev cross-fade proportion (computed once per update) ──
+    // ── Idle/Rev cross-fade proportion ──
     int16_t idleProportion = 100;
     if (state == RUNNING && !engineMuted) {
         if (currentRpmFixed > cfg.revSwitchPoint) {
@@ -423,30 +449,24 @@ void RcEngineSound::update(int16_t throttle) {
         }
     }
 
-    // ── Knock cylinder-adaptive volume ──
+    // ── Knock cylinder-adaptive volume with RPM scaling ──
     if (voices[VOICE_KNOCK].active && cfg.knockVolume > 0) {
         bool isLoud = false;
         switch (cfg.knockPattern) {
             case KNOCK_V8:
-                // V8: loud at positions 4 and 8 (of 8 pulses per cycle)
-                // curKnockCylinder is 1-indexed (goes 1,2,...,8 then resets)
                 isLoud = (curKnockCylinder == 4 || curKnockCylinder == 8);
                 break;
             case KNOCK_V8_468:
-                // Chevy 468: loud at 1, 5, 9, 13 (of 16 pulses)
                 isLoud = (curKnockCylinder == 1 || curKnockCylinder == 5 || 
                          curKnockCylinder == 9 || curKnockCylinder == 13);
                 break;
             case KNOCK_R6:
-                // Inline 6: loud at position 6 (of 6)
                 isLoud = (curKnockCylinder == 6);
                 break;
             case KNOCK_R6_2:
-                // Inline 6 alt: loud at 3 and 6 (of 6)
                 isLoud = (curKnockCylinder == 3 || curKnockCylinder == 6);
                 break;
             case KNOCK_V2:
-                // V2: loud at 1 and 2 (of 4)
                 isLoud = (curKnockCylinder == 1 || curKnockCylinder == 2);
                 break;
             case KNOCK_UNIFORM:
@@ -454,7 +474,20 @@ void RcEngineSound::update(int16_t throttle) {
                 isLoud = true;
                 break;
         }
-        voices[VOICE_KNOCK].volume = isLoud ? cfg.knockVolume : (uint8_t)(cfg.knockVolume * cfg.knockAdaptiveVolume / 100);
+
+        // RPM-dependent knock volume scaling
+        uint16_t knockRpmThreshold = (uint16_t)(cfg.maxRpm * cfg.knockStartRpm / 100);
+        uint16_t baseKnockVol = isLoud ? cfg.knockVolume : (uint16_t)(cfg.knockVolume * cfg.knockAdaptiveVolume / 100);
+        uint16_t minVol = (uint16_t)(cfg.knockVolume * cfg.minKnockVolume / 100);
+        uint16_t minSecondary = (uint16_t)(minVol * cfg.knockAdaptiveVolume / 100);
+
+        if (currentRpmFixed > knockRpmThreshold) {
+            uint16_t rpmScale = map(currentRpmFixed, knockRpmThreshold, cfg.maxRpm, 
+                                   isLoud ? minVol : minSecondary, baseKnockVol);
+            voices[VOICE_KNOCK].volume = (uint8_t)rpmScale;
+        } else {
+            voices[VOICE_KNOCK].volume = (uint8_t)(isLoud ? minVol : minSecondary);
+        }
     }
 
     // ── Jake brake sound: active when jake braking ──
@@ -463,11 +496,12 @@ void RcEngineSound::update(int16_t throttle) {
 
 // ─── Multi-Voice Mixer with Fractional Step Interpolation ───────────────────
 uint8_t RcEngineSound::getNextSample() {
-    int32_t mixed = 0;
+    int32_t engineMix = 0;
+    int32_t effectMix = 0;
 
     // ── Determine current pitch step ──
     float engineStep = pitchFactor;
-    if (state == STARTING) engineStep = 1.0f; // Fixed pitch during cranking
+    if (state == STARTING) engineStep = 1.0f;
     if (state == PARKING_BRAKE || state == OFF) engineStep = 0.0f;
 
     // ── Process each voice ──
@@ -475,25 +509,25 @@ uint8_t RcEngineSound::getNextSample() {
         VoiceState& v = voices[i];
         if (!v.active || !v.samples || v.count == 0) continue;
 
-        // Determine step size
         float step = v.pitchShifted ? engineStep : 1.0f;
-        // In PARKING_BRAKE state, only parking brake voice plays
         if (state == PARKING_BRAKE && i != VOICE_PARKING_BRAKE) continue;
 
-        // Read sample with interpolation
         int8_t sample = readInterpolated(v.samples, v.count, v.position);
         int32_t scaled = (int32_t)sample * v.volume / 100;
 
-        // Handle volume fade during STOPPING
         if (state == STOPPING && v.pitchShifted) {
             scaled = scaled / attenuator;
         }
 
-        // Apply step and advance
         v.step = step;
         advanceVoice(v);
 
-        mixed += scaled;
+        // Separate engine and effect mixing
+        if (v.pitchShifted) {
+            engineMix += scaled;
+        } else {
+            effectMix += scaled;
+        }
     }
 
     // ── Start sound (special: separate sample array, fixed rate during cranking) ──
@@ -502,21 +536,23 @@ uint8_t RcEngineSound::getNextSample() {
         if (pos < sounds.startSampleCount) {
             int8_t sample = sounds.startSamples[pos];
             int32_t scaled = (int32_t)sample * cfg.startVolume / 100;
-            mixed += scaled;
-            startPos++; // Fixed rate during cranking
+            engineMix += scaled;
+            startPos++;
             if (startPos >= sounds.startSampleCount) {
                 state = RUNNING;
                 startPos = 0;
-                // Reset all engine voice positions
                 voices[VOICE_IDLE].position = 0;
                 voices[VOICE_REV].position = 0;
                 voices[VOICE_TURBO].position = 0;
                 voices[VOICE_KNOCK].position = 0;
                 lastKnockTriggerSample = 0;
-                curKnockCylinder = 1; // Start at 1 (1-indexed)
+                curKnockCylinder = 1;
             }
         }
     }
+
+    // ── Apply voice mixing weights ──
+    int32_t mixed = (engineMix * cfg.engineMixWeight / 100) + (effectMix * cfg.effectMixWeight / 100);
 
     // ── Final mix: apply master volume, add DC offset ──
     mixed = (mixed * cfg.masterVolume / 100) + 128;

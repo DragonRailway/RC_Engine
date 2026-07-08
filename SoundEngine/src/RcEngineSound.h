@@ -74,10 +74,15 @@ struct SoundData {
  * 
  * Features:
  * - Fractional step interpolation for pitch shifting (voices speed up with RPM)
+ * - Loop points for sustained effect sounds (horn, siren, reversing)
  * - Cylinder-adaptive diesel knock volume (V8, R6, V2 patterns)
+ * - RPM-dependent knock volume scaling
  * - Jake brake auto-trigger with engine slowdown
  * - PARKING_BRAKE state in shutdown sequence
  * - Automatic transmission simulation with torque converter
+ * - Manual transmission shifting trigger
+ * - Voice mixing weights (engine vs effects)
+ * - Crawler mode (instant RPM at low volume)
  * - Supercharger start point
  * - Uncoupling separate sound
  * - Sound1 generic channel
@@ -150,6 +155,10 @@ public:
         uint8_t knockInterval = 8;          // Pulses per idle loop
         uint8_t knockAdaptiveVolume = 18;   // Volume % for secondary pulses
 
+        // Diesel knock RPM scaling
+        uint8_t minKnockVolume = 80;   // Min knock volume % at idle (RPM-dependent)
+        uint8_t knockStartRpm = 10;    // RPM % where knock volume starts scaling
+
         // Jake brake
         uint8_t jakeBrakeMinRpm = 60;  // Minimum RPM % for jake brake to activate
         uint8_t jakeBrakeDecelRate = 5; // How fast jake brake slows engine
@@ -161,6 +170,23 @@ public:
         TransmissionType transmissionType = TRANS_NONE;
         uint8_t numberOfGears = 3;
         uint8_t gearRampTimes[6] = {20, 50, 75, 75, 75, 75}; // Per-gear acceleration response
+
+        // Loop points (0 = full sample, backward compatible)
+        uint32_t hornLoopBegin = 0;
+        uint32_t hornLoopEnd = 0;
+        uint32_t sirenLoopBegin = 0;
+        uint32_t sirenLoopEnd = 0;
+        uint32_t reversingLoopBegin = 0;
+        uint32_t reversingLoopEnd = 0;
+        uint32_t sound1LoopBegin = 0;
+        uint32_t sound1LoopEnd = 0;
+
+        // Voice mixing weights (100 = unity)
+        uint8_t engineMixWeight = 100;
+        uint8_t effectMixWeight = 100;
+
+        // Crawler mode
+        uint8_t crawlerModeThreshold = 44; // Master volume below this = crawler mode
 
         // Transmission (legacy)
         bool automatic = false;
@@ -224,6 +250,8 @@ private:
         bool pitchShifted = false; // true = engine voice, false = effect voice
         bool oneShot = false;      // true = plays once then deactivates
         bool loop = true;          // true = loops when position >= count
+        uint32_t loopBegin = 0;    // Loop region start (0 = use full sample)
+        uint32_t loopEnd = 0;      // Loop region end (0 = use full sample)
     };
 
     // Engine state
@@ -257,6 +285,7 @@ private:
     // Transmission state
     uint8_t selectedGear = 1;
     int32_t virtualSpeed = 0;
+    uint8_t lastGear = 1; // For manual trans shifting trigger
 
     // Stop request
     bool engineStopRequested = false;
@@ -267,6 +296,9 @@ private:
     uint32_t attenuatorMillis;
     uint8_t attenuator;
     float stopPitchFactor; // Pitch factor when stopping started
+
+    // Crawler mode
+    bool crawlerMode = false;
 
     // Helper: read sample with linear interpolation at fractional position
     static inline int8_t readInterpolated(const int8_t* samples, uint32_t count, float position) {
@@ -280,13 +312,25 @@ private:
         return (int8_t)(s0 + (int32_t)((s1 - s0) * frac));
     }
 
-    // Helper: advance voice position with looping or one-shot behavior
+    // Helper: advance voice position with loop region support
     static inline void advanceVoice(VoiceState& v) {
         v.position += v.step;
         if (v.position >= (float)v.count) {
-            if (v.loop) {
+            if (v.loop && v.loopEnd > 0) {
+                // Loop within defined region
+                float regionLen = (float)(v.loopEnd - v.loopBegin);
+                if (regionLen > 0) {
+                    v.position = v.loopBegin + fmodf(v.position - v.loopBegin, regionLen);
+                    // Clamp: fmodf precision can land past loopEnd
+                    if (v.position >= (float)v.loopEnd) v.position = v.loopBegin;
+                } else {
+                    v.position = v.loopBegin;
+                }
+            } else if (v.loop) {
+                // Full sample loop (backward compatible)
                 v.position -= (float)v.count;
             } else {
+                // One-shot: deactivate at end
                 v.position = 0;
                 v.active = false;
             }
