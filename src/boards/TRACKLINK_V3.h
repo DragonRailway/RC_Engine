@@ -1,7 +1,20 @@
-#pragma once
 
-#include <Arduino.h>
-#ifdef TRACKLINK_V3
+// Source files: https://oshwlab.com/shreeramlive/tracklink-v3
+// Store link: https://www.elecrow.com/tracklink-v3-dragon-railway.html
+
+// PIN definitions for TrackLink V3 board
+
+struct PIN {
+  static constexpr uint8_t L0 = 42; // BUILTIN LED
+  static constexpr uint8_t L1 = 6;
+  static constexpr uint8_t L2 = 7;
+  static constexpr uint8_t L3 = 8;
+  static constexpr uint8_t L4 = 9;
+  static constexpr uint8_t L5 = 10;
+  static constexpr uint8_t L6 = 11;
+  static constexpr uint8_t S1 = 1;
+  static constexpr uint8_t S2 = 2;
+};
 
 struct HBRIDGE {
   struct A {
@@ -17,18 +30,6 @@ struct HBRIDGE {
   static constexpr uint8_t COMMON_EN = 12;
 };
 
-struct PIN {
-  static constexpr uint8_t L0 = 42; // BUILTIN LED
-  static constexpr uint8_t L1 = 6;
-  static constexpr uint8_t L2 = 7;
-  static constexpr uint8_t L3 = 8;
-  static constexpr uint8_t L4 = 9;
-  static constexpr uint8_t L5 = 10;
-  static constexpr uint8_t L6 = 11;
-  static constexpr uint8_t S1 = 1;
-  static constexpr uint8_t S2 = 2;
-};
-
 struct AUDIO {
   static constexpr uint8_t I2S_LRC = 17;
   static constexpr uint8_t I2S_BCLK = 18;
@@ -39,8 +40,6 @@ struct AUDIO {
 struct POWER {
   static constexpr uint8_t ENABLE = 33; // set high to enable board
   static constexpr uint8_t BUTTON = 48; // Detect power button press
-  static constexpr uint8_t V_ADC = 2;
+  static constexpr uint8_t VOLTAGE = 4;   // Voltage sense pin
   static constexpr uint8_t CHRG_SENS = 34; // Charging status indicator
 };
-
-#endif

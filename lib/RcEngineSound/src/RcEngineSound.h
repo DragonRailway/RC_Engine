@@ -30,6 +30,27 @@ struct SoundData {
     uint32_t hornSampleCount = 0;
     uint16_t hornSampleRate = 22050;
 
+    int8_t* jakeBrakeSamples = nullptr;
+    uint32_t jakeBrakeSampleCount = 0;
+
+    int8_t* fanSamples = nullptr;
+    uint32_t fanSampleCount = 0;
+
+    int8_t* sirenSamples = nullptr;
+    uint32_t sirenSampleCount = 0;
+
+    int8_t* brakeSamples = nullptr;
+    uint32_t brakeSampleCount = 0;
+
+    int8_t* reversingSamples = nullptr;
+    uint32_t reversingSampleCount = 0;
+
+    int8_t* parkingBrakeSamples = nullptr;
+    uint32_t parkingBrakeSampleCount = 0;
+
+    int8_t* superchargerSamples = nullptr;
+    uint32_t superchargerSampleCount = 0;
+
     bool isDynamic = false; // Set to true if allocated in PSRAM/Heap
 };
 
@@ -87,6 +108,7 @@ public:
 
     void begin(const SoundData& soundData, const Config& config);
     void begin(const SoundData& soundData); // Overload to avoid default arg issue
+    void setConfig(const Config& config) { cfg = config; }
 
     void update(int16_t throttle);
 

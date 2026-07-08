@@ -1,69 +1,93 @@
-#include "ConfigLoader.h"
-#include "boards/TRACKLINK_V3.h"
 #include <Arduino.h>
+#include "boards/TRACKLINK_V3.h"
+#include "ConfigLoader.h"
+#include "Config.h"
+#include "ConfigParser.h"
+#include "HardwareInit.h"
+#include "SoundLoader.h"
+#include "VehicleProfile.h"
+#include "AudioOutput.h"
+#include <RcEngineSound.h>
 
-void printConfigInfo() {
-  Serial.println("\n=== RC Brain - Config Loader Test ===\n");
+RcEngineSound engine;
+VehicleProfile profile;
+SoundData soundData;
+HardwareConfig hwConfig;
+VehicleConfig vehicleConfig;
 
-  // ── 1. Mount LittleFS ──────────────────────────────────────
-  if (!ConfigLoader::begin()) {
-    Serial.println("FATAL: LittleFS mount failed. Halting.");
-    while (1)
-      delay(100);
-  }
+void printConfig(const HardwareConfig& hw, const VehicleConfig& vc) {
+    Serial.println("\n── Hardware Config ──");
+    Serial.printf("  Sound Volume: %d%%\n", hw.sound.volume);
+    Serial.printf("  Drive Motor: type=%d hwId=%d freq=%dHz dir=%d\n",
+                  hw.driveMotor.type, hw.driveMotor.hardwareId,
+                  hw.driveMotor.frequency, hw.driveMotor.direction);
+    Serial.printf("  Steering Servo: hwId=%d freq=%dHz L=%d R=%d C=%d\n",
+                  hw.steeringServo.hardwareId, hw.steeringServo.frequency,
+                  hw.steeringServo.endpoints.left, hw.steeringServo.endpoints.right,
+                  hw.steeringServo.endpoints.center);
+    Serial.printf("  Lights: head=%d tail=%d brake=%d turnL=%d turnR=%d\n",
+                  hw.lights.headLight.pin, hw.lights.tailLight.pin,
+                  hw.lights.brakeLight.pin, hw.lights.turnLight.leftPin,
+                  hw.lights.turnLight.rightPin);
 
-  // ── 2. Print full file tree ────────────────────────────────
-  ConfigLoader::printFilesystemInfo();
-
-  // ── 3. Discover config files by prefix ─────────────────────
-  Serial.println("── Hardware Configs ──");
-  int hw = ConfigLoader::listFiles("/", "hardware-");
-  Serial.printf("  Found %d hardware config(s)\n\n", hw);
-
-  Serial.println("── Vehicle Configs ──");
-  int vc = ConfigLoader::listFiles("/", "vehicle-");
-  Serial.printf("  Found %d vehicle config(s)\n\n", vc);
-
-  Serial.println("── Sound Files ──");
-  int snd = ConfigLoader::listFiles("/sounds/");
-  Serial.printf("  Found %d sound file(s)\n\n", snd);
-
-  Serial.println("── Sound Files: idle-* ──");
-  ConfigLoader::listFiles("/sounds/", "idle-");
-
-  Serial.println("\n── Sound Files: airbrake-* ──");
-  ConfigLoader::listFiles("/sounds/", "airbrake-");
-
-  // ── 4. Parse and validate each config JSON ─────────────────
-  Serial.println("\n── Parsing Config Files ──");
-
-  // Try to parse any hardware config found at root
-  File root = LittleFS.open("/");
-  if (root && root.isDirectory()) {
-    File entry = root.openNextFile();
-    while (entry) {
-      if (!entry.isDirectory()) {
-        const char *name = entry.name();
-        // Parse all JSON files at root level
-        size_t len = strlen(name);
-        if (len > 5 && strcmp(name + len - 5, ".json") == 0) {
-          String path = String("/") + name;
-          ConfigLoader::parseAndPrintJson(path.c_str());
-        }
-      }
-      entry = root.openNextFile();
-    }
-  }
-
-  Serial.println("\n=== Config Loader Test Complete ===");
+    Serial.println("\n── Vehicle Config ──");
+    Serial.printf("  Name: %s Type: %s\n", vc.name, vc.type);
+    Serial.printf("  Engine: acc=%d dec=%d idle=%d clutch=%d\n",
+                  vc.engine.acc, vc.engine.dec, vc.engine.idleRpm, vc.engine.clutchRpm);
+    Serial.printf("  Transmission: type=%d gears=%d\n",
+                  vc.transmission.type, vc.transmission.numberOfGears);
+    Serial.printf("  Sound: start=%d idle=%d rev=%d turbo=%d knock=%d horn=%d\n",
+                  vc.soundVolume.start, vc.soundVolume.idle, vc.soundVolume.rev,
+                  vc.soundVolume.turbo, vc.soundVolume.knock, vc.soundVolume.horn);
 }
 
 void setup() {
-  Serial.begin(2000000);
-  delay(10000);
+    Serial.begin(2000000);
+    delay(1000);
+
+    Serial.println("\n=== RC Brain - Config Loader ===\n");
+
+    if (!SoundLoader::begin()) {
+        Serial.println("FATAL: LittleFS mount failed");
+        while (1) delay(100);
+    }
+
+    ConfigLoader::printFilesystemInfo();
+
+    Serial.println("\n── Loading Configs ──");
+    bool hwOk = ConfigParser::loadHardwareConfig("/hardware-config.json", hwConfig);
+    bool vcOk = ConfigParser::loadVehicleConfig("/vehicle-ScaniaV8.json", vehicleConfig);
+
+    if (hwOk && vcOk) {
+        printConfig(hwConfig, vehicleConfig);
+
+        Serial.println("\n── Initializing Hardware ──");
+        HardwareInit::init(hwConfig);
+
+        Serial.println("\n── Loading Vehicle Profile ──");
+        if (profile.load("/vehicle-ScaniaV8.json")) {
+            profile.populateSoundData(soundData);
+            RcEngineSound::Config config;
+            profile.populateConfig(config);
+            engine.setConfig(config);
+
+            engine.begin(soundData);
+            AudioOutput::begin(&engine);
+            AudioOutput::start();
+
+            Serial.println("\n── System Ready ──");
+            Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
+            Serial.printf("Free PSRAM: %d bytes\n", ESP.getFreePsram());
+        } else {
+            Serial.println("Failed to load vehicle profile");
+        }
+    } else {
+        Serial.println("Failed to load configs");
+    }
+
+    Serial.println("\n=== Init Complete ===\n");
 }
 
 void loop() {
-  printConfigInfo();
-  delay(2000);
+    delay(1000);
 }
