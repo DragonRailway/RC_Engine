@@ -43,4 +43,8 @@ applet/
 build_output.txt
 *bak
 
-/lib/ESP32_PWM_Fusion
+# Agents
+.opencode/
+.claude/
+.cursor/
+.codex/

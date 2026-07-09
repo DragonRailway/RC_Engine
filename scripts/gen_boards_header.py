@@ -9,7 +9,7 @@ import glob
 
 def generate_boards_header(source, target, env):
     project_dir = env["PROJECT_DIR"]
-    boards_dir = os.path.join(project_dir, "src", "boards")
+    boards_dir = os.path.join(project_dir, "boards")
     boards_h = os.path.join(boards_dir, "boards.h")
 
     # Find all .h files in boards_dir, excluding boards.h
@@ -46,7 +46,7 @@ def generate_boards_header(source, target, env):
 
 # Execute immediately when script is loaded
 project_dir = env["PROJECT_DIR"]
-boards_dir = os.path.join(project_dir, "src", "boards")
+boards_dir = os.path.join(project_dir, "boards")
 boards_h = os.path.join(boards_dir, "boards.h")
 
 # Find all .h files in boards_dir, excluding boards.h

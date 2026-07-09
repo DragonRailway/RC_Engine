@@ -1,0 +1,52 @@
+schema: spec-driven
+
+context: |
+  RC Brain - ESP32-S3 RC vehicle sound and control controller.
+  
+  Tech stack:
+  - ESP32-S3 N4R2 (4MB flash, 2MB PSRAM)
+  - Arduino framework via PlatformIO
+  - ArduinoJson ^7.0.4 for config parsing
+  - ESP32_PWM_Fusion (local) for PWM control
+  - LittleFS for on-device config storage
+  - I2S audio output (22,050 Hz, 8-bit PCM)
+  
+  Project structure:
+  - /SoundEngine - shared sound engine library (root level, not lib/)
+  - /boards - shared board pin definitions (TRACKLINK_V3, MIKRO_V2)
+  - /common - shared infrastructure (Config, PinMapper, HardwareInit, ConfigLoader, ConfigParser)
+  - /RC_Truck - truck controller (src/main.cpp, configs/, sounds/)
+  - /RC_Loco - locomotive controller (src/main.cpp, configs/, sounds/)
+  
+  Build environments:
+  - pio run -e RC_Truck (default)
+  - pio run -e RC_Loco
+  
+  Reference documentation: /llm-docs/ (read during explore for context)
+  - SPEC.md - project overview, build system, vehicle types
+  - CONFIGURATION.md - JSON config system, file structure
+  - SIMULATION.md - sound engine, RPM simulation, mixing
+  - MOTORS.md - H-Bridge, ESC, servo control
+  - LIGHTS.md - LED channels, effects
+  - BOARD.md - board definitions, pin mapping
+  
+  Sound format: 22,050 Hz, 8-bit PCM, stored as JSON arrays in /sounds/
+  Vehicle types: TRUCK, CAR, TANK, EXCAVATOR, LOCOMOTIVE
+  Vehicle profiles: 80+ pre-built in /SoundEngine/vehicles/
+  
+  Conventions:
+  - Header-only classes in common/ and SoundEngine/src/
+  - Config structs in Config.h (HardwareConfig, VehicleConfig)
+  - Pin names resolved via PinMapper (L0-L6, S1-S2, HBRIDGE_A/B)
+  - Board defines via build flags (-D TRACKLINK_V3)
+  - All config loaded from LittleFS at boot
+
+# Per-artifact rules (optional)
+# rules:
+#   proposal:
+#     - Keep proposals focused on one capability change
+#   specs:
+#     - Use SHALL/MUST for normative requirements
+#     - Each requirement needs at least one scenario
+#   tasks:
+#     - Break tasks into chunks of max 2 hours
