@@ -24,38 +24,16 @@ RcEngineSound::RcEngineSound() :
     virtualSpeed(0),
     lastThrottle(0)
 {
-    // Initialize all voices to inactive
-    for (int i = 0; i < VOICE_COUNT; i++) {
+    for (int i = 0; i < SOUND_COUNT; i++) {
         voices[i] = VoiceState();
     }
 }
 
 RcEngineSound::~RcEngineSound() {
     if (sounds.isDynamic) {
-        if (sounds.samples) free(sounds.samples);
-        if (sounds.startSamples) free(sounds.startSamples);
-        if (sounds.revSamples) free(sounds.revSamples);
-        if (sounds.turboSamples) free(sounds.turboSamples);
-        if (sounds.knockSamples) free(sounds.knockSamples);
-        if (sounds.wastegateSamples) free(sounds.wastegateSamples);
-        if (sounds.hornSamples) free(sounds.hornSamples);
-        if (sounds.jakeBrakeSamples) free(sounds.jakeBrakeSamples);
-        if (sounds.fanSamples) free(sounds.fanSamples);
-        if (sounds.sirenSamples) free(sounds.sirenSamples);
-        if (sounds.brakeSamples) free(sounds.brakeSamples);
-        if (sounds.reversingSamples) free(sounds.reversingSamples);
-        if (sounds.parkingBrakeSamples) free(sounds.parkingBrakeSamples);
-        if (sounds.superchargerSamples) free(sounds.superchargerSamples);
-        if (sounds.shiftingSamples) free(sounds.shiftingSamples);
-        if (sounds.indicatorSamples) free(sounds.indicatorSamples);
-        if (sounds.couplingSamples) free(sounds.couplingSamples);
-        if (sounds.uncouplingSamples) free(sounds.uncouplingSamples);
-        if (sounds.sound1Samples) free(sounds.sound1Samples);
-        if (sounds.tireSquealSamples) free(sounds.tireSquealSamples);
-        if (sounds.hydraulicPumpSamples) free(sounds.hydraulicPumpSamples);
-        if (sounds.hydraulicFlowSamples) free(sounds.hydraulicFlowSamples);
-        if (sounds.trackRattleSamples) free(sounds.trackRattleSamples);
-        if (sounds.bucketRattleSamples) free(sounds.bucketRattleSamples);
+        for (int i = 0; i < SOUND_COUNT; i++) {
+            if (sounds.slots[i].samples) free(sounds.slots[i].samples);
+        }
     }
 }
 
@@ -63,165 +41,77 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     sounds = soundData;
     cfg = config;
 
-    // Configure engine voices (pitch-shifted)
-    voices[VOICE_IDLE].samples = sounds.samples;
-    voices[VOICE_IDLE].count = sounds.sampleCount;
-    voices[VOICE_IDLE].pitchShifted = true;
-    voices[VOICE_IDLE].loop = true;
+    struct VoiceDef { bool pitchShifted; bool loop; bool oneShot; };
+    static const VoiceDef voiceDefs[SOUND_COUNT] = {
+        {true,  true,  false}, // IDLE
+        {true,  true,  false}, // REV
+        {false, false, false}, // START (handled separately)
+        {false, false, true},  // KNOCK
+        {false, false, true},  // WASTEGATE
+        {false, true,  false}, // HORN
+        {false, true,  false}, // SIREN
+        {false, false, true},  // BRAKE
+        {true,  true,  false}, // JAKE_BRAKE
+        {false, true,  false}, // REVERSING
+        {false, false, true},  // PARKING_BRAKE
+        {false, false, true},  // SHIFTING
+        {false, true,  false}, // INDICATOR
+        {false, false, true},  // COUPLING
+        {true,  true,  false}, // FAN
+        {true,  true,  false}, // SUPERCHARGER
+        {false, false, true},  // UNCOUPLING
+        {false, true,  false}, // SOUND1
+        {false, true,  false}, // TIRE_SQUEAL
+        {true,  true,  false}, // HYDRAULIC_PUMP
+        {false, true,  false}, // HYDRAULIC_FLOW
+        {false, false, true},  // TRACK_RATTLE
+        {false, false, true},  // BUCKET_RATTLE
+    };
 
-    voices[VOICE_REV].samples = sounds.revSamples;
-    voices[VOICE_REV].count = sounds.revSampleCount;
-    voices[VOICE_REV].pitchShifted = true;
-    voices[VOICE_REV].loop = true;
+    for (int i = 0; i < SOUND_COUNT; i++) {
+        voices[i].samples = sounds.slots[i].samples;
+        voices[i].count = sounds.slots[i].sampleCount;
+        voices[i].pitchShifted = voiceDefs[i].pitchShifted;
+        voices[i].loop = voiceDefs[i].loop;
+        voices[i].oneShot = voiceDefs[i].oneShot;
+    }
 
-    voices[VOICE_TURBO].samples = sounds.turboSamples;
-    voices[VOICE_TURBO].count = sounds.turboSampleCount;
-    voices[VOICE_TURBO].pitchShifted = true;
-    voices[VOICE_TURBO].loop = true;
-
-    voices[VOICE_KNOCK].samples = sounds.knockSamples;
-    voices[VOICE_KNOCK].count = sounds.knockSampleCount;
-    voices[VOICE_KNOCK].pitchShifted = false; // Knock is fixed pitch
-    voices[VOICE_KNOCK].loop = false;         // One-shot per trigger
-
-    voices[VOICE_WASTEGATE].samples = sounds.wastegateSamples;
-    voices[VOICE_WASTEGATE].count = sounds.wastegateSampleCount;
-    voices[VOICE_WASTEGATE].pitchShifted = false;
-    voices[VOICE_WASTEGATE].loop = false;
-
-    // Horn with loop points
-    voices[VOICE_HORN].samples = sounds.hornSamples;
-    voices[VOICE_HORN].count = sounds.hornSampleCount;
-    voices[VOICE_HORN].pitchShifted = false;
-    voices[VOICE_HORN].loop = true;
-    voices[VOICE_HORN].loopBegin = cfg.hornLoopBegin;
-    voices[VOICE_HORN].loopEnd = cfg.hornLoopEnd;
-
-    // Siren with loop points
-    voices[VOICE_SIREN].samples = sounds.sirenSamples;
-    voices[VOICE_SIREN].count = sounds.sirenSampleCount;
-    voices[VOICE_SIREN].pitchShifted = false;
-    voices[VOICE_SIREN].loop = true;
-    voices[VOICE_SIREN].loopBegin = cfg.sirenLoopBegin;
-    voices[VOICE_SIREN].loopEnd = cfg.sirenLoopEnd;
-
-    voices[VOICE_BRAKE].samples = sounds.brakeSamples;
-    voices[VOICE_BRAKE].count = sounds.brakeSampleCount;
-    voices[VOICE_BRAKE].pitchShifted = false;
-    voices[VOICE_BRAKE].oneShot = true;
-
-    voices[VOICE_JAKE_BRAKE].samples = sounds.jakeBrakeSamples;
-    voices[VOICE_JAKE_BRAKE].count = sounds.jakeBrakeSampleCount;
-    voices[VOICE_JAKE_BRAKE].pitchShifted = true;
-    voices[VOICE_JAKE_BRAKE].loop = true;
-
-    // Reversing with loop points
-    voices[VOICE_REVERSING].samples = sounds.reversingSamples;
-    voices[VOICE_REVERSING].count = sounds.reversingSampleCount;
-    voices[VOICE_REVERSING].pitchShifted = false;
-    voices[VOICE_REVERSING].loop = true;
-    voices[VOICE_REVERSING].loopBegin = cfg.reversingLoopBegin;
-    voices[VOICE_REVERSING].loopEnd = cfg.reversingLoopEnd;
-
-    voices[VOICE_PARKING_BRAKE].samples = sounds.parkingBrakeSamples;
-    voices[VOICE_PARKING_BRAKE].count = sounds.parkingBrakeSampleCount;
-    voices[VOICE_PARKING_BRAKE].pitchShifted = false;
-    voices[VOICE_PARKING_BRAKE].oneShot = true;
-
-    voices[VOICE_SHIFTING].samples = sounds.shiftingSamples;
-    voices[VOICE_SHIFTING].count = sounds.shiftingSampleCount;
-    voices[VOICE_SHIFTING].pitchShifted = false;
-    voices[VOICE_SHIFTING].oneShot = true;
-
-    voices[VOICE_INDICATOR].samples = sounds.indicatorSamples;
-    voices[VOICE_INDICATOR].count = sounds.indicatorSampleCount;
-    voices[VOICE_INDICATOR].pitchShifted = false;
-    voices[VOICE_INDICATOR].loop = true;
-
-    voices[VOICE_COUPLING].samples = sounds.couplingSamples;
-    voices[VOICE_COUPLING].count = sounds.couplingSampleCount;
-    voices[VOICE_COUPLING].pitchShifted = false;
-    voices[VOICE_COUPLING].oneShot = true;
-
-    voices[VOICE_FAN].samples = sounds.fanSamples;
-    voices[VOICE_FAN].count = sounds.fanSampleCount;
-    voices[VOICE_FAN].pitchShifted = true;
-    voices[VOICE_FAN].loop = true;
-
-    voices[VOICE_SUPERCHARGER].samples = sounds.superchargerSamples;
-    voices[VOICE_SUPERCHARGER].count = sounds.superchargerSampleCount;
-    voices[VOICE_SUPERCHARGER].pitchShifted = true;
-    voices[VOICE_SUPERCHARGER].loop = true;
-
-    voices[VOICE_UNCOUPLING].samples = sounds.uncouplingSamples;
-    voices[VOICE_UNCOUPLING].count = sounds.uncouplingSampleCount;
-    voices[VOICE_UNCOUPLING].pitchShifted = false;
-    voices[VOICE_UNCOUPLING].oneShot = true;
-
-    // Sound1 with loop points
-    voices[VOICE_SOUND1].samples = sounds.sound1Samples;
-    voices[VOICE_SOUND1].count = sounds.sound1SampleCount;
-    voices[VOICE_SOUND1].pitchShifted = false;
-    voices[VOICE_SOUND1].loop = true;
-    voices[VOICE_SOUND1].loopBegin = cfg.sound1LoopBegin;
-    voices[VOICE_SOUND1].loopEnd = cfg.sound1LoopEnd;
-
-    // Tire squeal: fixed pitch, loops while active
-    voices[VOICE_TIRE_SQUEAL].samples = sounds.tireSquealSamples;
-    voices[VOICE_TIRE_SQUEAL].count = sounds.tireSquealSampleCount;
-    voices[VOICE_TIRE_SQUEAL].pitchShifted = false;
-    voices[VOICE_TIRE_SQUEAL].loop = true;
-
-    // Hydraulic pump: pitch-shifted with engine, loops
-    voices[VOICE_HYDRAULIC_PUMP].samples = sounds.hydraulicPumpSamples;
-    voices[VOICE_HYDRAULIC_PUMP].count = sounds.hydraulicPumpSampleCount;
-    voices[VOICE_HYDRAULIC_PUMP].pitchShifted = true;
-    voices[VOICE_HYDRAULIC_PUMP].loop = true;
-
-    // Hydraulic flow: fixed pitch, loops
-    voices[VOICE_HYDRAULIC_FLOW].samples = sounds.hydraulicFlowSamples;
-    voices[VOICE_HYDRAULIC_FLOW].count = sounds.hydraulicFlowSampleCount;
-    voices[VOICE_HYDRAULIC_FLOW].pitchShifted = false;
-    voices[VOICE_HYDRAULIC_FLOW].loop = true;
-
-    // Track rattle: fixed pitch, one-shot per trigger
-    voices[VOICE_TRACK_RATTLE].samples = sounds.trackRattleSamples;
-    voices[VOICE_TRACK_RATTLE].count = sounds.trackRattleSampleCount;
-    voices[VOICE_TRACK_RATTLE].pitchShifted = false;
-    voices[VOICE_TRACK_RATTLE].oneShot = true;
-
-    // Bucket rattle: fixed pitch, one-shot per trigger
-    voices[VOICE_BUCKET_RATTLE].samples = sounds.bucketRattleSamples;
-    voices[VOICE_BUCKET_RATTLE].count = sounds.bucketRattleSampleCount;
-    voices[VOICE_BUCKET_RATTLE].pitchShifted = false;
-    voices[VOICE_BUCKET_RATTLE].oneShot = true;
+    // Loop points
+    voices[HORN].loopBegin = cfg.loopPoints.hornBegin;
+    voices[HORN].loopEnd = cfg.loopPoints.hornEnd;
+    voices[SIREN].loopBegin = cfg.loopPoints.sirenBegin;
+    voices[SIREN].loopEnd = cfg.loopPoints.sirenEnd;
+    voices[REVERSING].loopBegin = cfg.loopPoints.reversingBegin;
+    voices[REVERSING].loopEnd = cfg.loopPoints.reversingEnd;
+    voices[SOUND1].loopBegin = cfg.loopPoints.sound1Begin;
+    voices[SOUND1].loopEnd = cfg.loopPoints.sound1End;
 
     // Configure default volumes
-    voices[VOICE_IDLE].volume = cfg.idleVolume;
-    voices[VOICE_REV].volume = cfg.revVolume;
-    voices[VOICE_TURBO].volume = cfg.turboVolume;
-    voices[VOICE_KNOCK].volume = cfg.knockVolume;
-    voices[VOICE_WASTEGATE].volume = cfg.wastegateVolume;
-    voices[VOICE_HORN].volume = cfg.hornVolume;
-    voices[VOICE_SIREN].volume = cfg.sirenVolume;
-    voices[VOICE_BRAKE].volume = cfg.brakeVolume;
-    voices[VOICE_JAKE_BRAKE].volume = cfg.jakeBrakeVolume;
-    voices[VOICE_REVERSING].volume = cfg.reversingVolume;
-    voices[VOICE_PARKING_BRAKE].volume = cfg.parkingBrakeVolume;
-    voices[VOICE_SHIFTING].volume = cfg.shiftingVolume;
-    voices[VOICE_INDICATOR].volume = cfg.indicatorVolume;
-    voices[VOICE_COUPLING].volume = cfg.couplingVolume;
-    voices[VOICE_FAN].volume = cfg.fanVolume;
-    voices[VOICE_SUPERCHARGER].volume = cfg.superchargerVolume;
-    voices[VOICE_UNCOUPLING].volume = cfg.uncouplingVolume;
-    voices[VOICE_SOUND1].volume = cfg.sound1Volume;
-    voices[VOICE_TIRE_SQUEAL].volume = cfg.tireSquealVolume;
-    voices[VOICE_HYDRAULIC_PUMP].volume = cfg.hydraulicPumpVolume;
-    voices[VOICE_HYDRAULIC_FLOW].volume = cfg.hydraulicFlowVolume;
-    voices[VOICE_TRACK_RATTLE].volume = cfg.trackRattleVolume;
-    voices[VOICE_BUCKET_RATTLE].volume = cfg.bucketRattleVolume;
+    voices[IDLE].volume = cfg.sound.idle;
+    voices[REV].volume = cfg.sound.rev;
+    voices[TURBO].volume = cfg.sound.turbo;
+    voices[KNOCK].volume = cfg.sound.knock;
+    voices[WASTEGATE].volume = cfg.sound.wastegate;
+    voices[HORN].volume = cfg.sound.horn;
+    voices[SIREN].volume = cfg.sound.siren;
+    voices[BRAKE].volume = cfg.sound.brake;
+    voices[JAKE_BRAKE].volume = cfg.sound.jakeBrake;
+    voices[REVERSING].volume = cfg.sound.reversing;
+    voices[PARKING_BRAKE].volume = cfg.sound.parkingBrake;
+    voices[SHIFTING].volume = cfg.sound.shifting;
+    voices[INDICATOR].volume = cfg.sound.indicator;
+    voices[COUPLING].volume = cfg.sound.coupling;
+    voices[FAN].volume = cfg.sound.fan;
+    voices[SUPERCHARGER].volume = cfg.sound.supercharger;
+    voices[UNCOUPLING].volume = cfg.sound.uncoupling;
+    voices[SOUND1].volume = cfg.sound.sound1;
+    voices[TIRE_SQUEAL].volume = cfg.sound.tireSqueal;
+    voices[HYDRAULIC_PUMP].volume = cfg.sound.hydraulicPump;
+    voices[HYDRAULIC_FLOW].volume = cfg.sound.hydraulicFlow;
+    voices[TRACK_RATTLE].volume = cfg.sound.trackRattle;
+    voices[BUCKET_RATTLE].volume = cfg.sound.bucketRattle;
 
-    Serial.printf("[RcEngineSound] Initialized with %d voice slots\n", VOICE_COUNT);
+    Serial.printf("[RcEngineSound] Initialized with %d voice slots\n", SOUND_COUNT);
 }
 
 void RcEngineSound::begin(const SoundData& soundData) {
@@ -243,87 +133,87 @@ void RcEngineSound::stopEngine() {
 }
 
 void RcEngineSound::triggerHorn(bool active) {
-    voices[VOICE_HORN].active = active;
-    if (active) voices[VOICE_HORN].position = 0;
+    voices[HORN].active = active;
+    if (active) voices[HORN].position = 0;
 }
 
 void RcEngineSound::triggerSiren(bool active) {
-    voices[VOICE_SIREN].active = active;
-    if (active) voices[VOICE_SIREN].position = 0;
+    voices[SIREN].active = active;
+    if (active) voices[SIREN].position = 0;
 }
 
 void RcEngineSound::triggerBrake(bool active) {
-    voices[VOICE_BRAKE].active = active;
-    if (active) voices[VOICE_BRAKE].position = 0;
+    voices[BRAKE].active = active;
+    if (active) voices[BRAKE].position = 0;
 }
 
 void RcEngineSound::triggerParkingBrake(bool active) {
-    voices[VOICE_PARKING_BRAKE].active = active;
-    if (active) voices[VOICE_PARKING_BRAKE].position = 0;
+    voices[PARKING_BRAKE].active = active;
+    if (active) voices[PARKING_BRAKE].position = 0;
 }
 
 void RcEngineSound::triggerReversing(bool active) {
-    voices[VOICE_REVERSING].active = active;
-    if (active) voices[VOICE_REVERSING].position = 0;
+    voices[REVERSING].active = active;
+    if (active) voices[REVERSING].position = 0;
 }
 
 void RcEngineSound::triggerShifting(bool active) {
-    voices[VOICE_SHIFTING].active = active;
-    if (active) voices[VOICE_SHIFTING].position = 0;
+    voices[SHIFTING].active = active;
+    if (active) voices[SHIFTING].position = 0;
 }
 
 void RcEngineSound::triggerIndicator(bool active) {
-    voices[VOICE_INDICATOR].active = active;
-    if (active) voices[VOICE_INDICATOR].position = 0;
+    voices[INDICATOR].active = active;
+    if (active) voices[INDICATOR].position = 0;
 }
 
 void RcEngineSound::triggerCoupling(bool active) {
-    voices[VOICE_COUPLING].active = active;
-    if (active) voices[VOICE_COUPLING].position = 0;
+    voices[COUPLING].active = active;
+    if (active) voices[COUPLING].position = 0;
 }
 
 void RcEngineSound::triggerUncoupling(bool active) {
-    voices[VOICE_UNCOUPLING].active = active;
-    if (active) voices[VOICE_UNCOUPLING].position = 0;
+    voices[UNCOUPLING].active = active;
+    if (active) voices[UNCOUPLING].position = 0;
 }
 
 void RcEngineSound::triggerSound1(bool active) {
-    voices[VOICE_SOUND1].active = active;
-    if (active) voices[VOICE_SOUND1].position = 0;
+    voices[SOUND1].active = active;
+    if (active) voices[SOUND1].position = 0;
 }
 
 void RcEngineSound::triggerTireSqueal(bool active) {
-    voices[VOICE_TIRE_SQUEAL].active = active;
-    if (active) voices[VOICE_TIRE_SQUEAL].position = 0;
+    voices[TIRE_SQUEAL].active = active;
+    if (active) voices[TIRE_SQUEAL].position = 0;
 }
 
 void RcEngineSound::triggerHydraulicPump(bool active) {
-    voices[VOICE_HYDRAULIC_PUMP].active = active;
-    if (active) voices[VOICE_HYDRAULIC_PUMP].position = 0;
+    voices[HYDRAULIC_PUMP].active = active;
+    if (active) voices[HYDRAULIC_PUMP].position = 0;
 }
 
 void RcEngineSound::triggerHydraulicFlow(bool active) {
-    voices[VOICE_HYDRAULIC_FLOW].active = active;
-    if (active) voices[VOICE_HYDRAULIC_FLOW].position = 0;
+    voices[HYDRAULIC_FLOW].active = active;
+    if (active) voices[HYDRAULIC_FLOW].position = 0;
 }
 
 void RcEngineSound::triggerTrackRattle(bool active) {
-    voices[VOICE_TRACK_RATTLE].active = active;
-    if (active) voices[VOICE_TRACK_RATTLE].position = 0;
+    voices[TRACK_RATTLE].active = active;
+    if (active) voices[TRACK_RATTLE].position = 0;
 }
 
 void RcEngineSound::triggerBucketRattle(bool active) {
-    voices[VOICE_BUCKET_RATTLE].active = active;
-    if (active) voices[VOICE_BUCKET_RATTLE].position = 0;
+    voices[BUCKET_RATTLE].active = active;
+    if (active) voices[BUCKET_RATTLE].position = 0;
 }
 
 void RcEngineSound::triggerDumpBed(bool active) {
-    if (cfg.dumpBedEnabled) {
-        voices[VOICE_HYDRAULIC_PUMP].active = active;
-        voices[VOICE_HYDRAULIC_FLOW].active = active;
+    if (cfg.features.dumpBedEnabled) {
+        voices[HYDRAULIC_PUMP].active = active;
+        voices[HYDRAULIC_FLOW].active = active;
         if (active) {
-            voices[VOICE_HYDRAULIC_PUMP].position = 0;
-            voices[VOICE_HYDRAULIC_FLOW].position = 0;
+            voices[HYDRAULIC_PUMP].position = 0;
+            voices[HYDRAULIC_FLOW].position = 0;
         }
     }
 }
@@ -335,25 +225,25 @@ void RcEngineSound::update(int16_t throttle) {
     lastUpdateTime = now;
 
     int32_t targetRpm = abs(throttle);
-    if (targetRpm > cfg.maxRpm) targetRpm = cfg.maxRpm;
+    if (targetRpm > cfg.engine.maxRpm) targetRpm = cfg.engine.maxRpm;
 
     // ── Crawler Mode Detection ──
-    crawlerMode = (cfg.masterVolume <= cfg.crawlerModeThreshold);
+    crawlerMode = (cfg.sound.master <= cfg.sound.crawlerModeThreshold);
 
     // ── Automatic Transmission Simulation ──
     int32_t effectiveTarget = targetRpm;
-    if (cfg.transmissionType == TRANS_AUTOMATIC && state == RUNNING) {
-        int32_t gearSize = cfg.maxRpm / cfg.numberOfGears;
+    if (cfg.transmission.type == TRANS_AUTOMATIC && state == RUNNING) {
+        int32_t gearSize = cfg.engine.maxRpm / cfg.transmission.numberOfGears;
         if (gearSize > 0) {
             if (throttle > virtualSpeed) {
-                virtualSpeed += max((int32_t)1, (int32_t)(cfg.acc * 2));
-                if (virtualSpeed > cfg.maxRpm) virtualSpeed = cfg.maxRpm;
+                virtualSpeed += max((int32_t)1, (int32_t)(cfg.engine.acc * 2));
+                if (virtualSpeed > cfg.engine.maxRpm) virtualSpeed = cfg.engine.maxRpm;
             } else if (throttle < virtualSpeed) {
-                virtualSpeed -= max((int32_t)1, (int32_t)(cfg.dec * 2));
+                virtualSpeed -= max((int32_t)1, (int32_t)(cfg.engine.dec * 2));
                 if (virtualSpeed < 0) virtualSpeed = 0;
             }
             selectedGear = (uint8_t)(virtualSpeed / gearSize);
-            if (selectedGear >= cfg.numberOfGears) selectedGear = cfg.numberOfGears - 1;
+            if (selectedGear >= cfg.transmission.numberOfGears) selectedGear = cfg.transmission.numberOfGears - 1;
             int32_t gearBase = selectedGear * gearSize;
             int32_t throttleInGear = targetRpm - gearBase;
             if (throttleInGear < 0) throttleInGear = 0;
@@ -363,14 +253,14 @@ void RcEngineSound::update(int16_t throttle) {
     }
 
     // ── Manual Transmission Shifting Trigger ──
-    if (cfg.transmissionType == TRANS_MANUAL && state == RUNNING) {
-        int32_t gearSize = cfg.maxRpm / cfg.numberOfGears;
+    if (cfg.transmission.type == TRANS_MANUAL && state == RUNNING) {
+        int32_t gearSize = cfg.engine.maxRpm / cfg.transmission.numberOfGears;
         if (gearSize > 0) {
             uint8_t newGear = (uint8_t)(targetRpm / gearSize) + 1;
-            if (newGear > cfg.numberOfGears) newGear = cfg.numberOfGears;
-            if (newGear != lastGear && cfg.shiftingVolume > 0) {
-                voices[VOICE_SHIFTING].active = true;
-                voices[VOICE_SHIFTING].position = 0;
+            if (newGear > cfg.transmission.numberOfGears) newGear = cfg.transmission.numberOfGears;
+            if (newGear != lastGear && cfg.sound.shifting > 0) {
+                voices[SHIFTING].active = true;
+                voices[SHIFTING].position = 0;
             }
             lastGear = newGear;
             selectedGear = newGear;
@@ -380,33 +270,32 @@ void RcEngineSound::update(int16_t throttle) {
     if (state == RUNNING) {
         // ── Jake brake auto-detection ──
         bool throttleReleased = (effectiveTarget < currentRpm);
-        bool aboveJakeThreshold = (currentRpmFixed > (uint16_t)(cfg.maxRpm * cfg.jakeBrakeMinRpm / 100));
+        bool aboveJakeThreshold = (currentRpmFixed > (uint16_t)(cfg.engine.maxRpm * cfg.engine.jakeBrakeMinRpm / 100));
         bool throttleApplied = (effectiveTarget > currentRpm);
-        
-        if (throttleReleased && aboveJakeThreshold && cfg.jakeBrakeVolume > 0) {
+
+        if (throttleReleased && aboveJakeThreshold && cfg.sound.jakeBrake > 0) {
             jakeBrakeActive = true;
             engineMuted = true;
-        } else if (throttleApplied || currentRpmFixed <= (uint16_t)(cfg.maxRpm * cfg.jakeBrakeMinRpm / 100)) {
+        } else if (throttleApplied || currentRpmFixed <= (uint16_t)(cfg.engine.maxRpm * cfg.engine.jakeBrakeMinRpm / 100)) {
             jakeBrakeActive = false;
             engineMuted = false;
         }
 
         // ── Jake brake RPM deceleration ──
         if (jakeBrakeActive) {
-            currentRpm -= cfg.jakeBrakeDecelRate;
+            currentRpm -= cfg.engine.jakeBrakeDecelRate;
             if (currentRpm < 0) currentRpm = 0;
         } else if (crawlerMode) {
-            // ── Crawler mode: instant RPM response ──
             currentRpm = effectiveTarget;
         } else {
             // ── Normal RPM calculation with inertia ──
-            int32_t inertiaFactor = max((int32_t)1, (int32_t)(101 - cfg.inertia));
+            int32_t inertiaFactor = max((int32_t)1, (int32_t)(101 - cfg.engine.inertia));
             int32_t diff = effectiveTarget - currentRpm;
 
-            int32_t accelStep = cfg.acc;
-            int32_t decelStep = cfg.dec;
-            if (cfg.transmissionType == TRANS_AUTOMATIC && selectedGear < 6) {
-                accelStep = cfg.gearRampTimes[selectedGear];
+            int32_t accelStep = cfg.engine.acc;
+            int32_t decelStep = cfg.engine.dec;
+            if (cfg.transmission.type == TRANS_AUTOMATIC && selectedGear < 6) {
+                accelStep = cfg.transmission.gearRampTimes[selectedGear];
                 decelStep = accelStep;
             }
 
@@ -420,47 +309,46 @@ void RcEngineSound::update(int16_t throttle) {
         }
 
         // ── Tire squeal: high throttle, low speed ──
-        bool squealCondition = (throttle > (int32_t)(cfg.maxRpm * cfg.tireSquealThreshold / 100) &&
-                                virtualSpeed < (int32_t)(cfg.maxRpm * cfg.tireSquealMaxSpeed / 100));
-        voices[VOICE_TIRE_SQUEAL].active = squealCondition;
-        if (squealCondition && cfg.tireSquealVolume > 0) {
-            // Volume inversely proportional to speed
+        bool squealCondition = (throttle > (int32_t)(cfg.engine.maxRpm * cfg.features.tireSquealThreshold / 100) &&
+                                virtualSpeed < (int32_t)(cfg.engine.maxRpm * cfg.features.tireSquealMaxSpeed / 100));
+        voices[TIRE_SQUEAL].active = squealCondition;
+        if (squealCondition && cfg.sound.tireSqueal > 0) {
             int32_t speedScale = map(virtualSpeed, 0,
-                                     cfg.maxRpm * cfg.tireSquealMaxSpeed / 100, 100, 0);
-            voices[VOICE_TIRE_SQUEAL].volume =
-                (uint8_t)(cfg.tireSquealVolume * constrain(speedScale, 0, 100) / 100);
+                                     cfg.engine.maxRpm * cfg.features.tireSquealMaxSpeed / 100, 100, 0);
+            voices[TIRE_SQUEAL].volume =
+                (uint8_t)(cfg.sound.tireSqueal * constrain(speedScale, 0, 100) / 100);
         }
 
         // ── Hydraulic pump: RPM-dependent, loops while enabled ──
-        voices[VOICE_HYDRAULIC_PUMP].active = cfg.hydraulicEnabled;
-        if (cfg.hydraulicEnabled && cfg.hydraulicPumpVolume > 0) {
-            int32_t pumpScale = map(currentRpmFixed, 0, cfg.maxRpm, 30, 100);
-            int32_t vol = cfg.hydraulicPumpVolume * constrain(pumpScale, 0, 100) / 100;
-            if (cfg.hydrostaticMode) {
-                int32_t speedScale = map(virtualSpeed, 0, cfg.maxRpm, 50, 100);
+        voices[HYDRAULIC_PUMP].active = cfg.features.hydraulicEnabled;
+        if (cfg.features.hydraulicEnabled && cfg.sound.hydraulicPump > 0) {
+            int32_t pumpScale = map(currentRpmFixed, 0, cfg.engine.maxRpm, 30, 100);
+            int32_t vol = cfg.sound.hydraulicPump * constrain(pumpScale, 0, 100) / 100;
+            if (cfg.features.hydrostaticMode) {
+                int32_t speedScale = map(virtualSpeed, 0, cfg.engine.maxRpm, 50, 100);
                 vol = vol * constrain(speedScale, 0, 100) / 100;
             }
-            voices[VOICE_HYDRAULIC_PUMP].volume = (uint8_t)vol;
+            voices[HYDRAULIC_PUMP].volume = (uint8_t)vol;
         }
 
         // ── Track rattle: speed-dependent interval ──
-        if (cfg.trackRattleEnabled && virtualSpeed > 0 && cfg.trackRattleVolume > 0 && !voices[VOICE_TRACK_RATTLE].active) {
-            uint32_t interval = map(virtualSpeed, 0, cfg.maxRpm,
-                                   cfg.trackRattleIntervalMax, cfg.trackRattleIntervalMin);
+        if (cfg.features.trackRattleEnabled && virtualSpeed > 0 && cfg.sound.trackRattle > 0 && !voices[TRACK_RATTLE].active) {
+            uint32_t interval = map(virtualSpeed, 0, cfg.engine.maxRpm,
+                                   cfg.features.trackRattleIntervalMax, cfg.features.trackRattleIntervalMin);
             if (now - lastTrackRattleTime > interval) {
-                voices[VOICE_TRACK_RATTLE].active = true;
-                voices[VOICE_TRACK_RATTLE].position = 0;
+                voices[TRACK_RATTLE].active = true;
+                voices[TRACK_RATTLE].position = 0;
                 lastTrackRattleTime = now;
             }
         }
 
         // ── Wastegate detection ──
-        if (sounds.wastegateSamples && sounds.wastegateSampleCount > 0) {
+        if (sounds.slots[WASTEGATE].samples && sounds.slots[WASTEGATE].sampleCount > 0) {
             int16_t throttleDrop = lastThrottle - throttle;
             if (throttleDrop > 150 && currentRpmFixed > 200 && !wastegateTriggered) {
                 wastegateTriggered = true;
-                voices[VOICE_WASTEGATE].active = true;
-                voices[VOICE_WASTEGATE].position = 0;
+                voices[WASTEGATE].active = true;
+                voices[WASTEGATE].position = 0;
                 wastegateTriggerMillis = now;
             }
         }
@@ -477,14 +365,13 @@ void RcEngineSound::update(int16_t throttle) {
         currentRpm = 0;
     }
 
-    // ── Update virtualSpeed for all transmission types (needed for tire squeal, track rattle) ──
-    if (cfg.transmissionType != TRANS_AUTOMATIC && state == RUNNING) {
-        // Ramp virtualSpeed with inertia for smooth tire squeal / track rattle
+    // ── Update virtualSpeed for non-automatic transmissions ──
+    if (cfg.transmission.type != TRANS_AUTOMATIC && state == RUNNING) {
         if (targetRpm > virtualSpeed) {
-            virtualSpeed += max((int32_t)1, (int32_t)(cfg.acc * 2));
-            if (virtualSpeed > cfg.maxRpm) virtualSpeed = cfg.maxRpm;
+            virtualSpeed += max((int32_t)1, (int32_t)(cfg.engine.acc * 2));
+            if (virtualSpeed > cfg.engine.maxRpm) virtualSpeed = cfg.engine.maxRpm;
         } else if (targetRpm < virtualSpeed) {
-            virtualSpeed -= max((int32_t)1, (int32_t)(cfg.dec * 2));
+            virtualSpeed -= max((int32_t)1, (int32_t)(cfg.engine.dec * 2));
             if (virtualSpeed < 0) virtualSpeed = 0;
         }
     }
@@ -493,7 +380,7 @@ void RcEngineSound::update(int16_t throttle) {
     lastThrottle = throttle;
 
     // ── PARKING_BRAKE → OFF transition ──
-    if (state == PARKING_BRAKE && !voices[VOICE_PARKING_BRAKE].active) {
+    if (state == PARKING_BRAKE && !voices[PARKING_BRAKE].active) {
         state = OFF;
         virtualSpeed = 0;
         lastGear = 1;
@@ -501,7 +388,7 @@ void RcEngineSound::update(int16_t throttle) {
 
     // ── Compute pitch factor from RPM ──
     if (state == RUNNING) {
-        pitchFactor = 1.0f + ((float)currentRpmFixed / (float)cfg.maxRpm) * (cfg.maxPitchFactor - 1.0f);
+        pitchFactor = 1.0f + ((float)currentRpmFixed / (float)cfg.engine.maxRpm) * (cfg.engine.maxPitchFactor - 1.0f);
     } else if (state == STOPPING) {
         if (now - attenuatorMillis > 80) {
             stopPitchFactor -= 0.05f;
@@ -511,16 +398,14 @@ void RcEngineSound::update(int16_t throttle) {
         }
         pitchFactor = stopPitchFactor;
         if (attenuator >= 40) {
-            if (sounds.parkingBrakeSamples && sounds.parkingBrakeSampleCount > 0) {
+            if (sounds.slots[PARKING_BRAKE].samples && sounds.slots[PARKING_BRAKE].sampleCount > 0) {
                 state = PARKING_BRAKE;
-                voices[VOICE_PARKING_BRAKE].active = true;
-                voices[VOICE_PARKING_BRAKE].position = 0;
+                voices[PARKING_BRAKE].active = true;
+                voices[PARKING_BRAKE].position = 0;
             } else {
                 state = OFF;
             }
         }
-    } else if (state == STARTING) {
-        pitchFactor = 1.0f;
     } else {
         pitchFactor = 1.0f;
     }
@@ -528,62 +413,62 @@ void RcEngineSound::update(int16_t throttle) {
     // ── Idle/Rev cross-fade proportion ──
     int16_t idleProportion = 100;
     if (state == RUNNING && !engineMuted) {
-        if (currentRpmFixed > cfg.revSwitchPoint) {
-            idleProportion = map(currentRpmFixed, cfg.idleEndPoint, cfg.revSwitchPoint, 0, 100);
+        if (currentRpmFixed > cfg.engine.revSwitchPoint) {
+            idleProportion = map(currentRpmFixed, cfg.engine.idleEndPoint, cfg.engine.revSwitchPoint, 0, 100);
             idleProportion = constrain(idleProportion, 0, 100);
         }
     }
-    voices[VOICE_IDLE].volume = engineMuted ? 0 : (uint8_t)((int32_t)cfg.idleVolume * idleProportion / 100);
-    voices[VOICE_REV].volume = engineMuted ? 0 : (uint8_t)((int32_t)cfg.revVolume * (100 - idleProportion) / 100);
+    voices[IDLE].volume = engineMuted ? 0 : (uint8_t)((int32_t)cfg.sound.idle * idleProportion / 100);
+    voices[REV].volume = engineMuted ? 0 : (uint8_t)((int32_t)cfg.sound.rev * (100 - idleProportion) / 100);
 
     // ── Turbo volume: RPM-dependent ──
     if (!engineMuted) {
-        int32_t turboScale = map(currentRpmFixed, 0, cfg.maxRpm, 0, 100);
-        voices[VOICE_TURBO].volume = (uint8_t)(cfg.turboVolume * constrain(turboScale, 0, 100) / 100);
+        int32_t turboScale = map(currentRpmFixed, 0, cfg.engine.maxRpm, 0, 100);
+        voices[TURBO].volume = (uint8_t)(cfg.sound.turbo * constrain(turboScale, 0, 100) / 100);
     } else {
-        voices[VOICE_TURBO].volume = 0;
+        voices[TURBO].volume = 0;
     }
 
     // ── Fan volume: RPM-dependent ──
     if (!engineMuted) {
-        int32_t fanScale = map(currentRpmFixed, 0, cfg.maxRpm, 0, 100);
-        voices[VOICE_FAN].volume = (uint8_t)(cfg.fanVolume * constrain(fanScale, 0, 100) / 100);
+        int32_t fanScale = map(currentRpmFixed, 0, cfg.engine.maxRpm, 0, 100);
+        voices[FAN].volume = (uint8_t)(cfg.sound.fan * constrain(fanScale, 0, 100) / 100);
     } else {
-        voices[VOICE_FAN].volume = 0;
+        voices[FAN].volume = 0;
     }
 
     // ── Supercharger: RPM-dependent with start point ──
-    if (!engineMuted && currentRpmFixed > (uint16_t)(cfg.maxRpm * cfg.superchargerStartPoint / 100)) {
-        int32_t scScale = map(currentRpmFixed, cfg.maxRpm * cfg.superchargerStartPoint / 100, cfg.maxRpm, 0, 100);
-        voices[VOICE_SUPERCHARGER].volume = (uint8_t)(cfg.superchargerVolume * constrain(scScale, 0, 100) / 100);
+    if (!engineMuted && currentRpmFixed > (uint16_t)(cfg.engine.maxRpm * cfg.engine.superchargerStartPoint / 100)) {
+        int32_t scScale = map(currentRpmFixed, cfg.engine.maxRpm * cfg.engine.superchargerStartPoint / 100, cfg.engine.maxRpm, 0, 100);
+        voices[SUPERCHARGER].volume = (uint8_t)(cfg.sound.supercharger * constrain(scScale, 0, 100) / 100);
     } else {
-        voices[VOICE_SUPERCHARGER].volume = 0;
+        voices[SUPERCHARGER].volume = 0;
     }
 
     // ── Knock trigger (based on idle loop position) ──
-    if (state == RUNNING && !engineMuted && sounds.knockSamples && cfg.knockVolume > 0 && cfg.knockInterval > 0) {
-        uint32_t knockIntervalSamples = sounds.sampleCount / cfg.knockInterval;
+    if (state == RUNNING && !engineMuted && sounds.slots[KNOCK].samples && cfg.sound.knock > 0 && cfg.engine.knockInterval > 0) {
+        uint32_t knockIntervalSamples = sounds.slots[IDLE].sampleCount / cfg.engine.knockInterval;
         if (knockIntervalSamples > 0) {
-            uint32_t idlePos = (uint32_t)voices[VOICE_IDLE].position;
+            uint32_t idlePos = (uint32_t)voices[IDLE].position;
             if (idlePos >= lastKnockTriggerSample + knockIntervalSamples) {
                 lastKnockTriggerSample = idlePos;
                 curKnockCylinder++;
-                if (curKnockCylinder > cfg.knockInterval) curKnockCylinder = 1;
-                voices[VOICE_KNOCK].active = true;
-                voices[VOICE_KNOCK].position = 0;
+                if (curKnockCylinder > cfg.engine.knockInterval) curKnockCylinder = 1;
+                voices[KNOCK].active = true;
+                voices[KNOCK].position = 0;
             }
         }
     }
 
     // ── Knock cylinder-adaptive volume with RPM scaling ──
-    if (voices[VOICE_KNOCK].active && cfg.knockVolume > 0) {
+    if (voices[KNOCK].active && cfg.sound.knock > 0) {
         bool isLoud = false;
-        switch (cfg.knockPattern) {
+        switch (cfg.engine.knockPattern) {
             case KNOCK_V8:
                 isLoud = (curKnockCylinder == 4 || curKnockCylinder == 8);
                 break;
             case KNOCK_V8_468:
-                isLoud = (curKnockCylinder == 1 || curKnockCylinder == 5 || 
+                isLoud = (curKnockCylinder == 1 || curKnockCylinder == 5 ||
                          curKnockCylinder == 9 || curKnockCylinder == 13);
                 break;
             case KNOCK_R6:
@@ -601,23 +486,22 @@ void RcEngineSound::update(int16_t throttle) {
                 break;
         }
 
-        // RPM-dependent knock volume scaling
-        uint16_t knockRpmThreshold = (uint16_t)(cfg.maxRpm * cfg.knockStartRpm / 100);
-        uint16_t baseKnockVol = isLoud ? cfg.knockVolume : (uint16_t)(cfg.knockVolume * cfg.knockAdaptiveVolume / 100);
-        uint16_t minVol = (uint16_t)(cfg.knockVolume * cfg.minKnockVolume / 100);
-        uint16_t minSecondary = (uint16_t)(minVol * cfg.knockAdaptiveVolume / 100);
+        uint16_t knockRpmThreshold = (uint16_t)(cfg.engine.maxRpm * cfg.engine.knockStartRpm / 100);
+        uint16_t baseKnockVol = isLoud ? cfg.sound.knock : (uint16_t)(cfg.sound.knock * cfg.engine.knockAdaptiveVolume / 100);
+        uint16_t minVol = (uint16_t)(cfg.sound.knock * cfg.engine.minKnockVolume / 100);
+        uint16_t minSecondary = (uint16_t)(minVol * cfg.engine.knockAdaptiveVolume / 100);
 
         if (currentRpmFixed > knockRpmThreshold) {
-            uint16_t rpmScale = map(currentRpmFixed, knockRpmThreshold, cfg.maxRpm, 
+            uint16_t rpmScale = map(currentRpmFixed, knockRpmThreshold, cfg.engine.maxRpm,
                                    isLoud ? minVol : minSecondary, baseKnockVol);
-            voices[VOICE_KNOCK].volume = (uint8_t)rpmScale;
+            voices[KNOCK].volume = (uint8_t)rpmScale;
         } else {
-            voices[VOICE_KNOCK].volume = (uint8_t)(isLoud ? minVol : minSecondary);
+            voices[KNOCK].volume = (uint8_t)(isLoud ? minVol : minSecondary);
         }
     }
 
     // ── Jake brake sound: active when jake braking ──
-    voices[VOICE_JAKE_BRAKE].active = jakeBrakeActive;
+    voices[JAKE_BRAKE].active = jakeBrakeActive;
 }
 
 // ─── Multi-Voice Mixer with Fractional Step Interpolation ───────────────────
@@ -625,18 +509,21 @@ uint8_t RcEngineSound::getNextSample() {
     int32_t engineMix = 0;
     int32_t effectMix = 0;
 
-    // ── Determine current pitch step ──
+    VoiceState snapshot[SOUND_COUNT];
+    portENTER_CRITICAL(&voiceMutex);
+    memcpy(snapshot, voices, sizeof(voices));
+    portEXIT_CRITICAL(&voiceMutex);
+
     float engineStep = pitchFactor;
     if (state == STARTING) engineStep = 1.0f;
     if (state == PARKING_BRAKE || state == OFF) engineStep = 0.0f;
 
-    // ── Process each voice ──
-    for (int i = 0; i < VOICE_COUNT; i++) {
-        VoiceState& v = voices[i];
+    for (int i = 0; i < SOUND_COUNT; i++) {
+        VoiceState& v = snapshot[i];
         if (!v.active || !v.samples || v.count == 0) continue;
 
         float step = v.pitchShifted ? engineStep : 1.0f;
-        if (state == PARKING_BRAKE && i != VOICE_PARKING_BRAKE) continue;
+        if (state == PARKING_BRAKE && i != PARKING_BRAKE) continue;
 
         int8_t sample = readInterpolated(v.samples, v.count, v.position);
         int32_t scaled = (int32_t)sample * v.volume / 100;
@@ -648,7 +535,13 @@ uint8_t RcEngineSound::getNextSample() {
         v.step = step;
         advanceVoice(v);
 
-        // Separate engine and effect mixing
+        // Write back position and active flag
+        // Both needed: position for continuity, active for one-shot deactivation
+        portENTER_CRITICAL(&voiceMutex);
+        voices[i].position = v.position;
+        voices[i].active = v.active;
+        portEXIT_CRITICAL(&voiceMutex);
+
         if (v.pitchShifted) {
             engineMix += scaled;
         } else {
@@ -656,21 +549,21 @@ uint8_t RcEngineSound::getNextSample() {
         }
     }
 
-    // ── Start sound (special: separate sample array, fixed rate during cranking) ──
-    if (state == STARTING && sounds.startSamples && sounds.startSampleCount > 0) {
+    // ── Start sound ──
+    if (state == STARTING && sounds.slots[START].samples && sounds.slots[START].sampleCount > 0) {
         uint32_t pos = (uint32_t)startPos;
-        if (pos < sounds.startSampleCount) {
-            int8_t sample = sounds.startSamples[pos];
-            int32_t scaled = (int32_t)sample * cfg.startVolume / 100;
+        if (pos < sounds.slots[START].sampleCount) {
+            int8_t sample = sounds.slots[START].samples[pos];
+            int32_t scaled = (int32_t)sample * cfg.sound.start / 100;
             engineMix += scaled;
             startPos++;
-            if (startPos >= sounds.startSampleCount) {
+            if (startPos >= sounds.slots[START].sampleCount) {
                 state = RUNNING;
                 startPos = 0;
-                voices[VOICE_IDLE].position = 0;
-                voices[VOICE_REV].position = 0;
-                voices[VOICE_TURBO].position = 0;
-                voices[VOICE_KNOCK].position = 0;
+                voices[IDLE].position = 0;
+                voices[REV].position = 0;
+                voices[TURBO].position = 0;
+                voices[KNOCK].position = 0;
                 lastKnockTriggerSample = 0;
                 curKnockCylinder = 1;
             }
@@ -678,10 +571,10 @@ uint8_t RcEngineSound::getNextSample() {
     }
 
     // ── Apply voice mixing weights ──
-    int32_t mixed = (engineMix * cfg.engineMixWeight / 100) + (effectMix * cfg.effectMixWeight / 100);
+    int32_t mixed = (engineMix * cfg.sound.engineMixWeight / 100) + (effectMix * cfg.sound.effectMixWeight / 100);
 
     // ── Final mix: apply master volume, add DC offset ──
-    mixed = (mixed * cfg.masterVolume / 100) + 128;
+    mixed = (mixed * cfg.sound.master / 100) + 128;
 
     return (uint8_t)constrain(mixed, 0, 255);
 }

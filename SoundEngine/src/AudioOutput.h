@@ -97,7 +97,7 @@ public:
         int16_t out_sample = (int16_t)sample * 256;
 
         buffer[bufferPos] = out_sample;
-        bufferPos++;
+        bufferPos = bufferPos + 1;
 
         if (bufferPos >= BUFFER_SIZE) {
             BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -114,8 +114,8 @@ public:
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
             if (!active || !tx_handle) continue;
 
-            // Apply DC offset fade: ramp 0->128 over ~12ms (276 samples)
-            // At 22,050Hz with 64-sample buffers, increment ~30 per buffer
+            // Apply volume ramp: scale 0.0→1.0 over ~12ms (276 samples)
+            // At 22,050Hz with 64-sample buffers, increment ~30/128 per buffer
             if (offsetRamping && currentOffset < 128) {
                 currentOffset += 30;
                 if (currentOffset >= 128) {
@@ -124,10 +124,11 @@ public:
                 }
             }
 
-            // Apply offset to buffer before writing
-            uint8_t offset = currentOffset;
+            // Scale buffer by ramp factor (0.0→1.0) instead of adding offset
+            // This prevents pops by fading from silence to full volume
+            float scale = currentOffset / 128.0f;
             for (int i = 0; i < BUFFER_SIZE; i++) {
-                buffer[i] += (int16_t)offset;
+                buffer[i] = (int16_t)(buffer[i] * scale);
             }
 
             size_t bytes_written;

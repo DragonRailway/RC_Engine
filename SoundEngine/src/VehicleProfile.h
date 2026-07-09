@@ -7,23 +7,13 @@
 #include "SoundLoader.h"
 
 struct VehicleProfile {
-    SoundData* sounds[24] = {};  // SOUND_COUNT = 24
+    SoundSlot* sounds[SOUND_COUNT] = {};
     RcEngineSound::Config config;
     char name[32] = {};
     bool loaded = false;
 
-    // Sound indices
-    enum SoundIndex {
-        IDLE, REV, START, KNOCK, TURBO, WASTEGATE, HORN,
-        JAKE_BRAKE, FAN, SIREN, BRAKE, PARKING_BRAKE,
-        SHIFTING, REVERSING, INDICATOR, COUPLING, SUPERCHARGER,
-        UNCOUPLING, SOUND1, TIRE_SQUEAL, HYDRAULIC_PUMP,
-        HYDRAULIC_FLOW, TRACK_RATTLE, BUCKET_RATTLE
-    };
-
     static const char* soundTypeNames[];
     static const char* genericNames[];
-    static const int SOUND_COUNT = 24;
 
     bool load(const char* profilePath) {
         unload();
@@ -73,12 +63,12 @@ struct VehicleProfile {
         name[0] = '\0';
     }
 
-    SoundData* getSound(SoundIndex idx) {
-        if (idx < 0 || idx >= SOUND_COUNT) return nullptr;
+    SoundSlot* getSound(SoundID idx) {
+        if (idx >= SOUND_COUNT) return nullptr;
         return sounds[idx];
     }
 
-    SoundData* getSound(const char* type) {
+    SoundSlot* getSound(const char* type) {
         for (int i = 0; i < SOUND_COUNT; i++) {
             if (strcmp(soundTypeNames[i], type) == 0) {
                 return sounds[i];
@@ -89,31 +79,11 @@ struct VehicleProfile {
 
     void populateSoundData(SoundData& out) {
         out = SoundData();
-        out.samples = getSampleAndCount(IDLE, out.sampleCount);
-        out.revSamples = getSampleAndCount(REV, out.revSampleCount);
-        out.startSamples = getSampleAndCount(START, out.startSampleCount);
-        out.knockSamples = getSampleAndCount(KNOCK, out.knockSampleCount);
-        out.turboSamples = getSampleAndCount(TURBO, out.turboSampleCount);
-        out.wastegateSamples = getSampleAndCount(WASTEGATE, out.wastegateSampleCount);
-        out.hornSamples = getSampleAndCount(HORN, out.hornSampleCount);
-        out.hornSampleRate = getSampleRate(HORN);
-        out.jakeBrakeSamples = getSampleAndCount(JAKE_BRAKE, out.jakeBrakeSampleCount);
-        out.fanSamples = getSampleAndCount(FAN, out.fanSampleCount);
-        out.sirenSamples = getSampleAndCount(SIREN, out.sirenSampleCount);
-        out.brakeSamples = getSampleAndCount(BRAKE, out.brakeSampleCount);
-        out.reversingSamples = getSampleAndCount(REVERSING, out.reversingSampleCount);
-        out.parkingBrakeSamples = getSampleAndCount(PARKING_BRAKE, out.parkingBrakeSampleCount);
-        out.superchargerSamples = getSampleAndCount(SUPERCHARGER, out.superchargerSampleCount);
-        out.shiftingSamples = getSampleAndCount(SHIFTING, out.shiftingSampleCount);
-        out.indicatorSamples = getSampleAndCount(INDICATOR, out.indicatorSampleCount);
-        out.couplingSamples = getSampleAndCount(COUPLING, out.couplingSampleCount);
-        out.uncouplingSamples = getSampleAndCount(UNCOUPLING, out.uncouplingSampleCount);
-        out.sound1Samples = getSampleAndCount(SOUND1, out.sound1SampleCount);
-        out.tireSquealSamples = getSampleAndCount(TIRE_SQUEAL, out.tireSquealSampleCount);
-        out.hydraulicPumpSamples = getSampleAndCount(HYDRAULIC_PUMP, out.hydraulicPumpSampleCount);
-        out.hydraulicFlowSamples = getSampleAndCount(HYDRAULIC_FLOW, out.hydraulicFlowSampleCount);
-        out.trackRattleSamples = getSampleAndCount(TRACK_RATTLE, out.trackRattleSampleCount);
-        out.bucketRattleSamples = getSampleAndCount(BUCKET_RATTLE, out.bucketRattleSampleCount);
+        for (int i = 0; i < SOUND_COUNT; i++) {
+            if (sounds[i]) {
+                out.slots[i] = *sounds[i];
+            }
+        }
     }
 
     void populateConfig(RcEngineSound::Config& out) {
@@ -129,134 +99,103 @@ private:
         return count;
     }
 
-    int8_t* getSampleAndCount(SoundIndex idx, uint32_t& count) {
-        SoundData* sd = sounds[idx];
-        if (sd) {
-            count = sd->sampleCount;
-            return sd->samples;
-        }
-        count = 0;
-        return nullptr;
-    }
-
-    uint16_t getSampleRate(SoundIndex idx) {
-        SoundData* sd = sounds[idx];
-        return sd ? sd->sampleRate : 22050;
-    }
-
     void parseConfig(JsonDocument& doc, RcEngineSound::Config& cfg) {
-        // Engine behavior
-        cfg.acc = doc["ENGINE"]["ACCELERATION"] | 2;
-        cfg.dec = doc["ENGINE"]["DECELERATION"] | 1;
-        cfg.inertia = doc["ENGINE"]["INERTIA"] | 10;
-        cfg.maxRpm = 500;
-        cfg.minRpm = 0;
-
-        // Sound volumes
-        cfg.masterVolume = 100;
-        cfg.startVolume = doc["SOUND_VOLUME"]["START"] | 100;
-        cfg.idleVolume = doc["SOUND_VOLUME"]["IDLE"] | 100;
-        cfg.revVolume = doc["SOUND_VOLUME"]["REV"] | 100;
-        cfg.turboVolume = doc["SOUND_VOLUME"]["TURBO"] | 0;
-        cfg.knockVolume = doc["SOUND_VOLUME"]["KNOCK"] | 0;
-        cfg.wastegateVolume = doc["SOUND_VOLUME"]["WASTEGATE"] | 0;
-        cfg.hornVolume = doc["SOUND_VOLUME"]["HORN"] | 100;
-        cfg.fanVolume = doc["SOUND_VOLUME"]["FAN"] | 0;
-        cfg.jakeBrakeVolume = doc["SOUND_VOLUME"]["JAKEBRAKE"] | 0;
-        cfg.shiftingVolume = doc["SOUND_VOLUME"]["SHIFTING"] | 0;
-        cfg.brakeVolume = doc["SOUND_VOLUME"]["BRAKE"] | 0;
-        cfg.reversingVolume = doc["SOUND_VOLUME"]["REVERSING"] | 0;
-        cfg.sirenVolume = doc["SOUND_VOLUME"]["SIREN"] | 0;
-        cfg.parkingBrakeVolume = doc["SOUND_VOLUME"]["PARKING_BRAKE"] | 0;
-        cfg.superchargerVolume = doc["SOUND_VOLUME"]["SUPERCHARGER"] | 0;
-        cfg.indicatorVolume = doc["SOUND_VOLUME"]["INDICATOR"] | 0;
-        cfg.couplingVolume = doc["SOUND_VOLUME"]["COUPLING"] | 0;
-        cfg.uncouplingVolume = doc["SOUND_VOLUME"]["UNCOUPLING"] | 0;
-        cfg.sound1Volume = doc["SOUND_VOLUME"]["SOUND1"] | 100;
-        cfg.tireSquealVolume = doc["SOUND_VOLUME"]["TIRE_SQUEAL"] | 0;
-        cfg.hydraulicPumpVolume = doc["SOUND_VOLUME"]["HYDRAULIC_PUMP"] | 0;
-        cfg.hydraulicFlowVolume = doc["SOUND_VOLUME"]["HYDRAULIC_FLOW"] | 0;
-        cfg.trackRattleVolume = doc["SOUND_VOLUME"]["TRACK_RATTLE"] | 0;
-        cfg.bucketRattleVolume = doc["SOUND_VOLUME"]["BUCKET_RATTLE"] | 0;
-
-        // Pitch shifting
-        cfg.maxPitchFactor = doc["ENGINE"]["MAX_PITCH_FACTOR"] | 3.3f;
-
-        // Idle/Rev cross-fade
-        cfg.revSwitchPoint = doc["ENGINE"]["REV_SWITCH_POINT"] | 50;
-        cfg.idleEndPoint = doc["ENGINE"]["IDLE_END_POINT"] | 300;
+        // Engine
+        cfg.engine.acc = doc["ENGINE"]["ACCELERATION"] | 2;
+        cfg.engine.dec = doc["ENGINE"]["DECELERATION"] | 1;
+        cfg.engine.inertia = doc["ENGINE"]["INERTIA"] | 10;
+        cfg.engine.maxRpm = 500;
+        cfg.engine.minRpm = 0;
+        cfg.engine.maxPitchFactor = doc["ENGINE"]["MAX_PITCH_FACTOR"] | 3.3f;
+        cfg.engine.revSwitchPoint = doc["ENGINE"]["REV_SWITCH_POINT"] | 50;
+        cfg.engine.idleEndPoint = doc["ENGINE"]["IDLE_END_POINT"] | 300;
 
         // Diesel knock
         String knockPatternStr = doc["ENGINE"]["KNOCK_PATTERN"] | "V8";
-        if (knockPatternStr == "V8") cfg.knockPattern = RcEngineSound::KNOCK_V8;
-        else if (knockPatternStr == "V8_468") cfg.knockPattern = RcEngineSound::KNOCK_V8_468;
-        else if (knockPatternStr == "R6") cfg.knockPattern = RcEngineSound::KNOCK_R6;
-        else if (knockPatternStr == "R6_2") cfg.knockPattern = RcEngineSound::KNOCK_R6_2;
-        else if (knockPatternStr == "V2") cfg.knockPattern = RcEngineSound::KNOCK_V2;
-        else cfg.knockPattern = RcEngineSound::KNOCK_UNIFORM;
+        if (knockPatternStr == "V8") cfg.engine.knockPattern = RcEngineSound::KNOCK_V8;
+        else if (knockPatternStr == "V8_468") cfg.engine.knockPattern = RcEngineSound::KNOCK_V8_468;
+        else if (knockPatternStr == "R6") cfg.engine.knockPattern = RcEngineSound::KNOCK_R6;
+        else if (knockPatternStr == "R6_2") cfg.engine.knockPattern = RcEngineSound::KNOCK_R6_2;
+        else if (knockPatternStr == "V2") cfg.engine.knockPattern = RcEngineSound::KNOCK_V2;
+        else cfg.engine.knockPattern = RcEngineSound::KNOCK_UNIFORM;
 
-        cfg.knockInterval = doc["ENGINE"]["DIESEL_KNOCK_INTERVAL"] | 8;
-        cfg.knockAdaptiveVolume = doc["ENGINE"]["KNOCK_ADAPTIVE_VOLUME"] | 18;
-
-        // RPM-dependent knock volume
-        cfg.minKnockVolume = doc["ENGINE"]["MIN_KNOCK_VOLUME"] | 80;
-        cfg.knockStartRpm = doc["ENGINE"]["KNOCK_START_RPM"] | 10;
+        cfg.engine.knockInterval = doc["ENGINE"]["DIESEL_KNOCK_INTERVAL"] | 8;
+        cfg.engine.knockAdaptiveVolume = doc["ENGINE"]["KNOCK_ADAPTIVE_VOLUME"] | 18;
+        cfg.engine.minKnockVolume = doc["ENGINE"]["MIN_KNOCK_VOLUME"] | 80;
+        cfg.engine.knockStartRpm = doc["ENGINE"]["KNOCK_START_RPM"] | 10;
 
         // Jake brake
-        cfg.jakeBrakeMinRpm = doc["ENGINE"]["JAKEBRAKE_MIN_RPM"] | 60;
-        cfg.jakeBrakeDecelRate = doc["ENGINE"]["JAKEBRAKE_DECEL_RATE"] | 5;
+        cfg.engine.jakeBrakeMinRpm = doc["ENGINE"]["JAKEBRAKE_MIN_RPM"] | 60;
+        cfg.engine.jakeBrakeDecelRate = doc["ENGINE"]["JAKEBRAKE_DECEL_RATE"] | 5;
 
         // Supercharger
-        cfg.superchargerStartPoint = doc["ENGINE"]["SUPERCHARGER_START_POINT"] | 10;
+        cfg.engine.superchargerStartPoint = doc["ENGINE"]["SUPERCHARGER_START_POINT"] | 10;
+
+        // Sound volumes
+        cfg.sound.master = 100;
+        cfg.sound.start = doc["SOUND_VOLUME"]["START"] | 100;
+        cfg.sound.idle = doc["SOUND_VOLUME"]["IDLE"] | 100;
+        cfg.sound.rev = doc["SOUND_VOLUME"]["REV"] | 100;
+        cfg.sound.turbo = doc["SOUND_VOLUME"]["TURBO"] | 0;
+        cfg.sound.knock = doc["SOUND_VOLUME"]["KNOCK"] | 0;
+        cfg.sound.wastegate = doc["SOUND_VOLUME"]["WASTEGATE"] | 0;
+        cfg.sound.horn = doc["SOUND_VOLUME"]["HORN"] | 100;
+        cfg.sound.fan = doc["SOUND_VOLUME"]["FAN"] | 0;
+        cfg.sound.jakeBrake = doc["SOUND_VOLUME"]["JAKEBRAKE"] | 0;
+        cfg.sound.shifting = doc["SOUND_VOLUME"]["SHIFTING"] | 0;
+        cfg.sound.brake = doc["SOUND_VOLUME"]["BRAKE"] | 0;
+        cfg.sound.reversing = doc["SOUND_VOLUME"]["REVERSING"] | 0;
+        cfg.sound.siren = doc["SOUND_VOLUME"]["SIREN"] | 0;
+        cfg.sound.parkingBrake = doc["SOUND_VOLUME"]["PARKING_BRAKE"] | 0;
+        cfg.sound.supercharger = doc["SOUND_VOLUME"]["SUPERCHARGER"] | 0;
+        cfg.sound.indicator = doc["SOUND_VOLUME"]["INDICATOR"] | 0;
+        cfg.sound.coupling = doc["SOUND_VOLUME"]["COUPLING"] | 0;
+        cfg.sound.uncoupling = doc["SOUND_VOLUME"]["UNCOUPLING"] | 0;
+        cfg.sound.sound1 = doc["SOUND_VOLUME"]["SOUND1"] | 100;
+        cfg.sound.tireSqueal = doc["SOUND_VOLUME"]["TIRE_SQUEAL"] | 0;
+        cfg.sound.hydraulicPump = doc["SOUND_VOLUME"]["HYDRAULIC_PUMP"] | 0;
+        cfg.sound.hydraulicFlow = doc["SOUND_VOLUME"]["HYDRAULIC_FLOW"] | 0;
+        cfg.sound.trackRattle = doc["SOUND_VOLUME"]["TRACK_RATTLE"] | 0;
+        cfg.sound.bucketRattle = doc["SOUND_VOLUME"]["BUCKET_RATTLE"] | 0;
+        cfg.sound.engineMixWeight = doc["MIX_WEIGHTS"]["ENGINE"] | 100;
+        cfg.sound.effectMixWeight = doc["MIX_WEIGHTS"]["EFFECTS"] | 100;
+        cfg.sound.crawlerModeThreshold = doc["SOUND_VOLUME"]["CRAWLER_MODE_THRESHOLD"] | 44;
 
         // Transmission
         String transTypeStr = doc["TRANSMISSION"]["TYPE"] | "NONE";
-        if (transTypeStr == "AUTOMATIC") cfg.transmissionType = RcEngineSound::TRANS_AUTOMATIC;
-        else if (transTypeStr == "MANUAL") cfg.transmissionType = RcEngineSound::TRANS_MANUAL;
-        else cfg.transmissionType = RcEngineSound::TRANS_NONE;
+        if (transTypeStr == "AUTOMATIC") cfg.transmission.type = RcEngineSound::TRANS_AUTOMATIC;
+        else if (transTypeStr == "MANUAL") cfg.transmission.type = RcEngineSound::TRANS_MANUAL;
+        else cfg.transmission.type = RcEngineSound::TRANS_NONE;
 
-        cfg.numberOfGears = doc["TRANSMISSION"]["NUMBER_OF_GEARS"] | 3;
-        cfg.automatic = (cfg.transmissionType == RcEngineSound::TRANS_AUTOMATIC);
+        cfg.transmission.numberOfGears = doc["TRANSMISSION"]["NUMBER_OF_GEARS"] | 3;
 
-        // Gear ramp times
         JsonArray rampTimes = doc["TRANSMISSION"]["GEAR_RAMP_TIMES"].as<JsonArray>();
         if (rampTimes) {
             int idx = 0;
             for (int val : rampTimes) {
-                if (idx < 6) cfg.gearRampTimes[idx++] = val;
+                if (idx < 6) cfg.transmission.gearRampTimes[idx++] = val;
             }
         }
 
+        // Features
+        cfg.features.hydraulicEnabled = doc["FEATURES"]["HYDRAULIC_ENABLED"] | false;
+        cfg.features.hydrostaticMode = doc["FEATURES"]["HYDROSTATIC_MODE"] | false;
+        cfg.features.trackRattleEnabled = doc["FEATURES"]["TRACK_RATTLE_ENABLED"] | false;
+        cfg.features.dumpBedEnabled = doc["FEATURES"]["DUMP_BED_ENABLED"] | false;
+        cfg.features.tireSquealThreshold = doc["FEATURES"]["TIRE_SQUEAL_THRESHOLD"] | 70;
+        cfg.features.tireSquealMaxSpeed = doc["FEATURES"]["TIRE_SQUEAL_MAX_SPEED"] | 30;
+        cfg.features.trackRattleIntervalMin = doc["FEATURES"]["TRACK_RATTLE_INTERVAL_MIN"] | 90;
+        cfg.features.trackRattleIntervalMax = doc["FEATURES"]["TRACK_RATTLE_INTERVAL_MAX"] | 500;
+
         // Loop points
-        cfg.hornLoopBegin = doc["LOOP_POINTS"]["HORN_BEGIN"] | 0;
-        cfg.hornLoopEnd = doc["LOOP_POINTS"]["HORN_END"] | 0;
-        cfg.sirenLoopBegin = doc["LOOP_POINTS"]["SIREN_BEGIN"] | 0;
-        cfg.sirenLoopEnd = doc["LOOP_POINTS"]["SIREN_END"] | 0;
-        cfg.reversingLoopBegin = doc["LOOP_POINTS"]["REVERSING_BEGIN"] | 0;
-        cfg.reversingLoopEnd = doc["LOOP_POINTS"]["REVERSING_END"] | 0;
-        cfg.sound1LoopBegin = doc["LOOP_POINTS"]["SOUND1_BEGIN"] | 0;
-        cfg.sound1LoopEnd = doc["LOOP_POINTS"]["SOUND1_END"] | 0;
-
-        // Voice mixing weights
-        cfg.engineMixWeight = doc["MIX_WEIGHTS"]["ENGINE"] | 100;
-        cfg.effectMixWeight = doc["MIX_WEIGHTS"]["EFFECTS"] | 100;
-
-        // Crawler mode
-        cfg.crawlerModeThreshold = doc["SOUND_VOLUME"]["CRAWLER_MODE_THRESHOLD"] | 44;
-
-        // Feature flags
-        cfg.hydraulicEnabled = doc["FEATURES"]["HYDRAULIC_ENABLED"] | false;
-        cfg.hydrostaticMode = doc["FEATURES"]["HYDROSTATIC_MODE"] | false;
-        cfg.trackRattleEnabled = doc["FEATURES"]["TRACK_RATTLE_ENABLED"] | false;
-        cfg.dumpBedEnabled = doc["FEATURES"]["DUMP_BED_ENABLED"] | false;
-        cfg.tireSquealThreshold = doc["FEATURES"]["TIRE_SQUEAL_THRESHOLD"] | 70;
-        cfg.tireSquealMaxSpeed = doc["FEATURES"]["TIRE_SQUEAL_MAX_SPEED"] | 30;
-        cfg.trackRattleIntervalMin = doc["FEATURES"]["TRACK_RATTLE_INTERVAL_MIN"] | 90;
-        cfg.trackRattleIntervalMax = doc["FEATURES"]["TRACK_RATTLE_INTERVAL_MAX"] | 500;
-
-        // Legacy
-        cfg.clutchEngagingPoint = doc["ENGINE"]["CLUTCH_RPM"] | 100;
-        cfg.maxRpmPercentage = 310;
+        cfg.loopPoints.hornBegin = doc["LOOP_POINTS"]["HORN_BEGIN"] | 0;
+        cfg.loopPoints.hornEnd = doc["LOOP_POINTS"]["HORN_END"] | 0;
+        cfg.loopPoints.sirenBegin = doc["LOOP_POINTS"]["SIREN_BEGIN"] | 0;
+        cfg.loopPoints.sirenEnd = doc["LOOP_POINTS"]["SIREN_END"] | 0;
+        cfg.loopPoints.reversingBegin = doc["LOOP_POINTS"]["REVERSING_BEGIN"] | 0;
+        cfg.loopPoints.reversingEnd = doc["LOOP_POINTS"]["REVERSING_END"] | 0;
+        cfg.loopPoints.sound1Begin = doc["LOOP_POINTS"]["SOUND1_BEGIN"] | 0;
+        cfg.loopPoints.sound1End = doc["LOOP_POINTS"]["SOUND1_END"] | 0;
     }
 };
 

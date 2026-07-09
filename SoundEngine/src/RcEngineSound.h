@@ -2,87 +2,7 @@
 #define RC_ENGINE_SOUND_H
 
 #include <Arduino.h>
-
-/**
- * @brief Structure to hold engine sound samples and metadata.
- */
-struct SoundData {
-    int8_t* samples = nullptr;
-    uint32_t sampleCount = 0;
-    uint16_t sampleRate = 22050;
-    
-    int8_t* startSamples = nullptr;
-    uint32_t startSampleCount = 0;
-    
-    int8_t* revSamples = nullptr;
-    uint32_t revSampleCount = 0;
-    
-    int8_t* turboSamples = nullptr;
-    uint32_t turboSampleCount = 0;
-    
-    int8_t* knockSamples = nullptr;
-    uint32_t knockSampleCount = 0;
-    
-    int8_t* wastegateSamples = nullptr;
-    uint32_t wastegateSampleCount = 0;
-    
-    int8_t* hornSamples = nullptr;
-    uint32_t hornSampleCount = 0;
-    uint16_t hornSampleRate = 22050;
-
-    int8_t* jakeBrakeSamples = nullptr;
-    uint32_t jakeBrakeSampleCount = 0;
-
-    int8_t* fanSamples = nullptr;
-    uint32_t fanSampleCount = 0;
-
-    int8_t* sirenSamples = nullptr;
-    uint32_t sirenSampleCount = 0;
-
-    int8_t* brakeSamples = nullptr;
-    uint32_t brakeSampleCount = 0;
-
-    int8_t* reversingSamples = nullptr;
-    uint32_t reversingSampleCount = 0;
-
-    int8_t* parkingBrakeSamples = nullptr;
-    uint32_t parkingBrakeSampleCount = 0;
-
-    int8_t* superchargerSamples = nullptr;
-    uint32_t superchargerSampleCount = 0;
-
-    int8_t* shiftingSamples = nullptr;
-    uint32_t shiftingSampleCount = 0;
-
-    int8_t* indicatorSamples = nullptr;
-    uint32_t indicatorSampleCount = 0;
-
-    int8_t* couplingSamples = nullptr;
-    uint32_t couplingSampleCount = 0;
-
-    int8_t* uncouplingSamples = nullptr;
-    uint32_t uncouplingSampleCount = 0;
-
-    int8_t* sound1Samples = nullptr;
-    uint32_t sound1SampleCount = 0;
-
-    int8_t* tireSquealSamples = nullptr;
-    uint32_t tireSquealSampleCount = 0;
-
-    int8_t* hydraulicPumpSamples = nullptr;
-    uint32_t hydraulicPumpSampleCount = 0;
-
-    int8_t* hydraulicFlowSamples = nullptr;
-    uint32_t hydraulicFlowSampleCount = 0;
-
-    int8_t* trackRattleSamples = nullptr;
-    uint32_t trackRattleSampleCount = 0;
-
-    int8_t* bucketRattleSamples = nullptr;
-    uint32_t bucketRattleSampleCount = 0;
-
-    bool isDynamic = false; // Set to true if allocated in PSRAM/Heap
-};
+#include "SoundTypes.h"
 
 /**
  * @brief Core engine for RC sound and state simulation.
@@ -133,110 +53,83 @@ public:
     };
 
     struct Config {
-        // Engine behavior
-        uint8_t acc = 2;
-        uint8_t dec = 2;
-        uint8_t inertia = 10; // 0-100, higher = slower RPM response
-        uint16_t maxRpm = 500;
-        uint16_t minRpm = 0;
-        
-        // Sound volumes
-        uint8_t masterVolume = 100;
-        uint8_t startVolume = 100;
-        uint8_t idleVolume = 100;
-        uint8_t revVolume = 100;
-        uint8_t turboVolume = 0;
-        uint8_t knockVolume = 0;
-        uint8_t wastegateVolume = 0;
-        uint8_t hornVolume = 100;
-        uint8_t fanVolume = 0;
-        uint8_t jakeBrakeVolume = 0;
-        uint8_t shiftingVolume = 0;
-        uint8_t brakeVolume = 0;
-        uint8_t reversingVolume = 0;
-        uint8_t sirenVolume = 0;
-        uint8_t parkingBrakeVolume = 0;
-        uint8_t superchargerVolume = 0;
-        uint8_t indicatorVolume = 0;
-        uint8_t couplingVolume = 0;
-        uint8_t uncouplingVolume = 0;
-        uint8_t sound1Volume = 100;
+        struct Engine {
+            uint8_t acc = 2;
+            uint8_t dec = 2;
+            uint8_t inertia = 10;
+            uint16_t maxRpm = 500;
+            uint16_t minRpm = 0;
+            float maxPitchFactor = 3.3f;
+            uint16_t revSwitchPoint = 50;
+            uint16_t idleEndPoint = 300;
+            KnockPattern knockPattern = KNOCK_V8;
+            uint8_t knockInterval = 8;
+            uint8_t knockAdaptiveVolume = 18;
+            uint8_t minKnockVolume = 80;
+            uint8_t knockStartRpm = 10;
+            uint8_t jakeBrakeMinRpm = 60;
+            uint8_t jakeBrakeDecelRate = 5;
+            uint8_t superchargerStartPoint = 10;
+        } engine;
 
-        // Tire squeal
-        uint8_t tireSquealVolume = 0;
-        uint8_t tireSquealThreshold = 70;   // Throttle % to trigger squeal
-        uint8_t tireSquealMaxSpeed = 30;    // Speed % below which squeal plays
+        struct Sound {
+            uint8_t master = 100;
+            uint8_t start = 100;
+            uint8_t idle = 100;
+            uint8_t rev = 100;
+            uint8_t turbo = 0;
+            uint8_t knock = 0;
+            uint8_t wastegate = 0;
+            uint8_t horn = 100;
+            uint8_t fan = 0;
+            uint8_t jakeBrake = 0;
+            uint8_t shifting = 0;
+            uint8_t brake = 0;
+            uint8_t reversing = 0;
+            uint8_t siren = 0;
+            uint8_t parkingBrake = 0;
+            uint8_t supercharger = 0;
+            uint8_t indicator = 0;
+            uint8_t coupling = 0;
+            uint8_t uncoupling = 0;
+            uint8_t sound1 = 100;
+            uint8_t tireSqueal = 0;
+            uint8_t hydraulicPump = 0;
+            uint8_t hydraulicFlow = 0;
+            uint8_t trackRattle = 0;
+            uint8_t bucketRattle = 0;
+            uint8_t engineMixWeight = 100;
+            uint8_t effectMixWeight = 100;
+            uint8_t crawlerModeThreshold = 44;
+        } sound;
 
-        // Hydraulic (excavator/crane support)
-        uint8_t hydraulicPumpVolume = 0;
-        uint8_t hydraulicFlowVolume = 0;
-        bool hydraulicEnabled = false;
-        bool hydrostaticMode = false;       // Pump volume scales with speed
+        struct Transmission {
+            TransmissionType type = TRANS_NONE;
+            uint8_t numberOfGears = 3;
+            uint8_t gearRampTimes[6] = {20, 50, 75, 75, 75, 75};
+        } transmission;
 
-        // Track/Bucket rattle
-        uint8_t trackRattleVolume = 0;
-        uint8_t bucketRattleVolume = 0;
-        bool trackRattleEnabled = false;
-        uint16_t trackRattleIntervalMin = 90;  // ms at top speed
-        uint16_t trackRattleIntervalMax = 500; // ms at low speed
+        struct Features {
+            bool hydraulicEnabled = false;
+            bool hydrostaticMode = false;
+            bool trackRattleEnabled = false;
+            bool dumpBedEnabled = false;
+            uint8_t tireSquealThreshold = 70;
+            uint8_t tireSquealMaxSpeed = 30;
+            uint16_t trackRattleIntervalMin = 90;
+            uint16_t trackRattleIntervalMax = 500;
+        } features;
 
-        // Dump bed
-        bool dumpBedEnabled = false;
-
-        // Pitch shifting
-        float maxPitchFactor = 3.3f; // Max pitch multiplier at full RPM
-
-        // Idle/Rev cross-fade
-        uint16_t revSwitchPoint = 50;
-        uint16_t idleEndPoint = 300;
-
-        // Diesel knock
-        KnockPattern knockPattern = KNOCK_V8;
-        uint8_t knockInterval = 8;          // Pulses per idle loop
-        uint8_t knockAdaptiveVolume = 18;   // Volume % for secondary pulses
-
-        // Diesel knock RPM scaling
-        uint8_t minKnockVolume = 80;   // Min knock volume % at idle (RPM-dependent)
-        uint8_t knockStartRpm = 10;    // RPM % where knock volume starts scaling
-
-        // Jake brake
-        uint8_t jakeBrakeMinRpm = 60;  // Minimum RPM % for jake brake to activate
-        uint8_t jakeBrakeDecelRate = 5; // How fast jake brake slows engine
-
-        // Supercharger
-        uint8_t superchargerStartPoint = 10; // RPM% where supercharger becomes audible
-
-        // Transmission
-        TransmissionType transmissionType = TRANS_NONE;
-        uint8_t numberOfGears = 3;
-        uint8_t gearRampTimes[6] = {20, 50, 75, 75, 75, 75}; // Per-gear acceleration response
-
-        // Loop points (0 = full sample, backward compatible)
-        uint32_t hornLoopBegin = 0;
-        uint32_t hornLoopEnd = 0;
-        uint32_t sirenLoopBegin = 0;
-        uint32_t sirenLoopEnd = 0;
-        uint32_t reversingLoopBegin = 0;
-        uint32_t reversingLoopEnd = 0;
-        uint32_t sound1LoopBegin = 0;
-        uint32_t sound1LoopEnd = 0;
-
-        // Voice mixing weights (100 = unity)
-        uint8_t engineMixWeight = 100;
-        uint8_t effectMixWeight = 100;
-
-        // Crawler mode
-        uint8_t crawlerModeThreshold = 44; // Master volume below this = crawler mode
-
-        // Transmission (legacy)
-        bool automatic = false;
-        uint16_t clutchEngagingPoint = 100;
-        uint16_t maxRpmPercentage = 310;
-
-        struct Lights {
-            bool xenon = false;
-            bool doubleFlashBlue = false;
-        } lights;
+        struct LoopPoints {
+            uint32_t hornBegin = 0;
+            uint32_t hornEnd = 0;
+            uint32_t sirenBegin = 0;
+            uint32_t sirenEnd = 0;
+            uint32_t reversingBegin = 0;
+            uint32_t reversingEnd = 0;
+            uint32_t sound1Begin = 0;
+            uint32_t sound1End = 0;
+        } loopPoints;
     };
 
     RcEngineSound();
@@ -350,6 +243,9 @@ private:
 
     // Track rattle timing
     uint32_t lastTrackRattleTime = 0;
+
+    // Thread safety: mutex for ISR/main loop voice state access
+    portMUX_TYPE voiceMutex = portMUX_INITIALIZER_UNLOCKED;
 
     // Helper: read sample with linear interpolation at fractional position
     static inline int8_t readInterpolated(const int8_t* samples, uint32_t count, float position) {
