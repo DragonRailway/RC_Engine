@@ -47,6 +47,7 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
         {true,  true,  false}, // REV
         {false, false, false}, // START (handled separately)
         {false, false, true},  // KNOCK
+        {false, true,  false}, // TURBO
         {false, false, true},  // WASTEGATE
         {false, true,  false}, // HORN
         {false, true,  false}, // SIREN
@@ -66,6 +67,14 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
         {false, true,  false}, // HYDRAULIC_FLOW
         {false, false, true},  // TRACK_RATTLE
         {false, false, true},  // BUCKET_RATTLE
+        {false, true,  false}, // BELL
+        {false, false, true},  // DOOR
+        {false, true,  false}, // SCANNER
+        {false, true,  false}, // MUSIC
+        {false, true,  false}, // WHISTLE
+        {false, false, true},  // GUN
+        {false, true,  false}, // OUT_OF_FUEL
+        {false, true,  false}, // OTHERS
     };
 
     for (int i = 0; i < SOUND_COUNT; i++) {
@@ -110,6 +119,14 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     voices[HYDRAULIC_FLOW].volume = cfg.sound.hydraulicFlow;
     voices[TRACK_RATTLE].volume = cfg.sound.trackRattle;
     voices[BUCKET_RATTLE].volume = cfg.sound.bucketRattle;
+    voices[BELL].volume = cfg.sound.bell;
+    voices[DOOR].volume = cfg.sound.door;
+    voices[SCANNER].volume = cfg.sound.scanner;
+    voices[MUSIC].volume = cfg.sound.music;
+    voices[WHISTLE].volume = cfg.sound.whistle;
+    voices[GUN].volume = cfg.sound.gun;
+    voices[OUT_OF_FUEL].volume = cfg.sound.outOfFuel;
+    voices[OTHERS].volume = cfg.sound.others;
 
     Serial.printf("[RcEngineSound] Initialized with %d voice slots\n", SOUND_COUNT);
 }
@@ -218,6 +235,46 @@ void RcEngineSound::triggerDumpBed(bool active) {
     }
 }
 
+void RcEngineSound::triggerBell(bool active) {
+    voices[BELL].active = active;
+    if (active) voices[BELL].position = 0;
+}
+
+void RcEngineSound::triggerDoor(bool active) {
+    voices[DOOR].active = active;
+    if (active) voices[DOOR].position = 0;
+}
+
+void RcEngineSound::triggerScanner(bool active) {
+    voices[SCANNER].active = active;
+    if (active) voices[SCANNER].position = 0;
+}
+
+void RcEngineSound::triggerMusic(bool active) {
+    voices[MUSIC].active = active;
+    if (active) voices[MUSIC].position = 0;
+}
+
+void RcEngineSound::triggerWhistle(bool active) {
+    voices[WHISTLE].active = active;
+    if (active) voices[WHISTLE].position = 0;
+}
+
+void RcEngineSound::triggerGun(bool active) {
+    voices[GUN].active = active;
+    if (active) voices[GUN].position = 0;
+}
+
+void RcEngineSound::triggerOutOfFuel(bool active) {
+    voices[OUT_OF_FUEL].active = active;
+    if (active) voices[OUT_OF_FUEL].position = 0;
+}
+
+void RcEngineSound::triggerOthers(bool active) {
+    voices[OTHERS].active = active;
+    if (active) voices[OTHERS].position = 0;
+}
+
 // ─── Advanced Engine State Machine ───────────────────────────────────────────
 void RcEngineSound::update(int16_t throttle) {
     uint32_t now = millis();
@@ -226,6 +283,9 @@ void RcEngineSound::update(int16_t throttle) {
 
     int32_t targetRpm = abs(throttle);
     if (targetRpm > cfg.engine.maxRpm) targetRpm = cfg.engine.maxRpm;
+
+    // ── Throttle ratio (0-100%) for volume scaling ──
+    int32_t throttlePercent = map(targetRpm, 0, cfg.engine.maxRpm, 0, 100);
 
     // ── Crawler Mode Detection ──
     crawlerMode = (cfg.sound.master <= cfg.sound.crawlerModeThreshold);
@@ -410,7 +470,7 @@ void RcEngineSound::update(int16_t throttle) {
         pitchFactor = 1.0f;
     }
 
-    // ── Idle/Rev cross-fade proportion ──
+    // ── Idle/Rev cross-fade with throttle-dependent volume scaling ──
     int16_t idleProportion = 100;
     if (state == RUNNING && !engineMuted) {
         if (currentRpmFixed > cfg.engine.revSwitchPoint) {
@@ -418,13 +478,17 @@ void RcEngineSound::update(int16_t throttle) {
             idleProportion = constrain(idleProportion, 0, 100);
         }
     }
-    voices[IDLE].volume = engineMuted ? 0 : (uint8_t)((int32_t)cfg.sound.idle * idleProportion / 100);
-    voices[REV].volume = engineMuted ? 0 : (uint8_t)((int32_t)cfg.sound.rev * (100 - idleProportion) / 100);
+    // Scale idle/rev volumes with throttle input (reference parity)
+    // idleVol interpolates from idle (at 0% throttle) to idleMin (at 100% throttle)
+    int32_t idleVol = cfg.sound.idleMin + (int32_t)(cfg.sound.idle - cfg.sound.idleMin) * (100 - throttlePercent) / 100;
+    int32_t revVol = cfg.sound.revMin + (int32_t)(cfg.sound.rev - cfg.sound.revMin) * throttlePercent / 100;
+    voices[IDLE].volume = engineMuted ? 0 : (uint8_t)(idleVol * idleProportion / 100 * cfg.sound.fullThrottle / 100);
+    voices[REV].volume = engineMuted ? 0 : (uint8_t)(revVol * (100 - idleProportion) / 100 * cfg.sound.fullThrottle / 100);
 
-    // ── Turbo volume: RPM-dependent ──
+    // ── Turbo volume: RPM-dependent with min volume ──
     if (!engineMuted) {
         int32_t turboScale = map(currentRpmFixed, 0, cfg.engine.maxRpm, 0, 100);
-        voices[TURBO].volume = (uint8_t)(cfg.sound.turbo * constrain(turboScale, 0, 100) / 100);
+        voices[TURBO].volume = (uint8_t)(cfg.sound.turboMin + (int32_t)(cfg.sound.turbo - cfg.sound.turboMin) * constrain(turboScale, 0, 100) / 100);
     } else {
         voices[TURBO].volume = 0;
     }
@@ -437,10 +501,10 @@ void RcEngineSound::update(int16_t throttle) {
         voices[FAN].volume = 0;
     }
 
-    // ── Supercharger: RPM-dependent with start point ──
+    // ── Supercharger: RPM-dependent with start point and min volume ──
     if (!engineMuted && currentRpmFixed > (uint16_t)(cfg.engine.maxRpm * cfg.engine.superchargerStartPoint / 100)) {
         int32_t scScale = map(currentRpmFixed, cfg.engine.maxRpm * cfg.engine.superchargerStartPoint / 100, cfg.engine.maxRpm, 0, 100);
-        voices[SUPERCHARGER].volume = (uint8_t)(cfg.sound.supercharger * constrain(scScale, 0, 100) / 100);
+        voices[SUPERCHARGER].volume = (uint8_t)(cfg.sound.superchargerMin + (int32_t)(cfg.sound.supercharger - cfg.sound.superchargerMin) * constrain(scScale, 0, 100) / 100);
     } else {
         voices[SUPERCHARGER].volume = 0;
     }
@@ -488,7 +552,7 @@ void RcEngineSound::update(int16_t throttle) {
 
         uint16_t knockRpmThreshold = (uint16_t)(cfg.engine.maxRpm * cfg.engine.knockStartRpm / 100);
         uint16_t baseKnockVol = isLoud ? cfg.sound.knock : (uint16_t)(cfg.sound.knock * cfg.engine.knockAdaptiveVolume / 100);
-        uint16_t minVol = (uint16_t)(cfg.sound.knock * cfg.engine.minKnockVolume / 100);
+        uint16_t minVol = cfg.sound.knockMin;  // Direct volume value, not percentage of knock
         uint16_t minSecondary = (uint16_t)(minVol * cfg.engine.knockAdaptiveVolume / 100);
 
         if (currentRpmFixed > knockRpmThreshold) {
@@ -536,7 +600,6 @@ uint8_t RcEngineSound::getNextSample() {
         advanceVoice(v);
 
         // Write back position and active flag
-        // Both needed: position for continuity, active for one-shot deactivation
         portENTER_CRITICAL(&voiceMutex);
         voices[i].position = v.position;
         voices[i].active = v.active;

@@ -135,19 +135,27 @@ private:
         cfg.sound.master = 100;
         cfg.sound.start = doc["SOUND_VOLUME"]["START"] | 100;
         cfg.sound.idle = doc["SOUND_VOLUME"]["IDLE"] | 100;
+        cfg.sound.idleMin = doc["SOUND_VOLUME"]["IDLE_MIN"] | 0;
         cfg.sound.rev = doc["SOUND_VOLUME"]["REV"] | 100;
+        cfg.sound.revMin = doc["SOUND_VOLUME"]["REV_MIN"] | 0;
+        cfg.sound.fullThrottle = doc["SOUND_VOLUME"]["FULL_THROTTLE"] | 100;
         cfg.sound.turbo = doc["SOUND_VOLUME"]["TURBO"] | 0;
+        cfg.sound.turboMin = doc["SOUND_VOLUME"]["TURBO_MIN"] | 0;
         cfg.sound.knock = doc["SOUND_VOLUME"]["KNOCK"] | 0;
+        cfg.sound.knockMin = doc["SOUND_VOLUME"]["KNOCK_MIN"] | 0;
         cfg.sound.wastegate = doc["SOUND_VOLUME"]["WASTEGATE"] | 0;
+        cfg.sound.wastegateMin = doc["SOUND_VOLUME"]["WASTEGATE_MIN"] | 0;
         cfg.sound.horn = doc["SOUND_VOLUME"]["HORN"] | 100;
         cfg.sound.fan = doc["SOUND_VOLUME"]["FAN"] | 0;
         cfg.sound.jakeBrake = doc["SOUND_VOLUME"]["JAKEBRAKE"] | 0;
+        cfg.sound.jakeBrakeMin = doc["SOUND_VOLUME"]["JAKEBRAKE_MIN"] | 0;
         cfg.sound.shifting = doc["SOUND_VOLUME"]["SHIFTING"] | 0;
         cfg.sound.brake = doc["SOUND_VOLUME"]["BRAKE"] | 0;
         cfg.sound.reversing = doc["SOUND_VOLUME"]["REVERSING"] | 0;
         cfg.sound.siren = doc["SOUND_VOLUME"]["SIREN"] | 0;
         cfg.sound.parkingBrake = doc["SOUND_VOLUME"]["PARKING_BRAKE"] | 0;
         cfg.sound.supercharger = doc["SOUND_VOLUME"]["SUPERCHARGER"] | 0;
+        cfg.sound.superchargerMin = doc["SOUND_VOLUME"]["SUPERCHARGER_MIN"] | 10;
         cfg.sound.indicator = doc["SOUND_VOLUME"]["INDICATOR"] | 0;
         cfg.sound.coupling = doc["SOUND_VOLUME"]["COUPLING"] | 0;
         cfg.sound.uncoupling = doc["SOUND_VOLUME"]["UNCOUPLING"] | 0;
@@ -157,6 +165,16 @@ private:
         cfg.sound.hydraulicFlow = doc["SOUND_VOLUME"]["HYDRAULIC_FLOW"] | 0;
         cfg.sound.trackRattle = doc["SOUND_VOLUME"]["TRACK_RATTLE"] | 0;
         cfg.sound.bucketRattle = doc["SOUND_VOLUME"]["BUCKET_RATTLE"] | 0;
+        // New voice channels
+        cfg.sound.bell = doc["SOUND_VOLUME"]["BELL"] | 0;
+        cfg.sound.door = doc["SOUND_VOLUME"]["DOOR"] | 0;
+        cfg.sound.scanner = doc["SOUND_VOLUME"]["SCANNER"] | 0;
+        cfg.sound.music = doc["SOUND_VOLUME"]["MUSIC"] | 0;
+        cfg.sound.whistle = doc["SOUND_VOLUME"]["WHISTLE"] | 0;
+        cfg.sound.gun = doc["SOUND_VOLUME"]["GUN"] | 0;
+        cfg.sound.outOfFuel = doc["SOUND_VOLUME"]["OUT_OF_FUEL"] | 0;
+        cfg.sound.others = doc["SOUND_VOLUME"]["OTHERS"] | 0;
+        // Mix weights
         cfg.sound.engineMixWeight = doc["MIX_WEIGHTS"]["ENGINE"] | 100;
         cfg.sound.effectMixWeight = doc["MIX_WEIGHTS"]["EFFECTS"] | 100;
         cfg.sound.crawlerModeThreshold = doc["SOUND_VOLUME"]["CRAWLER_MODE_THRESHOLD"] | 44;
@@ -204,7 +222,8 @@ const char* VehicleProfile::soundTypeNames[] = {
     "jakebrake", "fan", "siren", "airbrake", "parkingbrake",
     "shifting", "reversing", "indicator", "coupling", "supercharger",
     "uncoupling", "sound1", "tiresqueal", "hydraulicpump",
-    "hydraulicflow", "trackrattle", "bucketrattle"
+    "hydraulicflow", "trackrattle", "bucketrattle",
+    "bell", "door", "scanner", "music", "whistle", "gun", "outoffuel", "others"
 };
 
 const char* VehicleProfile::genericNames[] = {
@@ -217,5 +236,8 @@ const char* VehicleProfile::genericNames[] = {
     "indicator-Generic.json", "coupling-generic.json", "supercharger.json",
     "uncoupling-generic.json", "sound1-Dummy.json",
     "squeal-Tire2.json", "hydraulicPump-Generic.json",
-    "hydraulicFlow-Generic.json", "trackrattle.json", "bucketrattle-Generic.json"
+    "hydraulicFlow-Generic.json", "trackrattle.json", "bucketrattle-Generic.json",
+    "bell-Dummy.json", "door.json", "scanner-kitt.json",
+    "music-Dummy.json", "whistle-Turbo.json", "gun-Dummy.json",
+    "outoffuel-Dummy.json", "others-Dummy.json"
 };

@@ -76,19 +76,27 @@ public:
             uint8_t master = 100;
             uint8_t start = 100;
             uint8_t idle = 100;
+            uint8_t idleMin = 0;          // Min idle volume (throttle-dependent scaling)
             uint8_t rev = 100;
+            uint8_t revMin = 0;           // Min rev volume (throttle-dependent scaling)
+            uint8_t fullThrottle = 100;   // Max volume scaling at full throttle
             uint8_t turbo = 0;
+            uint8_t turboMin = 0;         // Min turbo volume at idle
             uint8_t knock = 0;
+            uint8_t knockMin = 0;         // Min knock volume at idle
             uint8_t wastegate = 0;
+            uint8_t wastegateMin = 0;     // Min wastegate volume
             uint8_t horn = 100;
             uint8_t fan = 0;
             uint8_t jakeBrake = 0;
+            uint8_t jakeBrakeMin = 0;     // Min jake brake volume at idle
             uint8_t shifting = 0;
             uint8_t brake = 0;
             uint8_t reversing = 0;
             uint8_t siren = 0;
             uint8_t parkingBrake = 0;
             uint8_t supercharger = 0;
+            uint8_t superchargerMin = 10; // Min supercharger volume at idle
             uint8_t indicator = 0;
             uint8_t coupling = 0;
             uint8_t uncoupling = 0;
@@ -98,6 +106,14 @@ public:
             uint8_t hydraulicFlow = 0;
             uint8_t trackRattle = 0;
             uint8_t bucketRattle = 0;
+            uint8_t bell = 0;
+            uint8_t door = 0;
+            uint8_t scanner = 0;
+            uint8_t music = 0;
+            uint8_t whistle = 0;
+            uint8_t gun = 0;
+            uint8_t outOfFuel = 0;
+            uint8_t others = 0;
             uint8_t engineMixWeight = 100;
             uint8_t effectMixWeight = 100;
             uint8_t crawlerModeThreshold = 44;
@@ -159,6 +175,14 @@ public:
     void triggerTrackRattle(bool active);
     void triggerBucketRattle(bool active);
     void triggerDumpBed(bool active);
+    void triggerBell(bool active);
+    void triggerDoor(bool active);
+    void triggerScanner(bool active);
+    void triggerMusic(bool active);
+    void triggerWhistle(bool active);
+    void triggerGun(bool active);
+    void triggerOutOfFuel(bool active);
+    void triggerOthers(bool active);
 
     uint8_t getNextSample();
 
@@ -168,18 +192,6 @@ public:
     float getPitchFactor() const { return pitchFactor; }
 
 private:
-    // Voice ID enum for indexing into voices[] array
-    enum VoiceID {
-        VOICE_IDLE, VOICE_REV, VOICE_START, VOICE_TURBO, VOICE_KNOCK,
-        VOICE_WASTEGATE, VOICE_HORN, VOICE_SIREN, VOICE_BRAKE,
-        VOICE_JAKE_BRAKE, VOICE_REVERSING, VOICE_PARKING_BRAKE,
-        VOICE_SHIFTING, VOICE_INDICATOR, VOICE_COUPLING, VOICE_FAN,
-        VOICE_SUPERCHARGER, VOICE_UNCOUPLING, VOICE_SOUND1,
-        VOICE_TIRE_SQUEAL, VOICE_HYDRAULIC_PUMP, VOICE_HYDRAULIC_FLOW,
-        VOICE_TRACK_RATTLE, VOICE_BUCKET_RATTLE,
-        VOICE_COUNT
-    };
-
     // Per-voice state for fractional step interpolation
     struct VoiceState {
         float position = 0.0f;
@@ -206,7 +218,7 @@ private:
     float pitchFactor;
 
     // Voice array
-    VoiceState voices[VOICE_COUNT];
+    VoiceState voices[SOUND_COUNT];
 
     // Start sound position (special: uses separate sample array)
     uint32_t startPos = 0;
