@@ -20,7 +20,9 @@ RcEngineSound::RcEngineSound() :
     attenuator(1),
     stopPitchFactor(1.0f),
     crawlerMode(false),
-    lastTrackRattleTime(0)
+    lastTrackRattleTime(0),
+    virtualSpeed(0),
+    lastThrottle(0)
 {
     // Initialize all voices to inactive
     for (int i = 0; i < VOICE_COUNT; i++) {
@@ -563,7 +565,7 @@ void RcEngineSound::update(int16_t throttle) {
         uint32_t knockIntervalSamples = sounds.sampleCount / cfg.knockInterval;
         if (knockIntervalSamples > 0) {
             uint32_t idlePos = (uint32_t)voices[VOICE_IDLE].position;
-            if (idlePos - lastKnockTriggerSample >= knockIntervalSamples) {
+            if (idlePos >= lastKnockTriggerSample + knockIntervalSamples) {
                 lastKnockTriggerSample = idlePos;
                 curKnockCylinder++;
                 if (curKnockCylinder > cfg.knockInterval) curKnockCylinder = 1;
