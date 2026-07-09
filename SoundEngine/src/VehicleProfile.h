@@ -7,7 +7,7 @@
 #include "SoundLoader.h"
 
 struct VehicleProfile {
-    SoundData* sounds[20] = {};  // All loaded sounds (increased for uncoupling, sound1)
+    SoundData* sounds[24] = {};  // SOUND_COUNT = 24
     RcEngineSound::Config config;
     char name[32] = {};
     bool loaded = false;
@@ -17,12 +17,13 @@ struct VehicleProfile {
         IDLE, REV, START, KNOCK, TURBO, WASTEGATE, HORN,
         JAKE_BRAKE, FAN, SIREN, BRAKE, PARKING_BRAKE,
         SHIFTING, REVERSING, INDICATOR, COUPLING, SUPERCHARGER,
-        UNCOUPLING, SOUND1
+        UNCOUPLING, SOUND1, TIRE_SQUEAL, HYDRAULIC_PUMP,
+        HYDRAULIC_FLOW, TRACK_RATTLE, BUCKET_RATTLE
     };
 
     static const char* soundTypeNames[];
     static const char* genericNames[];
-    static const int SOUND_COUNT = 19;
+    static const int SOUND_COUNT = 24;
 
     bool load(const char* profilePath) {
         unload();
@@ -108,6 +109,11 @@ struct VehicleProfile {
         out.couplingSamples = getSampleAndCount(COUPLING, out.couplingSampleCount);
         out.uncouplingSamples = getSampleAndCount(UNCOUPLING, out.uncouplingSampleCount);
         out.sound1Samples = getSampleAndCount(SOUND1, out.sound1SampleCount);
+        out.tireSquealSamples = getSampleAndCount(TIRE_SQUEAL, out.tireSquealSampleCount);
+        out.hydraulicPumpSamples = getSampleAndCount(HYDRAULIC_PUMP, out.hydraulicPumpSampleCount);
+        out.hydraulicFlowSamples = getSampleAndCount(HYDRAULIC_FLOW, out.hydraulicFlowSampleCount);
+        out.trackRattleSamples = getSampleAndCount(TRACK_RATTLE, out.trackRattleSampleCount);
+        out.bucketRattleSamples = getSampleAndCount(BUCKET_RATTLE, out.bucketRattleSampleCount);
     }
 
     void populateConfig(RcEngineSound::Config& out) {
@@ -167,6 +173,11 @@ private:
         cfg.couplingVolume = doc["SOUND_VOLUME"]["COUPLING"] | 0;
         cfg.uncouplingVolume = doc["SOUND_VOLUME"]["UNCOUPLING"] | 0;
         cfg.sound1Volume = doc["SOUND_VOLUME"]["SOUND1"] | 100;
+        cfg.tireSquealVolume = doc["SOUND_VOLUME"]["TIRE_SQUEAL"] | 0;
+        cfg.hydraulicPumpVolume = doc["SOUND_VOLUME"]["HYDRAULIC_PUMP"] | 0;
+        cfg.hydraulicFlowVolume = doc["SOUND_VOLUME"]["HYDRAULIC_FLOW"] | 0;
+        cfg.trackRattleVolume = doc["SOUND_VOLUME"]["TRACK_RATTLE"] | 0;
+        cfg.bucketRattleVolume = doc["SOUND_VOLUME"]["BUCKET_RATTLE"] | 0;
 
         // Pitch shifting
         cfg.maxPitchFactor = doc["ENGINE"]["MAX_PITCH_FACTOR"] | 3.3f;
@@ -233,6 +244,16 @@ private:
         // Crawler mode
         cfg.crawlerModeThreshold = doc["SOUND_VOLUME"]["CRAWLER_MODE_THRESHOLD"] | 44;
 
+        // Feature flags
+        cfg.hydraulicEnabled = doc["FEATURES"]["HYDRAULIC_ENABLED"] | false;
+        cfg.hydrostaticMode = doc["FEATURES"]["HYDROSTATIC_MODE"] | false;
+        cfg.trackRattleEnabled = doc["FEATURES"]["TRACK_RATTLE_ENABLED"] | false;
+        cfg.dumpBedEnabled = doc["FEATURES"]["DUMP_BED_ENABLED"] | false;
+        cfg.tireSquealThreshold = doc["FEATURES"]["TIRE_SQUEAL_THRESHOLD"] | 70;
+        cfg.tireSquealMaxSpeed = doc["FEATURES"]["TIRE_SQUEAL_MAX_SPEED"] | 30;
+        cfg.trackRattleIntervalMin = doc["FEATURES"]["TRACK_RATTLE_INTERVAL_MIN"] | 90;
+        cfg.trackRattleIntervalMax = doc["FEATURES"]["TRACK_RATTLE_INTERVAL_MAX"] | 500;
+
         // Legacy
         cfg.clutchEngagingPoint = doc["ENGINE"]["CLUTCH_RPM"] | 100;
         cfg.maxRpmPercentage = 310;
@@ -243,7 +264,8 @@ const char* VehicleProfile::soundTypeNames[] = {
     "idle", "rev", "start", "knock", "turbo", "wastegate", "horn",
     "jakebrake", "fan", "siren", "airbrake", "parkingbrake",
     "shifting", "reversing", "indicator", "coupling", "supercharger",
-    "uncoupling", "sound1"
+    "uncoupling", "sound1", "tiresqueal", "hydraulicpump",
+    "hydraulicflow", "trackrattle", "bucketrattle"
 };
 
 const char* VehicleProfile::genericNames[] = {
@@ -254,5 +276,7 @@ const char* VehicleProfile::genericNames[] = {
     "airbrake-Truck2.json", "parkingbrake-Generic.json",
     "ClunkingGearShifting.json", "reversing-TruckBeep.json",
     "indicator-Generic.json", "coupling-generic.json", "supercharger.json",
-    "uncoupling-generic.json", "sound1-Dummy.json"
+    "uncoupling-generic.json", "sound1-Dummy.json",
+    "squeal-Tire2.json", "hydraulicPump-Generic.json",
+    "hydraulicFlow-Generic.json", "trackrattle.json", "bucketrattle-Generic.json"
 };

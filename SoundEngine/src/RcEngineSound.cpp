@@ -19,7 +19,8 @@ RcEngineSound::RcEngineSound() :
     attenuatorMillis(0),
     attenuator(1),
     stopPitchFactor(1.0f),
-    crawlerMode(false)
+    crawlerMode(false),
+    lastTrackRattleTime(0)
 {
     // Initialize all voices to inactive
     for (int i = 0; i < VOICE_COUNT; i++) {
@@ -48,6 +49,11 @@ RcEngineSound::~RcEngineSound() {
         if (sounds.couplingSamples) free(sounds.couplingSamples);
         if (sounds.uncouplingSamples) free(sounds.uncouplingSamples);
         if (sounds.sound1Samples) free(sounds.sound1Samples);
+        if (sounds.tireSquealSamples) free(sounds.tireSquealSamples);
+        if (sounds.hydraulicPumpSamples) free(sounds.hydraulicPumpSamples);
+        if (sounds.hydraulicFlowSamples) free(sounds.hydraulicFlowSamples);
+        if (sounds.trackRattleSamples) free(sounds.trackRattleSamples);
+        if (sounds.bucketRattleSamples) free(sounds.bucketRattleSamples);
     }
 }
 
@@ -158,6 +164,36 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     voices[VOICE_SOUND1].loopBegin = cfg.sound1LoopBegin;
     voices[VOICE_SOUND1].loopEnd = cfg.sound1LoopEnd;
 
+    // Tire squeal: fixed pitch, loops while active
+    voices[VOICE_TIRE_SQUEAL].samples = sounds.tireSquealSamples;
+    voices[VOICE_TIRE_SQUEAL].count = sounds.tireSquealSampleCount;
+    voices[VOICE_TIRE_SQUEAL].pitchShifted = false;
+    voices[VOICE_TIRE_SQUEAL].loop = true;
+
+    // Hydraulic pump: pitch-shifted with engine, loops
+    voices[VOICE_HYDRAULIC_PUMP].samples = sounds.hydraulicPumpSamples;
+    voices[VOICE_HYDRAULIC_PUMP].count = sounds.hydraulicPumpSampleCount;
+    voices[VOICE_HYDRAULIC_PUMP].pitchShifted = true;
+    voices[VOICE_HYDRAULIC_PUMP].loop = true;
+
+    // Hydraulic flow: fixed pitch, loops
+    voices[VOICE_HYDRAULIC_FLOW].samples = sounds.hydraulicFlowSamples;
+    voices[VOICE_HYDRAULIC_FLOW].count = sounds.hydraulicFlowSampleCount;
+    voices[VOICE_HYDRAULIC_FLOW].pitchShifted = false;
+    voices[VOICE_HYDRAULIC_FLOW].loop = true;
+
+    // Track rattle: fixed pitch, one-shot per trigger
+    voices[VOICE_TRACK_RATTLE].samples = sounds.trackRattleSamples;
+    voices[VOICE_TRACK_RATTLE].count = sounds.trackRattleSampleCount;
+    voices[VOICE_TRACK_RATTLE].pitchShifted = false;
+    voices[VOICE_TRACK_RATTLE].oneShot = true;
+
+    // Bucket rattle: fixed pitch, one-shot per trigger
+    voices[VOICE_BUCKET_RATTLE].samples = sounds.bucketRattleSamples;
+    voices[VOICE_BUCKET_RATTLE].count = sounds.bucketRattleSampleCount;
+    voices[VOICE_BUCKET_RATTLE].pitchShifted = false;
+    voices[VOICE_BUCKET_RATTLE].oneShot = true;
+
     // Configure default volumes
     voices[VOICE_IDLE].volume = cfg.idleVolume;
     voices[VOICE_REV].volume = cfg.revVolume;
@@ -177,6 +213,11 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     voices[VOICE_SUPERCHARGER].volume = cfg.superchargerVolume;
     voices[VOICE_UNCOUPLING].volume = cfg.uncouplingVolume;
     voices[VOICE_SOUND1].volume = cfg.sound1Volume;
+    voices[VOICE_TIRE_SQUEAL].volume = cfg.tireSquealVolume;
+    voices[VOICE_HYDRAULIC_PUMP].volume = cfg.hydraulicPumpVolume;
+    voices[VOICE_HYDRAULIC_FLOW].volume = cfg.hydraulicFlowVolume;
+    voices[VOICE_TRACK_RATTLE].volume = cfg.trackRattleVolume;
+    voices[VOICE_BUCKET_RATTLE].volume = cfg.bucketRattleVolume;
 
     Serial.printf("[RcEngineSound] Initialized with %d voice slots\n", VOICE_COUNT);
 }
@@ -247,6 +288,42 @@ void RcEngineSound::triggerUncoupling(bool active) {
 void RcEngineSound::triggerSound1(bool active) {
     voices[VOICE_SOUND1].active = active;
     if (active) voices[VOICE_SOUND1].position = 0;
+}
+
+void RcEngineSound::triggerTireSqueal(bool active) {
+    voices[VOICE_TIRE_SQUEAL].active = active;
+    if (active) voices[VOICE_TIRE_SQUEAL].position = 0;
+}
+
+void RcEngineSound::triggerHydraulicPump(bool active) {
+    voices[VOICE_HYDRAULIC_PUMP].active = active;
+    if (active) voices[VOICE_HYDRAULIC_PUMP].position = 0;
+}
+
+void RcEngineSound::triggerHydraulicFlow(bool active) {
+    voices[VOICE_HYDRAULIC_FLOW].active = active;
+    if (active) voices[VOICE_HYDRAULIC_FLOW].position = 0;
+}
+
+void RcEngineSound::triggerTrackRattle(bool active) {
+    voices[VOICE_TRACK_RATTLE].active = active;
+    if (active) voices[VOICE_TRACK_RATTLE].position = 0;
+}
+
+void RcEngineSound::triggerBucketRattle(bool active) {
+    voices[VOICE_BUCKET_RATTLE].active = active;
+    if (active) voices[VOICE_BUCKET_RATTLE].position = 0;
+}
+
+void RcEngineSound::triggerDumpBed(bool active) {
+    if (cfg.dumpBedEnabled) {
+        voices[VOICE_HYDRAULIC_PUMP].active = active;
+        voices[VOICE_HYDRAULIC_FLOW].active = active;
+        if (active) {
+            voices[VOICE_HYDRAULIC_PUMP].position = 0;
+            voices[VOICE_HYDRAULIC_FLOW].position = 0;
+        }
+    }
 }
 
 // ─── Advanced Engine State Machine ───────────────────────────────────────────
@@ -340,6 +417,41 @@ void RcEngineSound::update(int16_t throttle) {
             }
         }
 
+        // ── Tire squeal: high throttle, low speed ──
+        bool squealCondition = (throttle > (int32_t)(cfg.maxRpm * cfg.tireSquealThreshold / 100) &&
+                                virtualSpeed < (int32_t)(cfg.maxRpm * cfg.tireSquealMaxSpeed / 100));
+        voices[VOICE_TIRE_SQUEAL].active = squealCondition;
+        if (squealCondition && cfg.tireSquealVolume > 0) {
+            // Volume inversely proportional to speed
+            int32_t speedScale = map(virtualSpeed, 0,
+                                     cfg.maxRpm * cfg.tireSquealMaxSpeed / 100, 100, 0);
+            voices[VOICE_TIRE_SQUEAL].volume =
+                (uint8_t)(cfg.tireSquealVolume * constrain(speedScale, 0, 100) / 100);
+        }
+
+        // ── Hydraulic pump: RPM-dependent, loops while enabled ──
+        voices[VOICE_HYDRAULIC_PUMP].active = cfg.hydraulicEnabled;
+        if (cfg.hydraulicEnabled && cfg.hydraulicPumpVolume > 0) {
+            int32_t pumpScale = map(currentRpmFixed, 0, cfg.maxRpm, 30, 100);
+            int32_t vol = cfg.hydraulicPumpVolume * constrain(pumpScale, 0, 100) / 100;
+            if (cfg.hydrostaticMode) {
+                int32_t speedScale = map(virtualSpeed, 0, cfg.maxRpm, 50, 100);
+                vol = vol * constrain(speedScale, 0, 100) / 100;
+            }
+            voices[VOICE_HYDRAULIC_PUMP].volume = (uint8_t)vol;
+        }
+
+        // ── Track rattle: speed-dependent interval ──
+        if (cfg.trackRattleEnabled && virtualSpeed > 0 && cfg.trackRattleVolume > 0 && !voices[VOICE_TRACK_RATTLE].active) {
+            uint32_t interval = map(virtualSpeed, 0, cfg.maxRpm,
+                                   cfg.trackRattleIntervalMax, cfg.trackRattleIntervalMin);
+            if (now - lastTrackRattleTime > interval) {
+                voices[VOICE_TRACK_RATTLE].active = true;
+                voices[VOICE_TRACK_RATTLE].position = 0;
+                lastTrackRattleTime = now;
+            }
+        }
+
         // ── Wastegate detection ──
         if (sounds.wastegateSamples && sounds.wastegateSampleCount > 0) {
             int16_t throttleDrop = lastThrottle - throttle;
@@ -361,6 +473,18 @@ void RcEngineSound::update(int16_t throttle) {
         }
     } else if (state == OFF) {
         currentRpm = 0;
+    }
+
+    // ── Update virtualSpeed for all transmission types (needed for tire squeal, track rattle) ──
+    if (cfg.transmissionType != TRANS_AUTOMATIC && state == RUNNING) {
+        // Ramp virtualSpeed with inertia for smooth tire squeal / track rattle
+        if (targetRpm > virtualSpeed) {
+            virtualSpeed += max((int32_t)1, (int32_t)(cfg.acc * 2));
+            if (virtualSpeed > cfg.maxRpm) virtualSpeed = cfg.maxRpm;
+        } else if (targetRpm < virtualSpeed) {
+            virtualSpeed -= max((int32_t)1, (int32_t)(cfg.dec * 2));
+            if (virtualSpeed < 0) virtualSpeed = 0;
+        }
     }
 
     currentRpmFixed = currentRpm;

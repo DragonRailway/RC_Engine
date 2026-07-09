@@ -66,6 +66,21 @@ struct SoundData {
     int8_t* sound1Samples = nullptr;
     uint32_t sound1SampleCount = 0;
 
+    int8_t* tireSquealSamples = nullptr;
+    uint32_t tireSquealSampleCount = 0;
+
+    int8_t* hydraulicPumpSamples = nullptr;
+    uint32_t hydraulicPumpSampleCount = 0;
+
+    int8_t* hydraulicFlowSamples = nullptr;
+    uint32_t hydraulicFlowSampleCount = 0;
+
+    int8_t* trackRattleSamples = nullptr;
+    uint32_t trackRattleSampleCount = 0;
+
+    int8_t* bucketRattleSamples = nullptr;
+    uint32_t bucketRattleSampleCount = 0;
+
     bool isDynamic = false; // Set to true if allocated in PSRAM/Heap
 };
 
@@ -87,6 +102,10 @@ struct SoundData {
  * - Uncoupling separate sound
  * - Sound1 generic channel
  * - ESC ramp time per gear
+ * - Tire squeal (speed-dependent)
+ * - Hydraulic pump + flow (excavator support)
+ * - Track rattle (interval-based)
+ * - Bucket rattle (one-shot)
  */
 class RcEngineSound {
 public:
@@ -142,6 +161,27 @@ public:
         uint8_t couplingVolume = 0;
         uint8_t uncouplingVolume = 0;
         uint8_t sound1Volume = 100;
+
+        // Tire squeal
+        uint8_t tireSquealVolume = 0;
+        uint8_t tireSquealThreshold = 70;   // Throttle % to trigger squeal
+        uint8_t tireSquealMaxSpeed = 30;    // Speed % below which squeal plays
+
+        // Hydraulic (excavator/crane support)
+        uint8_t hydraulicPumpVolume = 0;
+        uint8_t hydraulicFlowVolume = 0;
+        bool hydraulicEnabled = false;
+        bool hydrostaticMode = false;       // Pump volume scales with speed
+
+        // Track/Bucket rattle
+        uint8_t trackRattleVolume = 0;
+        uint8_t bucketRattleVolume = 0;
+        bool trackRattleEnabled = false;
+        uint16_t trackRattleIntervalMin = 90;  // ms at top speed
+        uint16_t trackRattleIntervalMax = 500; // ms at low speed
+
+        // Dump bed
+        bool dumpBedEnabled = false;
 
         // Pitch shifting
         float maxPitchFactor = 3.3f; // Max pitch multiplier at full RPM
@@ -220,6 +260,12 @@ public:
     void triggerCoupling(bool active);
     void triggerUncoupling(bool active);
     void triggerSound1(bool active);
+    void triggerTireSqueal(bool active);
+    void triggerHydraulicPump(bool active);
+    void triggerHydraulicFlow(bool active);
+    void triggerTrackRattle(bool active);
+    void triggerBucketRattle(bool active);
+    void triggerDumpBed(bool active);
 
     uint8_t getNextSample();
 
@@ -236,6 +282,8 @@ private:
         VOICE_JAKE_BRAKE, VOICE_REVERSING, VOICE_PARKING_BRAKE,
         VOICE_SHIFTING, VOICE_INDICATOR, VOICE_COUPLING, VOICE_FAN,
         VOICE_SUPERCHARGER, VOICE_UNCOUPLING, VOICE_SOUND1,
+        VOICE_TIRE_SQUEAL, VOICE_HYDRAULIC_PUMP, VOICE_HYDRAULIC_FLOW,
+        VOICE_TRACK_RATTLE, VOICE_BUCKET_RATTLE,
         VOICE_COUNT
     };
 
@@ -299,6 +347,9 @@ private:
 
     // Crawler mode
     bool crawlerMode = false;
+
+    // Track rattle timing
+    uint32_t lastTrackRattleTime = 0;
 
     // Helper: read sample with linear interpolation at fractional position
     static inline int8_t readInterpolated(const int8_t* samples, uint32_t count, float position) {
