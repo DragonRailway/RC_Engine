@@ -60,24 +60,7 @@ RC_brain/
 - **Vehicle config** (`vehicle-*.json`): Engine params, transmission, sound volumes
 - **Sound files** (`sounds/*.json`): Sample rate, count, PCM data arrays
 
-## Dependencies
-- ESP32 Arduino core (platform-espressif32)
-- ArduinoJson ^7.0.4
-- ESP32_PWM_Fusion (local symlink)
-- LittleFS (built-in)
-
-## Board Defines (platformio.ini)
-- `TRACKLINK_V3` - Board identifier
-- `BOOT=0` - Boot button pin
-- `VSCALE=1.8`, `VOFFSET=-0.2` - Voltage sensing calibration
-- `LED_FREQ=8000`, `LED_RES=10` - LED PWM
-- `DRV_FREQ=24000`, `DRV_RES=8` - Motor driver PWM
-
-## Sound Conversion
-Run `./convert_sounds.sh` to convert C header sound arrays in `lib/RcEngineSound/src/vehicles/sounds/` to prefixed JSON files in `lib/RcEngineSound/src/vehicles/sounds/json/`.
-
-## Common Tasks
-1. **Add new vehicle**: Create header in `lib/RcEngineSound/vehicles/`, add sounds to `lib/RcEngineSound/sounds/`, run convert script
-2. **Modify pin mapping**: Edit `src/boards/TRACKLINK_V3.h`
-3. **Update config schema**: Modify example configs in `src/example_config/`
-4. **Deploy configs**: Copy JSON files to device LittleFS (via PlatformIO filesystem upload)
+## RadioKit Remote Access API
+- **Where**: embedded in the RadioKit Flutter app on the Android phone (`10.0.0.6:7007`), reachable via `adb forward tcp:17007 tcp:7007` (direct LAN curl fails).
+- **Docs**: `docs/radiokit-api/README.md` (index + workflows), `skills/*.md` (server skill guides), `api-schema.json`, `root.md`.
+- **Design**: `docs/radiokit-rc-ui-design.json` — the RC_UI control surface; `src/RADIOKIT.h` is generated from it via `GET /api/designs/<id>/header`.
