@@ -39,7 +39,6 @@ applet/
 *.pyc
 
 # Project specific
-/references/
 build_output.txt
 *bak
 
@@ -48,3 +47,6 @@ build_output.txt
 .claude/
 .cursor/
 .codex/
+
+# openspec
+archive/
