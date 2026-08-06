@@ -7,7 +7,7 @@ context: |
   - ESP32-S3 N4R2 (4MB flash, 2MB PSRAM)
   - Arduino framework via PlatformIO
   - ArduinoJson ^7.0.4 for config parsing
-  - ESP32_PWM_Fusion (local) for PWM control
+  - ESP32_EasyKit (vendored at lib/ESP32_EasyKit) for PWM control
   - LittleFS for on-device config storage
   - I2S audio output (22,050 Hz, 8-bit PCM)
   

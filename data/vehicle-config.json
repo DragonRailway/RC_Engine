@@ -1,0 +1,86 @@
+{
+  "vehicle": {
+    "name": "Scania V8",
+    "type": "truck",
+    "sound_set": "ScaniaV8",
+    "preset": "heavy_truck"
+  },
+  "engine": {
+    "acceleration": 2,
+    "deceleration": 1,
+    "idle_rpm": 10,
+    "clutch_rpm": 100,
+    "rev_switch_point": 50,
+    "idle_end_point": 40,
+    "diesel_knock_interval": 8,
+    "diesel_knock_start_point": 30,
+    "jakebrake_min_rpm": 60,
+    "jakebrake_decel_rate": 5,
+    "fan_start_point": 0,
+    "knock_pattern": "v8",
+    "knock_adaptive_volume": 18,
+    "min_knock_volume": 80,
+    "knock_start_rpm": 10,
+    "supercharger_start_point": 10,
+    "max_pitch_factor": 3.3
+  },
+  "transmission": {
+    "type": "automatic",
+    "number_of_gears": 3,
+    "gear_ramp_times": [20, 50, 75, 75, 75, 75]
+  },
+  "loop_points": {
+    "horn_begin": 0,
+    "horn_end": 0,
+    "siren_begin": 0,
+    "siren_end": 0,
+    "reversing_begin": 0,
+    "reversing_end": 0,
+    "sound1_begin": 0,
+    "sound1_end": 0
+  },
+  "mix_weights": {
+    "engine": 100,
+    "effects": 100
+  },
+  "features": {
+    "tire_squeal_threshold": 70,
+    "tire_squeal_max_speed": 30,
+    "hydraulic_enabled": false,
+    "hydrostatic_mode": false,
+    "track_rattle_enabled": false,
+    "dump_bed_enabled": false,
+    "track_rattle_interval_min": 90,
+    "track_rattle_interval_max": 500
+  },
+  "sound_volumes": {
+    "start": 140,
+    "idle": 80,
+    "engine_idle": 50,
+    "full_throttle": 150,
+    "rev": 100,
+    "engine_rev": 50,
+    "turbo": 40,
+    "knock": 200,
+    "wastegate": 100,
+    "horn": 100,
+    "siren": 100,
+    "brake": 150,
+    "parking_brake": 150,
+    "shifting": 100,
+    "reversing": 70,
+    "indicator": 100,
+    "coupling": 100,
+    "jakebrake": 150,
+    "fan": 0,
+    "supercharger": 0,
+    "uncoupling": 100,
+    "sound1": 100,
+    "crawler_mode_threshold": 44,
+    "tire_squeal": 0,
+    "hydraulic_pump": 0,
+    "hydraulic_flow": 0,
+    "track_rattle": 0,
+    "bucket_rattle": 0
+  }
+}

@@ -1,0 +1,25 @@
+# Config Filesystem Management
+
+## ADDED Requirements
+
+### Requirement: Lower snake_case JSON schema
+The firmware SHALL parse hardware configuration (`/hardware-config.json`) and vehicle configuration (`/vehicle-config.json`) using `lower_snake_case` JSON keys.
+
+#### Scenario: Parse lower_snake_case hardware config
+- **WHEN** `/hardware-config.json` containing `sound`, `drivetrain`, `lights`, and `telemetry` keys in `lower_snake_case` is loaded
+- **THEN** `ConfigParser` successfully populates `HardwareConfig` with all specified parameters
+
+#### Scenario: Parse lower_snake_case vehicle config
+- **WHEN** `/vehicle-config.json` containing `vehicle`, `engine`, `transmission`, and `sound_volumes` keys in `lower_snake_case` is loaded
+- **THEN** `ConfigParser` successfully populates `RcEngineSound::Config` with all specified parameters
+
+### Requirement: Deductive drivetrain topology detection
+The firmware SHALL automatically deduce the physical drivetrain layout based on the keys present in the `"drivetrain"` JSON object without requiring a mandatory mode tag.
+
+#### Scenario: Skid-steer drivetrain detected
+- **WHEN** the `"drivetrain"` object contains both `"left_motor"` and `"right_motor"` keys
+- **THEN** `ConfigParser` configures the vehicle controller to operate in Skid-Steer mode (differential mixing of throttle and steering)
+
+#### Scenario: Ackermann drivetrain detected
+- **WHEN** the `"drivetrain"` object contains a `"drive_motor"` key (and optional `"steering_servo"`)
+- **THEN** `ConfigParser` configures the vehicle controller to operate in standard Ackermann mode (single throttle drive output + steering servo output)

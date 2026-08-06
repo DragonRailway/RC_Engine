@@ -1,0 +1,34 @@
+{
+  "name": "ESP32_EasyKit",
+  "version": "1.1.0",
+  "description": "Unified MCPWM + LEDC PWM library for ESP32 (Servo, DC Motor, LED Fade, LED Blink). Wraps ESP32's MCPWM and LEDC peripherals into single library. Supports asymmetric easing and hardware-locked precision.",
+  "keywords": "esp32, pwm, mcpwm, ledc, servo, motor, led, animation, easing, fpu",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rambros3d/ESP32_EasyKit.git"
+  },
+  "authors": [
+    {
+      "name": "RamBros",
+      "url": "https://github.com/rambros3d"
+    }
+  ],
+  "license": "MIT",
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "examples": "examples/*/*.ino",
+  "export": {
+    "exclude": [
+      ".cache",
+      ".embedder",
+      ".git",
+      ".gitignore",
+      "arduino-cli",
+      "arduino-cli.yaml",
+      "build",
+      "compile.sh",
+      "diagram.json",
+      "wokwi.toml"
+    ]
+  }
+}

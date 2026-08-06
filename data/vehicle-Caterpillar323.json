@@ -1,0 +1,28 @@
+{
+  "vehicle": {
+    "name": "Caterpillar 323",
+    "type": "excavator",
+    "sound_set": "Caterpillar323",
+    "preset": "excavator"
+  },
+  "engine": {
+    "acceleration": 3,
+    "deceleration": 2,
+    "idle_rpm": 15,
+    "clutch_rpm": 120,
+    "knock_pattern": "r6"
+  },
+  "features": {
+    "hydraulic_enabled": true,
+    "track_rattle_enabled": true
+  },
+  "sound_volumes": {
+    "start": 140,
+    "idle": 90,
+    "rev": 110,
+    "hydraulic_pump": 80,
+    "hydraulic_flow": 70,
+    "track_rattle": 90,
+    "bucket_rattle": 100
+  }
+}

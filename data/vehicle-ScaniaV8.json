@@ -1,0 +1,42 @@
+{
+  "vehicle": {
+    "name": "Scania V8",
+    "type": "truck",
+    "sound_set": "ScaniaV8",
+    "preset": "heavy_truck"
+  },
+  "engine": {
+    "acceleration": 2,
+    "deceleration": 1,
+    "idle_rpm": 10,
+    "clutch_rpm": 100,
+    "rev_switch_point": 50,
+    "idle_end_point": 40,
+    "diesel_knock_interval": 8,
+    "diesel_knock_start_point": 30,
+    "jakebrake_min_rpm": 60,
+    "jakebrake_decel_rate": 5,
+    "fan_start_point": 0,
+    "knock_pattern": "v8",
+    "knock_adaptive_volume": 18,
+    "min_knock_volume": 80,
+    "knock_start_rpm": 10,
+    "supercharger_start_point": 10,
+    "max_pitch_factor": 3.3
+  },
+  "transmission": {
+    "type": "automatic",
+    "number_of_gears": 3,
+    "gear_ramp_times": [20, 50, 75, 75, 75, 75]
+  },
+  "sound_volumes": {
+    "start": 140,
+    "idle": 80,
+    "rev": 100,
+    "turbo": 40,
+    "knock": 200,
+    "horn": 100,
+    "brake": 150,
+    "reversing": 70
+  }
+}
