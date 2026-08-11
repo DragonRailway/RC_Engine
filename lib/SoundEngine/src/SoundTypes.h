@@ -5,16 +5,12 @@
  * 
  * This header defines the unified SoundID enum used by both
  * RcEngineSound and VehicleProfile, ensuring they stay in sync.
+ *
+ * NOTE: the canonical VehicleType enum lives in RcEngineSound.h
+ * (TRUCK / LOCOMOTIVE / EXCAVATOR / UNKNOWN). The duplicate that
+ * used to live here was removed — keep vehicle type definitions
+ * in one place.
  */
-
-enum VehicleType {
-    VEHICLE_TRUCK,
-    VEHICLE_EXCAVATOR,
-    VEHICLE_LOCOMOTIVE,
-    VEHICLE_CAR,
-    VEHICLE_TANK,
-    VEHICLE_UNKNOWN
-};
 
 enum SoundID {
     IDLE, REV, START, KNOCK, TURBO, WASTEGATE, HORN,

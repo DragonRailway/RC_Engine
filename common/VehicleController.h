@@ -86,6 +86,18 @@ public:
 
         Serial.printf("[VehicleController] Detected %dS LiPo (Boot V: %.2fV, Cutoff: %.2fV)\n",
                       s_cellCount, bootV, s_cutoffVoltage);
+
+        // ── Vehicle type boot visibility ──
+        const RcEngineSound::VehicleType t = s_profile->config.type;
+        if (t == RcEngineSound::VEHICLE_EXCAVATOR) {
+            Serial.println("[VehicleController] Vehicle type: EXCAVATOR (control surface deferred — using truck widget set)");
+        } else if (t == RcEngineSound::VEHICLE_LOCOMOTIVE) {
+            Serial.println("[VehicleController] Vehicle type: LOCOMOTIVE");
+        } else if (t == RcEngineSound::VEHICLE_UNKNOWN) {
+            Serial.println("[VehicleController] Vehicle type: UNKNOWN (defaulting to truck widget set)");
+        } else {
+            Serial.println("[VehicleController] Vehicle type: TRUCK");
+        }
     }
 
     static void update() {
@@ -93,7 +105,10 @@ public:
 
         // Vehicle type from vehicle-config.json is the single source of truth:
         // TRUCK and LOCOMOTIVE widget sets are mutually exclusive, never active together.
-        const bool isLoco = (s_profile->config.type == RcEngineSound::VEHICLE_LOCOMOTIVE);
+        // Dispatch on the canonical enum: LOCOMOTIVE -> loco widget set; TRUCK, EXCAVATOR
+        // (recognized stub, see init) and UNKNOWN all use the truck widget set.
+        const RcEngineSound::VehicleType vtype = s_profile->config.type;
+        const bool isLoco = (vtype == RcEngineSound::VEHICLE_LOCOMOTIVE);
 
         // ── Battery Protection & Low Voltage Cutoff ──
         float pinV = analogReadMilliVolts(POWER::VOLTAGE) / 1000.0f;

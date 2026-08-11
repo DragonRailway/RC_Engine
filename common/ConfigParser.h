@@ -120,10 +120,13 @@ public:
             config.type = RcEngineSound::VEHICLE_LOCOMOTIVE;
         } else if (strcasecmp(vehicleTypeStr, "EXCAVATOR") == 0) {
             config.type = RcEngineSound::VEHICLE_EXCAVATOR;
-        } else if (strcasecmp(vehicleTypeStr, "CUSTOM") == 0) {
-            config.type = RcEngineSound::VEHICLE_CUSTOM;
-        } else {
+        } else if (strcasecmp(vehicleTypeStr, "TRUCK") == 0) {
             config.type = RcEngineSound::VEHICLE_TRUCK;
+        } else {
+            // No silent TRUCK fallback: an unrecognized type string is
+            // visible in the boot log so config typos are caught.
+            config.type = RcEngineSound::VEHICLE_UNKNOWN;
+            Serial.printf("[ConfigParser] WARNING: unknown vehicle type '%s' — defaulting to truck\n", vehicleTypeStr);
         }
 
         parseEngine(doc, config);

@@ -52,11 +52,15 @@ public:
         TRANS_AUTOMATIC
     };
 
+    // Canonical vehicle type (single source of truth — the duplicate in
+    // SoundTypes.h was removed). TRUCK and LOCOMOTIVE are the two control
+    // surfaces; EXCAVATOR is a recognized stub (control surface deferred);
+    // UNKNOWN covers unrecognized config strings with a truck fallback.
     enum VehicleType {
         VEHICLE_TRUCK,
         VEHICLE_LOCOMOTIVE,
         VEHICLE_EXCAVATOR,
-        VEHICLE_CUSTOM
+        VEHICLE_UNKNOWN
     };
 
     struct Config {

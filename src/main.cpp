@@ -139,6 +139,20 @@ void setup() {
     Serial.println("\n── Starting RadioKit (BLE) ──");
     initRadioKit();
 
+    // ── Vehicle-type-driven app surface ──
+    // RadioKit.config.type is informational (sent to the app on connect); the
+    // generated header hardcodes "Locomotive", so override it from the vehicle
+    // config so the app labels the device correctly. Also force the active page
+    // to match the model so the app lands on the right page (a nudge, not a
+    // lock — app-initiated page switches still work afterwards).
+    if (profile.config.type == RcEngineSound::VEHICLE_LOCOMOTIVE) {
+        RadioKit.config.type = "Locomotive";
+        RadioKit.setActivePage(1);   // page 1 "Loco"
+    } else {
+        RadioKit.config.type = "Truck";
+        RadioKit.setActivePage(0);   // page 0 "Truck"
+    }
+
     Serial.println("\n── System Ready ──");
     Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
     Serial.printf("Free PSRAM: %d bytes\n", ESP.getFreePsram());
