@@ -76,7 +76,7 @@ public:
 
         if (!docObj["telemetry"].isNull() || !docObj["TELEMETRY"].isNull()) {
             JsonObjectConst telObj = docObj["telemetry"] | docObj["TELEMETRY"];
-            // Board calibration: hardware-config.json wins when present; fall back to
+            // Board calibration: the board hardware config wins when present; fall back to
             // the compile-time VSCALE/VOFFSET macros (defined per-env in platformio.ini).
 #ifndef VSCALE
 #define VSCALE 1.0f

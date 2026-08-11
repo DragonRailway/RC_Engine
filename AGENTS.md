@@ -47,7 +47,7 @@ RC_brain/
 │   ├── main.cpp             # Config loader test app
 │   ├── boards/TRACKLINK_V3.h # Pin mappings (H-bridge, LEDs, I2S, power)
 │   ├── ConfigLoader.h       # LittleFS + JSON config utilities
-│   ├── example_config/      # hardware-config.json, vehicle-config.json
+│   ├── example_config/      # hardware-<BOARD>.json, vehicle-config.json
 │   └── sounds/              # Sound profile JSONs (idle, rev, horn, etc.)
 ├── lib/RcEngineSound/       # Sound engine library
 │   ├── vehicles/            # Vehicle sound profiles (ScaniaV8, etc.)

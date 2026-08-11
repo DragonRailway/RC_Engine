@@ -10,7 +10,7 @@ Defines the consolidated LittleFS configuration system where ConfigParser is the
 ConfigParser SHALL be the single authority for parsing all JSON config files from LittleFS, including hardware config, vehicle config, and sound files.
 
 #### Scenario: Hardware config loaded
-- **WHEN** `ConfigParser::loadHardwareConfig("/hardware-config.json", hwConfig)` is called
+- **WHEN** `ConfigParser::loadHardwareConfig("/hardware-MIKRO_V2.json", hwConfig)` is called (board-specific path selected at compile time)
 - **THEN** the HardwareConfig struct is populated with pin assignments, motor settings, servo endpoints, and light configurations
 
 #### Scenario: Vehicle config loaded

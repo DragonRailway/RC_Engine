@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MIKRO_V2 hot-reload smoke test (task 5.3).
 
-Uploads a modified /hardware-config.json over the RadioKit FS protocol (0xAA)
+Uploads a modified /hardware-MIKRO_V2.json over the RadioKit FS protocol (0xAA)
 while the board keeps running — exactly what the RadioKit app's filesystem
 manager does — then watches the firmware's 2-second config watcher trigger a
 live reload (reloadConfigs -> HardwareInit::hotReload) without a reboot.
@@ -28,14 +28,14 @@ def main():
     ser = serial.Serial(PORT, BAUD, timeout=0.3)
     print(f"Opened {PORT} @ {BAUD}", flush=True)
 
-    # Modified config: bump VOLUME 55 -> 70 (visible change)
-    with open('data/hardware-config.json') as f:
+    # Modified config: bump sound volume 80 -> 70 (visible change)
+    with open('data/hardware-MIKRO_V2.json') as f:
         txt = f.read()
-    new_txt = re.sub(r'"VOLUME":\s*\d+', '"VOLUME": 70', txt, count=1)
+    new_txt = re.sub(r'"volume":\s*\d+', '"volume": 70', txt, count=1)
     data = new_txt.encode()
-    print(f"Uploading /hardware-config.json ({len(data)} bytes), VOLUME 55 -> 70", flush=True)
+    print(f"Uploading /hardware-MIKRO_V2.json ({len(data)} bytes), volume 80 -> 70", flush=True)
 
-    path = b'/hardware-config.json'
+    path = b'/hardware-MIKRO_V2.json'
     ser.reset_input_buffer()
 
     # Opening the port may have reset the board (DTR). Wait for a clean boot

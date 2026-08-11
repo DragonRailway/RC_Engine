@@ -3,10 +3,10 @@
 ## ADDED Requirements
 
 ### Requirement: Lower snake_case JSON schema
-The firmware SHALL parse hardware configuration (`/hardware-config.json`) and vehicle configuration (`/vehicle-config.json`) using `lower_snake_case` JSON keys.
+The firmware SHALL parse hardware configuration (board-specific: `/hardware-MIKRO_V2.json` or `/hardware-TRACKLINK_V3.json`, selected at compile time by the board define) and vehicle configuration (`/vehicle-config.json`) using `lower_snake_case` JSON keys.
 
 #### Scenario: Parse lower_snake_case hardware config
-- **WHEN** `/hardware-config.json` containing `sound`, `drivetrain`, `lights`, and `telemetry` keys in `lower_snake_case` is loaded
+- **WHEN** the board hardware config containing `sound`, `drivetrain`, `lights`, and `telemetry` keys in `lower_snake_case` is loaded
 - **THEN** `ConfigParser` successfully populates `HardwareConfig` with all specified parameters
 
 #### Scenario: Parse lower_snake_case vehicle config

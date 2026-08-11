@@ -69,7 +69,7 @@ public:
         HardwareInit::setAuxServo2(0);
 
         // ── Battery Cell Count: config-driven, voltage auto-detect as fallback ──
-        // hardware-config.json is authoritative (cell_count: 1..4). Only when the
+        // Board hardware config is authoritative (cell_count: 1..4). Only when the
         // config omits it (cell_count: 0) do we fall back to legacy voltage-based
         // detection so the cutoff still engages for unknown packs.
         float sumV = 0;

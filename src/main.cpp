@@ -9,6 +9,19 @@
 #include <VehicleProfile.h>
 #include <AudioOutput.h>
 
+// ── Board-specific hardware config ──
+// Each board has its own hardware config file on LittleFS, selected here at
+// compile time by the same -D define that selects the board pins. The shared
+// /hardware-config.json is no longer used; each board tunes its own file
+// (e.g. voltage calibration, servo endpoints, battery) independently.
+#ifdef MIKRO_V2
+#define HW_CONFIG_PATH "/hardware-MIKRO_V2.json"
+#elif defined(TRACKLINK_V3)
+#define HW_CONFIG_PATH "/hardware-TRACKLINK_V3.json"
+#else
+#error "Unknown board: define MIKRO_V2 or TRACKLINK_V3 in platformio.ini"
+#endif
+
 RcEngineSound engine;
 VehicleProfile profile;
 HardwareConfig hwConfig;
@@ -39,8 +52,8 @@ static bool reloadConfigs() {
     HardwareConfig newHw;
     RcEngineSound::Config newVc;
 
-    if (!ConfigParser::loadHardwareConfig("/hardware-config.json", newHw)) {
-        Serial.println("[Reload] hardware-config.json invalid — keeping current config");
+    if (!ConfigParser::loadHardwareConfig(HW_CONFIG_PATH, newHw)) {
+        Serial.printf("[Reload] %s invalid — keeping current config\n", HW_CONFIG_PATH);
         return false;
     }
     if (!ConfigParser::loadVehicleConfig("/vehicle-config.json", newVc)) {
@@ -110,11 +123,11 @@ void setup() {
     ConfigParser::printFilesystemInfo();
 
     Serial.println("\n── Loading Configs ──");
-    bool hwOk = ConfigParser::loadHardwareConfig("/hardware-config.json", hwConfig);
+    bool hwOk = ConfigParser::loadHardwareConfig(HW_CONFIG_PATH, hwConfig);
     bool vcOk = ConfigParser::loadVehicleConfig("/vehicle-config.json", profile.config);
 
     if (!hwOk || !vcOk) {
-        Serial.println("\nFATAL ERROR: Failed to load /hardware-config.json or /vehicle-config.json!");
+        Serial.printf("\nFATAL ERROR: Failed to load %s or /vehicle-config.json!\n", HW_CONFIG_PATH);
         Serial.println("Execution halted. Please upload valid configuration files to LittleFS.");
         while (1) delay(100);
     }
@@ -160,7 +173,7 @@ void setup() {
 
     // Seed the hot-reload watcher so boot does not trigger a spurious reload
     // (file write times are nonzero while lastHwWrite/lastVcWrite start at 0).
-    lastHwWrite = fileWriteTime("/hardware-config.json");
+    lastHwWrite = fileWriteTime(HW_CONFIG_PATH);
     lastVcWrite = fileWriteTime("/vehicle-config.json");
 }
 
@@ -172,7 +185,7 @@ void loop() {
     uint32_t now = millis();
     if (now - lastCfgCheck >= 2000) {
         lastCfgCheck = now;
-        uint32_t hwT = fileWriteTime("/hardware-config.json");
+        uint32_t hwT = fileWriteTime(HW_CONFIG_PATH);
         uint32_t vcT = fileWriteTime("/vehicle-config.json");
         bool changed = (hwT != lastHwWrite) || (vcT != lastVcWrite);
         if (changed && !pendingReload) {
