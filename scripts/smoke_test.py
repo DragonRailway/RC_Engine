@@ -60,8 +60,8 @@ def main():
     ser.setDTR(True); ser.setRTS(False); time.sleep(0.05)
     ser.reset_input_buffer()
 
-    # Drain boot log
-    boot_end = time.time() + 8
+    # Drain boot log (BLE init takes ~10s on cold boot, so wait 12s)
+    boot_end = time.time() + 12
     boot = b''
     while time.time() < boot_end:
         c = ser.read(4096)
