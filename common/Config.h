@@ -59,4 +59,13 @@ struct HardwareConfig {
         float vScale = 1.0f;
         float vOffset = 0.0f;
     } telemetry;
+
+    // Battery / power configuration. cellCount is the single source of truth for
+    // the connected LiPo pack (1S, 2S, 3S, 4S). When cellCount is 0 the firmware
+    // falls back to voltage-based auto-detection at boot (legacy behavior).
+    struct Battery {
+        uint8_t cellCount = 0;        // 0 = auto-detect, otherwise fixed (1..4)
+        float   cutoffVoltage = 3.3f; // low-voltage cutoff per cell (V)
+        float   fullVoltage = 4.2f;   // fully-charged voltage per cell (V)
+    } battery;
 };

@@ -88,6 +88,14 @@ public:
             config.telemetry.vOffset = telObj["voltage_offset"] | telObj["VOLTAGE_OFFSET"] | (float)VOFFSET;
         }
 
+        if (!docObj["battery"].isNull() || !docObj["BATTERY"].isNull()) {
+            JsonObjectConst batObj = docObj["battery"] | docObj["BATTERY"];
+            config.battery.cellCount = batObj["cell_count"] | batObj["CELL_COUNT"] | batObj["cells"] | 0;
+            config.battery.cutoffVoltage = batObj["cutoff_voltage"] | batObj["CUTOFF_VOLTAGE"] | 3.3f;
+            config.battery.fullVoltage = batObj["full_voltage"] | batObj["FULL_VOLTAGE"] | 4.2f;
+            config.battery.cellCount = constrain(config.battery.cellCount, 0, 4);
+        }
+
         Serial.printf("[ConfigParser] Loaded hardware config: %s\n", path);
         return true;
     }

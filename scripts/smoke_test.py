@@ -75,7 +75,7 @@ def main():
     # Boot sanity checks
     checks = {
         "Vehicle type: TRUCK":         "Vehicle type: TRUCK" in boot_txt,
-        "Engine OFF boot state":       "Detected" in boot_txt,  # cell detection ran
+        "Engine OFF boot state":       ("Battery cell count from config" in boot_txt or "Auto-detected" in boot_txt),  # battery config/detection ran
         "Config loaded":               "Configs reloaded OK" in boot_txt or "System Ready" in boot_txt,
     }
     for name, ok in checks.items():

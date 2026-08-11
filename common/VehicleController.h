@@ -68,7 +68,10 @@ public:
         HardwareInit::setAuxServo1(0);
         HardwareInit::setAuxServo2(0);
 
-        // ── Auto LiPo Cell Count Detection ──
+        // ── Battery Cell Count: config-driven, voltage auto-detect as fallback ──
+        // hardware-config.json is authoritative (cell_count: 1..4). Only when the
+        // config omits it (cell_count: 0) do we fall back to legacy voltage-based
+        // detection so the cutoff still engages for unknown packs.
         float sumV = 0;
         for (int i = 0; i < 10; ++i) {
             float pinV = analogReadMilliVolts(POWER::VOLTAGE) / 1000.0f;
@@ -76,16 +79,28 @@ public:
             delay(5);
         }
         float bootV = sumV / 10.0f;
-        if (bootV < 8.4f)       s_cellCount = 2;
-        else if (bootV < 12.6f) s_cellCount = 3;
-        else                    s_cellCount = 4;
 
-        s_cutoffVoltage = s_cellCount * 3.3f;
+        const uint8_t cfgCells = s_hw->battery.cellCount;
+        if (cfgCells > 0) {
+            s_cellCount = cfgCells;
+            Serial.printf("[VehicleController] Battery cell count from config: %dS (Boot V: %.2fV)\n",
+                          s_cellCount, bootV);
+        } else {
+            // Legacy auto-detect: a 1S pack measures well below the old 2S floor.
+            if (bootV < 4.5f)       s_cellCount = 1;
+            else if (bootV < 8.4f)  s_cellCount = 2;
+            else if (bootV < 12.6f) s_cellCount = 3;
+            else                    s_cellCount = 4;
+            Serial.printf("[VehicleController] Auto-detected %dS LiPo (Boot V: %.2fV)\n",
+                          s_cellCount, bootV);
+        }
+
+        s_cutoffVoltage = s_cellCount * s_hw->battery.cutoffVoltage;
         s_lowVoltageStart = 0;
         s_batteryCutoff = false;
 
-        Serial.printf("[VehicleController] Detected %dS LiPo (Boot V: %.2fV, Cutoff: %.2fV)\n",
-                      s_cellCount, bootV, s_cutoffVoltage);
+        Serial.printf("[VehicleController] Battery cutoff: %.2fV (%.2fV/cell)\n",
+                      s_cutoffVoltage, s_hw->battery.cutoffVoltage);
 
         // ── Vehicle type boot visibility ──
         const RcEngineSound::VehicleType t = s_profile->config.type;
@@ -407,7 +422,10 @@ private:
     }
 
     static void updateTelemetry(int16_t motorSpeed, float batV) {
-        int pct = (int)((batV - 3.3f * s_cellCount) / ((4.2f - 3.3f) * s_cellCount) * 100.0f);
+        // Percent uses the config'd per-cell voltages (defaults 3.3V / 4.2V).
+        const float cutoffPerCell = s_hw ? s_hw->battery.cutoffVoltage : 3.3f;
+        const float fullPerCell   = s_hw ? s_hw->battery.fullVoltage   : 4.2f;
+        int pct = (int)((batV - cutoffPerCell * s_cellCount) / ((fullPerCell - cutoffPerCell) * s_cellCount) * 100.0f);
         pct = constrain(pct, 0, 100);
         snprintf(s_battBuf, sizeof(s_battBuf), "%d", pct);
         telemetry_Battery.rk.content = s_battBuf;

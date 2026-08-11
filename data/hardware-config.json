@@ -54,5 +54,10 @@
     "telemetry": {
         "voltage_scale": 1.8,
         "voltage_offset": -0.2
+    },
+    "battery": {
+        "cell_count": 1,
+        "cutoff_voltage": 3.4,
+        "full_voltage": 4.2
     }
 }

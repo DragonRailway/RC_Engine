@@ -64,7 +64,9 @@ public:
         timer = timerBegin(SAMPLE_RATE);   // new 1-arg API: frequency in Hz, not a divider
         timerAttachInterrupt(timer, &onTimer);
 
-        xTaskCreatePinnedToCore(audioTask, "audio", 4096, NULL, 5, &audioTaskHandle, 1);
+        // 8KB stack: getNextSample() needs ~1KB for its VoiceState snapshot and
+        // i2s_channel_write() is also deep; 4KB was tight for both in one task.
+        xTaskCreatePinnedToCore(audioTask, "audio", 8192, NULL, 5, &audioTaskHandle, 1);
 
         Serial.println("[AudioOutput] Initialized (22,050 Hz)");
     }
@@ -89,16 +91,15 @@ public:
         Serial.println("[AudioOutput] Stopped");
     }
 
-    // Minimal ISR: just get sample, scale, buffer, notify task
+    // Minimal ISR: pacing only. Sample generation and all FPU math live in the
+    // audio task — the Xtensa FPU coprocessor is NOT available in ISR context on
+    // this IDF build (a floating-point op in onTimer panics with a Coprocessor
+    // exception), and getNextSample() also needs ~1.3KB of stack for its voice
+    // snapshot which is unsafe on the small ISR stack.
     static void onTimer() {
-        if (!active || !engine) return;
+        if (!active) return;
 
-        int8_t sample = engine->getNextSample();
-        int16_t out_sample = (int16_t)sample * 256;
-
-        buffer[bufferPos] = out_sample;
         bufferPos = bufferPos + 1;
-
         if (bufferPos >= BUFFER_SIZE) {
             BaseType_t xHigherPriorityTaskWoken = pdFALSE;
             vTaskNotifyGiveFromISR(audioTaskHandle, &xHigherPriorityTaskWoken);
@@ -108,11 +109,18 @@ public:
 
     static TaskHandle_t audioTaskHandle;
 
-    // Audio output task: apply offset fade, write to I2S
+    // Audio output task: generate samples (FPU-safe task context), apply offset
+    // fade, write to I2S. Paced by the 22.05kHz timer ISR notification.
     static void audioTask(void* param) {
         while (true) {
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-            if (!active || !tx_handle) continue;
+            if (!active || !tx_handle || !engine) continue;
+
+            // Generate one buffer of samples in task context
+            for (int i = 0; i < BUFFER_SIZE; i++) {
+                int8_t sample = engine->getNextSample();
+                buffer[i] = (int16_t)sample * 256;
+            }
 
             // Apply volume ramp: scale 0.0→1.0 over ~12ms (276 samples)
             // At 22,050Hz with 64-sample buffers, increment ~30/128 per buffer
