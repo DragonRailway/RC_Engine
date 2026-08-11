@@ -45,13 +45,19 @@ def main():
     )
     text = re.sub(r"#endif // RADIOKIT_H", "#endif // RC_BRAIN_RADIOKIT_H", text)
 
-    # 2. Multi-select item blocks -> field-by-field, expanded to declared itemCount
+    # 2. Multi-select item blocks -> field-by-field, expanded to declared itemCount.
+    #    Item labels come from the design's onLabel when exported (e.g. gear_switch
+    #    D/P/R); items beyond the exported set fall back to A/B/C letters.
     design = json.loads(DESIGN.read_text())
-    declared = {}  # widget name -> declared itemCount
+    declared = {}   # widget name -> declared itemCount
+    labels = {}     # widget name -> list of onLabels (as exported, may be short)
     for page in design.get("pages", []):
         for w in page.get("widgets", []):
             if w.get("type") == "multiple":
                 declared[w["name"]] = int(w["properties"].get("itemCount", 0))
+                items = w.get("properties", {}).get("items", []) or []
+                labels[w["name"]] = [it.get("onLabel") or chr(ord("A") + i)
+                                      for i, it in enumerate(items)]
 
     for widget, count in declared.items():
         pat = re.compile(
@@ -64,7 +70,10 @@ def main():
             indent = m.group("indent")
             lines = []
             for i in range(count):
-                label = chr(ord("A") + i)
+                if i < len(labels.get(widget, [])):
+                    label = labels[widget][i]
+                else:
+                    label = chr(ord("A") + i)
                 lines.append(f'{indent}{widget}.rk.items[{i}].label = "{label}";')
                 lines.append(f"{indent}{widget}.rk.items[{i}].pos = {i};")
             lines.append(f"{indent}{widget}.rk.itemCount = {count};")

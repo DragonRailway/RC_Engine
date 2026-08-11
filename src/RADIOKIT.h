@@ -13,6 +13,7 @@
 #ifndef RK_ENABLE_BLE
 #define RK_ENABLE_BLE
 #endif
+
 #include <RadioKitLib.h>
 
 #define RK_NUM_PAGES 2
@@ -22,23 +23,23 @@ static const char* rk_pageNames[] = {
 };
 
 // ─── Page 0: Truck ───
-RK_Knob steering_wheel(162, 54, 64, 0, 0);  // knob: pos=(162,54) size=?x64 label="steering_wheel"
+RK_Knob steering_wheel(163, 54, 64, 0, 0);  // knob: pos=(163,54) size=?x64 label="steering_wheel"
 
-RK_GasPedal gas_pedal(21, 54, 58, 21, 0);  // slider: pos=(21,54) size=21x58 label="gas_pedal"
+RK_GasPedal gas_pedal(22, 54, 58, 20, 0);  // slider: pos=(22,54) size=20x58 label="gas_pedal"
 
 RK_GasPedal brake_pedal(48, 62, 41, 20, 0);  // slider: pos=(48,62) size=20x41 label="brake_pedal"
 
-RK_MultipleSelect truck_light(97, 79, 21, 70, 0);  // multiple: pos=(97,79) size=70x21 label="truck_light"
+RK_MultipleSelect truck_light(97, 81, 21, 70, 0);  // multiple: pos=(97,81) size=70x21 label="truck_light"
 
 RK_ToggleButton start_button(97, 51, 20, 0, 0);  // button: pos=(97,51) size=?x20 label="start_button"
 
-RK_PushButton left_indicator(134, 23, 20, 0, 0);  // button: pos=(134,23) size=?x20 label="left_indicator"
+RK_ToggleButton left_indicator(136, 16, 13, 0, 0);  // button: pos=(136,16) size=?x13 label="left_indicator"
 
-RK_PushButton right_indicator(190, 23, 20, 0, 0);  // button: pos=(190,23) size=?x20 label="right_indicator"
+RK_ToggleButton right_indicator(190, 16, 13, 0, 0);  // button: pos=(190,16) size=?x13 label="right_indicator"
 
 RK_Slider aux_slider(121, 49, 40, 12, 0);  // slider: pos=(121,49) size=12x40 label="aux_slider"
 
-RK_PushButton horn_button(162, 18, 20, 0, 0);  // button: pos=(162,18) size=?x20 label="horn_button"
+RK_PushButton horn_button(163, 15, 12, 0, 0);  // button: pos=(163,15) size=?x12 label="horn_button"
 
 RK_MultipleButton gear_switch(72, 50, 40, 18, 0);  // multiple: pos=(72,50) size=18x40 label="gear_switch"
 
@@ -67,7 +68,7 @@ static inline void initRadioKit() {
   steering_wheel.rk.label = "steering_wheel";
   steering_wheel.setLabelHidden(true);
   steering_wheel.rk.variant = 1;     // steeringWheel
-  steering_wheel.rk.centering = RK_SPRING_CENTER;
+  steering_wheel.rk.centering = RK_SPRING_NONE;
   steering_wheel.rk.startAngle = -135.0;
   steering_wheel.rk.endAngle = 135.0;
   gas_pedal.rk.label = "gas_pedal";
@@ -112,13 +113,15 @@ static inline void initRadioKit() {
   horn_button.rk.label = "horn_button";
   horn_button.rk.label = "horn_button";
   horn_button.setLabelHidden(true);
+  horn_button.rk.offText = "";
+  horn_button.rk.icon = "bell";
   gear_switch.rk.label = "gear_switch";
   gear_switch.setLabelHidden(true);
-  gear_switch.rk.items[0].label = "A";
+  gear_switch.rk.items[0].label = "D";
   gear_switch.rk.items[0].pos = 0;
-  gear_switch.rk.items[1].label = "B";
+  gear_switch.rk.items[1].label = "P";
   gear_switch.rk.items[1].pos = 1;
-  gear_switch.rk.items[2].label = "C";
+  gear_switch.rk.items[2].label = "R";
   gear_switch.rk.items[2].pos = 2;
   gear_switch.rk.itemCount = 3;
   throttle_slider.setPage(1);
