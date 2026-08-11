@@ -26,7 +26,12 @@ def parse_raw_sound_header(filepath):
     if not array_match:
         return None
 
-    samples = [int(num) for num in re.findall(r'-?\d+', array_match.group(1))]
+    # Raw headers often carry sample-offset counters as line comments
+    # (e.g. ", //16" after every 16 values). Strip comments first so the
+    # offset numbers are not mistaken for audio samples.
+    array_str = re.sub(r'//.*', '', array_match.group(1))
+
+    samples = [int(num) for num in re.findall(r'-?\d+', array_str)]
 
     if sample_count == 0:
         sample_count = len(samples)

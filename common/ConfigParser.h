@@ -255,23 +255,36 @@ private:
 
         if (error) return SoundSlot();
 
-        uint32_t sampleCount = doc["sampleCount"] | 0;
+        uint32_t declaredCount = doc["sampleCount"] | 0;
         uint16_t sampleRate = doc["sampleRate"] | 22050;
         JsonArray samples = doc["samples"].as<JsonArray>();
 
-        if (sampleCount == 0 || !samples) return SoundSlot();
+        if (declaredCount == 0 || !samples) return SoundSlot();
+
+        // Defensive: never trust the declared sampleCount blindly. The actual
+        // number of samples in the JSON array is authoritative — a corrupt or
+        // stale declaration (e.g. generated from a header with //offset line
+        // comments) could overflow the allocation below.
+        uint32_t sampleCount = samples.size();
+        if (sampleCount == 0) return SoundSlot();
 
         int8_t* buffer = (int8_t*)ps_malloc(sampleCount);
         if (!buffer) return SoundSlot();
 
         uint32_t i = 0;
         for (int val : samples) {
+            if (i >= sampleCount) break;   // hard bound — never write past the buffer
             buffer[i++] = (int8_t)val;
+        }
+
+        if (declaredCount != sampleCount) {
+            Serial.printf("[ConfigParser] WARN: %s declares sampleCount=%u but has %u samples — using actual\n",
+                          path, declaredCount, sampleCount);
         }
 
         SoundSlot slot;
         slot.samples = buffer;
-        slot.sampleCount = sampleCount;
+        slot.sampleCount = sampleCount;   // actual copied count
         slot.sampleRate = sampleRate;
         return slot;
     }
