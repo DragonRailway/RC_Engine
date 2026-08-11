@@ -175,6 +175,8 @@ public:
     void triggerSiren(bool active);
     void triggerBrake(bool active);
     void triggerParkingBrake(bool active);
+    void triggerJakeBrake(bool active);
+    void triggerWastegate(bool active);
     void triggerReversing(bool active);
     void triggerShifting(bool active);
     void triggerIndicator(bool active);

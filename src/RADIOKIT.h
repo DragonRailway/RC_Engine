@@ -2,12 +2,17 @@
 //__Might_Be_Overwritten_
 
 #ifndef RC_BRAIN_RADIOKIT_H
-#define RC_BRAIN_RADIOKIT_H
+#define RC_BRAIN_RADIOKIT_H   // must not collide with RadioKitLib.h's own RADIOKIT_H guard
 
+#ifndef RK_ENABLE_OTA
 #define RK_ENABLE_OTA
+#endif
+#ifndef RK_ENABLE_FS
 #define RK_ENABLE_FS
+#endif
+#ifndef RK_ENABLE_BLE
 #define RK_ENABLE_BLE
-
+#endif
 #include <RadioKitLib.h>
 
 #define RK_NUM_PAGES 2
@@ -17,22 +22,36 @@ static const char* rk_pageNames[] = {
 };
 
 // ─── Page 0: Truck ───
-RK_Knob steering_wheel(164, 52, 64, 0, 0);  // knob: pos=(164,52) size=?x64 label="steering_wheel"
+RK_Knob steering_wheel(162, 54, 64, 0, 0);  // knob: pos=(162,54) size=?x64 label="steering_wheel"
 
 RK_GasPedal gas_pedal(21, 54, 58, 21, 0);  // slider: pos=(21,54) size=21x58 label="gas_pedal"
 
 RK_GasPedal brake_pedal(48, 62, 41, 20, 0);  // slider: pos=(48,62) size=20x41 label="brake_pedal"
 
-RK_MultipleSelect led_select(95, 58, 21, 0, 0);  // multiple: pos=(95,58) size=?x21 label="led_select"
+RK_MultipleSelect truck_light(97, 79, 21, 70, 0);  // multiple: pos=(97,79) size=70x21 label="truck_light"
+
+RK_ToggleButton start_button(97, 51, 20, 0, 0);  // button: pos=(97,51) size=?x20 label="start_button"
+
+RK_PushButton left_indicator(134, 23, 20, 0, 0);  // button: pos=(134,23) size=?x20 label="left_indicator"
+
+RK_PushButton right_indicator(190, 23, 20, 0, 0);  // button: pos=(190,23) size=?x20 label="right_indicator"
+
+RK_Slider aux_slider(121, 49, 40, 12, 0);  // slider: pos=(121,49) size=12x40 label="aux_slider"
+
+RK_PushButton horn_button(162, 18, 20, 0, 0);  // button: pos=(162,18) size=?x20 label="horn_button"
+
+RK_MultipleButton gear_switch(72, 50, 40, 18, 0);  // multiple: pos=(72,50) size=18x40 label="gear_switch"
 
 // ─── Page 1: Loco ───
-RK_Slider slider(74, 98, 95, 22, 0);  // slider: pos=(74,98) size=22x95 label="slider"
+RK_Slider throttle_slider(74, 98, 95, 22, 0);  // slider: pos=(74,98) size=22x95 label="throttle_slider"
 
 RK_SlideSwitch dir_switch(73, 162, 18, 32, 0);  // switch: pos=(73,162) size=32x18 label="dir_switch"
 
-RK_MultipleSelect lights_toggle(26, 95, 26, 0, 0);  // multiple: pos=(26,95) size=?x26 label="lights_toggle"
+RK_MultipleSelect loco_light(29, 98, 83, 29, 0);  // multiple: pos=(29,98) size=29x83 label="loco_light"
 
-RK_PushButton horn(26, 159, 20, 0, 0);  // button: pos=(26,159) size=?x20 label="horn"
+RK_PushButton bell_button(29, 161, 20, 0, 0);  // button: pos=(29,161) size=?x20 label="bell_button"
+
+RK_ToggleButton engine_button(29, 38, 20, 0, 0);  // button: pos=(29,38) size=?x20 label="engine_button"
 
 // ─── Telemetry Widgets ───
 RK_Telemetry telemetry_Battery("Battery");
@@ -57,43 +76,86 @@ static inline void initRadioKit() {
   brake_pedal.rk.label = "brake_pedal";
   brake_pedal.setLabelHidden(true);
   brake_pedal.rk.centering = RK_SPRING_CENTER;
-  led_select.rk.label = "led_select";
-  led_select.setLabelHidden(true);
-  led_select.rk.items[0].label = "A";
-  led_select.rk.items[0].pos = 0;
-  led_select.rk.items[1].label = "B";
-  led_select.rk.items[1].pos = 1;
-  led_select.rk.items[2].label = "C";
-  led_select.rk.items[2].pos = 2;
-  led_select.rk.items[3].label = "D";
-  led_select.rk.items[3].pos = 3;
-  led_select.rk.items[4].label = "E";
-  led_select.rk.items[4].pos = 4;
-  led_select.rk.itemCount = 5;
-  slider.rk.label = "slider";
-  slider.setLabelHidden(true);
-  slider.rk.centering = RK_SPRING_NONE;
+  truck_light.rk.label = "truck_light";
+  truck_light.setLabelHidden(true);
+  truck_light.rk.items[0].label = "A";
+  truck_light.rk.items[0].pos = 0;
+  truck_light.rk.items[1].label = "B";
+  truck_light.rk.items[1].pos = 1;
+  truck_light.rk.items[2].label = "C";
+  truck_light.rk.items[2].pos = 2;
+  truck_light.rk.items[3].label = "D";
+  truck_light.rk.items[3].pos = 3;
+  truck_light.rk.items[4].label = "E";
+  truck_light.rk.items[4].pos = 4;
+  truck_light.rk.itemCount = 5;
+  start_button.rk.label = "start_button";
+  start_button.rk.label = "start_button";
+  start_button.setLabelHidden(true);
+  start_button.rk.onText = "START";
+  start_button.rk.offText = "STOP";
+  left_indicator.rk.label = "left_indicator";
+  left_indicator.rk.label = "left_indicator";
+  left_indicator.setLabelHidden(true);
+  left_indicator.rk.onText = "";
+  left_indicator.rk.offText = "";
+  left_indicator.rk.icon = "arrow-left";
+  right_indicator.rk.label = "right_indicator";
+  right_indicator.rk.label = "right_indicator";
+  right_indicator.setLabelHidden(true);
+  right_indicator.rk.onText = "";
+  right_indicator.rk.offText = "";
+  right_indicator.rk.icon = "arrow-right";
+  aux_slider.rk.label = "aux_slider";
+  aux_slider.setLabelHidden(true);
+  aux_slider.rk.centering = RK_SPRING_NONE;
+  horn_button.rk.label = "horn_button";
+  horn_button.rk.label = "horn_button";
+  horn_button.setLabelHidden(true);
+  gear_switch.rk.label = "gear_switch";
+  gear_switch.setLabelHidden(true);
+  gear_switch.rk.items[0].label = "A";
+  gear_switch.rk.items[0].pos = 0;
+  gear_switch.rk.items[1].label = "B";
+  gear_switch.rk.items[1].pos = 1;
+  gear_switch.rk.items[2].label = "C";
+  gear_switch.rk.items[2].pos = 2;
+  gear_switch.rk.itemCount = 3;
+  throttle_slider.setPage(1);
+  throttle_slider.rk.label = "throttle_slider";
+  throttle_slider.setLabelHidden(true);
+  throttle_slider.rk.centering = RK_SPRING_NONE;
   dir_switch.setPage(1);
   dir_switch.rk.label = "dir_switch";
   dir_switch.setLabelHidden(true);
-  lights_toggle.rk.label = "lights_toggle";
-  lights_toggle.setLabelHidden(true);
-  lights_toggle.rk.items[0].label = "A";
-  lights_toggle.rk.items[0].pos = 0;
-  lights_toggle.rk.items[1].label = "B";
-  lights_toggle.rk.items[1].pos = 1;
-  lights_toggle.rk.items[2].label = "C";
-  lights_toggle.rk.items[2].pos = 2;
-  lights_toggle.rk.items[3].label = "D";
-  lights_toggle.rk.items[3].pos = 3;
-  lights_toggle.rk.items[4].label = "E";
-  lights_toggle.rk.items[4].pos = 4;
-  lights_toggle.rk.itemCount = 5;
-  // RK_PushButton is momentary by construction; no mode switch needed
-  horn.rk.label = "horn";
-  horn.setPage(1);
-  horn.rk.label = "horn";
-  horn.setLabelHidden(true);
+  loco_light.setPage(1);
+  loco_light.rk.label = "loco_light";
+  loco_light.setLabelHidden(true);
+  loco_light.rk.items[0].label = "A";
+  loco_light.rk.items[0].pos = 0;
+  loco_light.rk.items[1].label = "B";
+  loco_light.rk.items[1].pos = 1;
+  loco_light.rk.items[2].label = "C";
+  loco_light.rk.items[2].pos = 2;
+  loco_light.rk.items[3].label = "D";
+  loco_light.rk.items[3].pos = 3;
+  loco_light.rk.items[4].label = "E";
+  loco_light.rk.items[4].pos = 4;
+  loco_light.rk.items[5].label = "F";
+  loco_light.rk.items[5].pos = 5;
+  loco_light.rk.items[6].label = "G";
+  loco_light.rk.items[6].pos = 6;
+  loco_light.rk.items[7].label = "H";
+  loco_light.rk.items[7].pos = 7;
+  loco_light.rk.itemCount = 8;
+  bell_button.rk.label = "bell_button";
+  bell_button.setPage(1);
+  bell_button.rk.label = "bell_button";
+  bell_button.setLabelHidden(true);
+  engine_button.rk.label = "engine_button";
+  engine_button.setPage(1);
+  engine_button.rk.label = "engine_button";
+  engine_button.setLabelHidden(true);
   telemetry_Battery.rk.icon = "battery";
   telemetry_Battery.rk.unit = "%";
   telemetry_Battery.rk.content = "--";
@@ -112,3 +174,4 @@ static inline void initRadioKit() {
 }
 
 #endif // RC_BRAIN_RADIOKIT_H
+

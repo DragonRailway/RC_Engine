@@ -50,3 +50,8 @@ build_output.txt
 
 # openspec
 archive/
+
+# Third-party reference repos (kept local, not committed)
+references/ESP32MCServo/
+references/ESP32Servo/
+references/ESP32_MCPWM/

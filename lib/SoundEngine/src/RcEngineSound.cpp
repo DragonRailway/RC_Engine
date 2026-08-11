@@ -169,6 +169,16 @@ void RcEngineSound::triggerParkingBrake(bool active) {
     if (active) voices[PARKING_BRAKE].position = 0;
 }
 
+void RcEngineSound::triggerJakeBrake(bool active) {
+    voices[JAKE_BRAKE].active = active;
+    if (active) voices[JAKE_BRAKE].position = 0;
+}
+
+void RcEngineSound::triggerWastegate(bool active) {
+    voices[WASTEGATE].active = active;
+    if (active) voices[WASTEGATE].position = 0;
+}
+
 void RcEngineSound::triggerReversing(bool active) {
     voices[REVERSING].active = active;
     if (active) voices[REVERSING].position = 0;

@@ -76,8 +76,16 @@ public:
 
         if (!docObj["telemetry"].isNull() || !docObj["TELEMETRY"].isNull()) {
             JsonObjectConst telObj = docObj["telemetry"] | docObj["TELEMETRY"];
-            config.telemetry.vScale = telObj["voltage_scale"] | telObj["VOLTAGE_SCALE"] | 1.0f;
-            config.telemetry.vOffset = telObj["voltage_offset"] | telObj["VOLTAGE_OFFSET"] | 0.0f;
+            // Board calibration: hardware-config.json wins when present; fall back to
+            // the compile-time VSCALE/VOFFSET macros (defined per-env in platformio.ini).
+#ifndef VSCALE
+#define VSCALE 1.0f
+#endif
+#ifndef VOFFSET
+#define VOFFSET 0.0f
+#endif
+            config.telemetry.vScale = telObj["voltage_scale"] | telObj["VOLTAGE_SCALE"] | (float)VSCALE;
+            config.telemetry.vOffset = telObj["voltage_offset"] | telObj["VOLTAGE_OFFSET"] | (float)VOFFSET;
         }
 
         Serial.printf("[ConfigParser] Loaded hardware config: %s\n", path);

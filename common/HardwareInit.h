@@ -21,6 +21,7 @@ public:
             initSteeringServo(hw.steeringServo);
         }
         initLights(hw.lights);
+        initAuxServos();
 
         Serial.println("[HardwareInit] Done");
     }
@@ -36,6 +37,8 @@ public:
         driveMotor.end();
         steeringServo.detach();
         escServo.detach();
+        auxServo1.detach();
+        auxServo2.detach();
         headLed.end();
         tailLed.end();
         brakeLed.end();
@@ -109,6 +112,21 @@ public:
         if (led) led->write((float)brightnessPct);
     }
 
+    // position: -100 .. +100
+    static void setAuxServo1(int16_t position) {
+        if (!auxServo1.attached()) return;
+        int32_t us = 1500 + (int32_t)position * 500 / 100;
+        us = constrain(us, 1000, 2000);
+        auxServo1.writeMicroseconds(us);
+    }
+
+    static void setAuxServo2(int16_t position) {
+        if (!auxServo2.attached()) return;
+        int32_t us = 1500 + (int32_t)position * 500 / 100;
+        us = constrain(us, 1000, 2000);
+        auxServo2.writeMicroseconds(us);
+    }
+
 private:
     static uint8_t s_drivetrainType;
     static uint8_t motorPwm1Pin;
@@ -142,12 +160,37 @@ private:
     static EasyMotor driveMotor;
     static EasyServo steeringServo;
     static EasyServo escServo;      // used when drive motor type == ESC (PPM output)
+    static EasyServo auxServo1;     // Aux Servo 1 (Servo 2 Pin / S2)
+    static EasyServo auxServo2;     // Aux Servo 2 (Servo 3 Pin / S3) — MIKRO_V2 only; TRACKLINK_V3 has no S3/S4 pin
     static EasyLED   headLed;
     static EasyLED   tailLed;
     static EasyLED   brakeLed;
     static EasyLED   turnLLed;
     static EasyLED   turnRLed;
     static EasyLED   reversingLed;
+
+    static void initAuxServos() {
+        EasyKit::ServoConfig cfg;
+        cfg.minUs = 1000;
+        cfg.maxUs = 2000;
+        cfg.centerUs = 1500;
+        cfg.freq = 50;
+
+        uint8_t pinS2 = PinMapper::resolve("S2");
+        if (pinS2 != 0xFF) {
+            if (auxServo1.attach(pinS2, cfg) == EasyKit::Result::OK) {
+                Serial.printf("[HardwareInit] Aux Servo 1 attached on Pin=%d\n", pinS2);
+            }
+        }
+        // S3 exists on MIKRO_V2 only; on TRACKLINK_V3 (S1/S2 only) resolve returns
+        // 0xFF and Aux Servo 2 stays uninitialized, which is expected.
+        uint8_t pinS3 = PinMapper::resolve("S3");
+        if (pinS3 != 0xFF) {
+            if (auxServo2.attach(pinS3, cfg) == EasyKit::Result::OK) {
+                Serial.printf("[HardwareInit] Aux Servo 2 attached on Pin=%d\n", pinS3);
+            }
+        }
+    }
 
     static EasyLED* findLight(uint8_t pin) {
         if (pin == headPin     && headLed.isAttached())     return &headLed;
@@ -325,6 +368,8 @@ uint16_t HardwareInit::servoCenter = 1500;
 EasyMotor HardwareInit::driveMotor;
 EasyServo HardwareInit::steeringServo;
 EasyServo HardwareInit::escServo;
+EasyServo HardwareInit::auxServo1;
+EasyServo HardwareInit::auxServo2;
 EasyLED   HardwareInit::headLed;
 EasyLED   HardwareInit::tailLed;
 EasyLED   HardwareInit::brakeLed;

@@ -52,7 +52,7 @@
         }
     },
     "telemetry": {
-        "voltage_scale": 1.0,
-        "voltage_offset": 0.0
+        "voltage_scale": 1.8,
+        "voltage_offset": -0.2
     }
 }
