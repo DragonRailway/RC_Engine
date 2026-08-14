@@ -2,6 +2,15 @@
 .pio/
 .pioenvs/
 .piolibdeps/
+
+# FS staging scratch (configs/ is the source of truth; data/ is transient build output)
+data/
+
+# Host test harness build artifacts (sources are committed, binaries are not)
+test/host_dsp/compare_harness
+test/host_dsp/host_dsp_harness
+test/host_vc/host_vc_harness
+
 libdeps/
 build/
 .cache/
@@ -43,15 +52,10 @@ build_output.txt
 *bak
 
 # Agents
-.opencode/
-.claude/
-.cursor/
-.codex/
+.*/
 
 # openspec
 archive/
 
 # Third-party reference repos (kept local, not committed)
-references/ESP32MCServo/
-references/ESP32Servo/
-references/ESP32_MCPWM/
+references/

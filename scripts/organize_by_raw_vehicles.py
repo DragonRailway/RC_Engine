@@ -3,12 +3,12 @@ import os
 import re
 import json
 
-RAW_VEHICLES_DIR = "/home/sun/Filelink/RC_brain/sounds/raw_vehicles"
-RAW_SOUNDS_DIR = "/home/sun/Filelink/RC_brain/sounds/raw_sounds"
-SOUNDS_DIR = "/home/sun/Filelink/RC_brain/sounds"
-VEHICLES_DIR = os.path.join(SOUNDS_DIR, "vehicles")
-PRESETS_DIR = os.path.join(SOUNDS_DIR, "presets")
-GENERIC_DIR = os.path.join(SOUNDS_DIR, "generic")
+SCRIPT_DIR = os.path.dirname(__file__)
+RAW_VEHICLES_DIR = os.path.join(SCRIPT_DIR, "..", "references", "raw_vehicles")
+RAW_SOUNDS_DIR = os.path.join(SCRIPT_DIR, "..", "references", "raw_sounds")
+VEHICLES_DIR = os.path.join(SCRIPT_DIR, "..", "configs", "vehicle_configs")
+PRESETS_DIR = os.path.join(VEHICLES_DIR, "common")
+GENERIC_DIR = os.path.join(SCRIPT_DIR, "..", "data", "generic")
 
 def parse_raw_sound_header(filepath):
     if not os.path.exists(filepath):
@@ -109,7 +109,7 @@ def determine_slot_from_line(line, header_name):
 def process_vehicle_file(v_path):
     v_filename = os.path.basename(v_path)
     veh_name = clean_vehicle_name(v_filename)
-    veh_dir = os.path.join(VEHICLES_DIR, veh_name)
+    veh_dir = os.path.join(VEHICLES_DIR, veh_name, "sounds")
     os.makedirs(veh_dir, exist_ok=True)
 
     with open(v_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -165,6 +165,7 @@ def main():
     os.makedirs(os.path.join(PRESETS_DIR, "heavy_truck"), exist_ok=True)
     os.makedirs(os.path.join(PRESETS_DIR, "excavator"), exist_ok=True)
     os.makedirs(os.path.join(PRESETS_DIR, "locomotive"), exist_ok=True)
+    print(f"Output bundles: {VEHICLES_DIR}")
 
     v_files = [f for f in os.listdir(RAW_VEHICLES_DIR) if f.endswith('.h') and f != '00_Master.h']
     print(f"Inspecting and organizing {len(v_files)} vehicle definitions from raw_vehicles/...")

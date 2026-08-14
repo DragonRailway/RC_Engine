@@ -29,7 +29,7 @@ def main():
     print(f"Opened {PORT} @ {BAUD}", flush=True)
 
     # Modified config: bump sound volume 80 -> 70 (visible change)
-    with open('data/hardware-MIKRO_V2.json') as f:
+    with open('configs/hardware_configs/hardware-MIKRO_V2.json') as f:
         txt = f.read()
     new_txt = re.sub(r'"volume":\s*\d+', '"volume": 70', txt, count=1)
     data = new_txt.encode()

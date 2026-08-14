@@ -4,8 +4,10 @@ import re
 import json
 import subprocess
 
-RAW_SOUNDS_DIR = "/home/sun/Filelink/RC_brain/sounds/raw_sounds"
-SOUNDS_DIR = "/home/sun/Filelink/RC_brain/sounds"
+RAW_SOUNDS_DIR = os.path.join(os.path.dirname(__file__), "..", "references", "raw_sounds")
+# Loose <slot>-<Vehicle>.json output lands in gitignored scratch (data/);
+# organize_sounds.py moves them into the configs/vehicle_configs bundles.
+SOUNDS_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
 def parse_header_sound(filepath):
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
