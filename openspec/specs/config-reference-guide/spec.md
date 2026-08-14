@@ -7,7 +7,7 @@ Document the hardware config (`hardware-<BOARD>.json`) for users in a Klipper-st
 ## Requirements
 
 ### Requirement: Hardware config reference documentation
-The repository SHALL provide a Klipper-style reference guide at `GUIDE/HARDWARE_CONFIG.md` documenting the hardware config (`hardware-<BOARD>.json`) end-to-end: every config section (`sound`, `drivetrain`, `lights`, `animation`, `telemetry`, `battery`) with each parameter's name, type, default value, allowed values, and a description, where defaults match the firmware's `HardwareConfig` struct defaults.
+The repository SHALL provide a Klipper-style reference guide at `GUIDE/HARDWARE_CONFIG.md` documenting the hardware config (`hardware-<BOARD>.json`) end-to-end: every config section (`sound`, `drivetrain`, `lights`, `animation`, `battery`) with each parameter's name, type, default value, allowed values, and a description, where defaults match the firmware's `HardwareConfig` struct defaults.
 
 #### Scenario: Looking up a parameter default
 - **WHEN** a user consults the reference for `drivetrain.drive_motor.duty.min`
@@ -18,15 +18,15 @@ The repository SHALL provide a Klipper-style reference guide at `GUIDE/HARDWARE_
 - **THEN** they learn that presence of `left_motor` selects skid-steer (with `right_motor` + `steering_sensitivity`) while its absence selects Ackermann (`drive_motor` + `steering_servo`), and that mixing the two layouts is not supported
 
 ### Requirement: Per-board pin reference
-The reference guide SHALL include per-board pin tables for MIKRO_V2 and TRACKLINK_V3 mapping every `hardware` token (`L<n>`, `S<n>`, `HBRIDGE_A`, `HBRIDGE_B`) to its physical GPIO and bridge pin assignments, and SHALL document the H-bridge tokens as semantic markers resolved per board.
+The reference guide SHALL include per-board pin tables for MIKRO_V2 and TRACKLINK_V3 mapping every `hardware` token (`L<n>`, `S<n>`, `DRIVER_A`, `DRIVER_B`) to its physical GPIO and driver pin assignments, and SHALL document the motor-driver tokens as semantic markers resolved per board.
 
 #### Scenario: Choosing a pin across boards
 - **WHEN** a user wires a headlight to `L1` and checks the pin reference for their board
 - **THEN** they see the correct physical GPIO for their board (GPIO 38 on MIKRO_V2, GPIO 6 on TRACKLINK_V3)
 
 #### Scenario: H-bridge semantic markers
-- **WHEN** a user looks up `HBRIDGE_A`
-- **THEN** they find its per-board PWM/DIR/EN/BEMF pin assignments and note that `HBRIDGE_B` is dual-PWM on MIKRO_V2 but DIR+PWM on TRACKLINK_V3
+- **WHEN** a user looks up `DRIVER_A`
+- **THEN** they find its per-board PWM/DIR/EN/BEMF pin assignments and note that `DRIVER_B` is dual-PWM on MIKRO_V2 but DIR+PWM on TRACKLINK_V3
 
 ### Requirement: Quirks and legacy behavior documented
 The reference guide SHALL explicitly document parameters that are accepted but ignored, values forced by the firmware, and legacy case variants, and SHALL state in its introduction that the firmware performs no schema validation (unknown keys silently ignored; unrecognized `hardware` tokens result in unconfigured outputs).

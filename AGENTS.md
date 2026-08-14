@@ -80,6 +80,10 @@ Config-only tweaks on a live board still hot-reload over RadioKit FS upload (no 
 - **Vehicle config** (`configs/vehicle_configs/<set>/vehicle.json`): Engine params, transmission, sound volumes; `sound_set` must equal its bundle dir name
 - **Sound files** (`.../sounds/*.json`): Sample rate, count, PCM data arrays
 
+## Config validation
+- **Firmware**: `common/ConfigParser.h` logs `WARN:` lines for semantic config errors at boot and hot-reload (unknown keys, unrecognized `hardware` tokens, out-of-range values, unrecognized enums) — warn-and-continue, never halts.
+- **Host**: `scripts/build_fs.py` validates the hardware config against `configs/schemas/hardware_config.schema.json` before staging (aborts flash on violations). `scripts/validate_configs.py` validates every config in the repo (CI-able).
+
 ## RadioKit Remote Access API
 - **Where**: embedded in the RadioKit Flutter app on the Android phone (`10.0.0.6:7007`), reachable via `adb forward tcp:17007 tcp:7007` (direct LAN curl fails).
 - **Docs**: `docs/radiokit-api/README.md` (index + workflows), `skills/*.md` (server skill guides), `api-schema.json`, `root.md`.

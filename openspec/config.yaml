@@ -26,7 +26,7 @@ context: |
   - SPEC.md - project overview, build system, vehicle types
   - CONFIGURATION.md - JSON config system, file structure
   - SIMULATION.md - sound engine, RPM simulation, mixing
-  - MOTORS.md - H-Bridge, ESC, servo control
+  - MOTORS.md - Motor drivers, ESC, servo control
   - LIGHTS.md - LED channels, effects
   - BOARD.md - board definitions, pin mapping
   
@@ -37,7 +37,7 @@ context: |
   Conventions:
   - Header-only classes in common/ and SoundEngine/src/
   - Config structs in Config.h (HardwareConfig, VehicleConfig)
-  - Pin names resolved via PinMapper (L0-L6, S1-S2, HBRIDGE_A/B)
+  - Pin names resolved via PinMapper (L0-L6, S1-S2, DRIVER_A/B)
   - Board defines via build flags (-D TRACKLINK_V3)
   - All config loaded from LittleFS at boot
 

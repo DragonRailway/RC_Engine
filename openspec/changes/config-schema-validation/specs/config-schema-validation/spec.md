@@ -20,7 +20,7 @@ The firmware SHALL detect and log semantic errors in hardware and vehicle config
 - **THEN** the config still loads and the system continues to boot or reload, matching pre-validation behavior
 
 ### Requirement: Accepted-but-ignored keys do not warn
-The validation SHALL treat keys that the parser intentionally accepts but does not read (e.g. `lights.turn_light.type`, `drivetrain.drive_motor.type`) as valid, so no false-positive warnings are emitted for documented quirks.
+The validation SHALL treat keys that the parser intentionally accepts but does not read (e.g. `lights.turn_light.type`) as valid, so no false-positive warnings are emitted for documented quirks.
 
 #### Scenario: Documented quirk keys pass silently
 - **WHEN** a config includes `"type": "blink"` under `lights.turn_light`
@@ -38,7 +38,7 @@ The repository SHALL provide a JSON Schema for the hardware config and SHALL val
 - **THEN** every hardware config and vehicle bundle either passes schema validation or is reported with specific violations
 
 ### Requirement: Validation matches parser reality
-The schema and firmware checks SHALL match the parser's actual behavior, including documented quirks: `drive_motor.type` is derived from `hardware` (the `type` key is documentation-only), `brake_light`/`reversing_light` brightness is forced to 100 by the firmware, and `lights.reversing_light.hardware` accepts either a pin token or a light alias.
+The schema and firmware checks SHALL match the parser's actual behavior, including documented quirks: motor type (`hbridge`/`esc`) is derived from the `hardware` token — `drive_motor`, `left_motor`, and `right_motor` accept no `type` key — `brake_light`/`reversing_light` brightness is forced to 100 by the firmware, and `lights.reversing_light.hardware` accepts either a pin token or a light alias.
 
 #### Scenario: Quirk-aware validation
 - **WHEN** the schema is authored

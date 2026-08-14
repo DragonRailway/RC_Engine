@@ -22,7 +22,7 @@ default, allowed values, and notes.
 
 | Repo | Deployed to (device LittleFS) | Purpose |
 |---|---|---|
-| `configs/hardware_configs/hardware-<BOARD>.json` | `/hardware-config.json` | Pins, drivetrain, lights, animation, telemetry, battery |
+| `configs/hardware_configs/hardware-<BOARD>.json` | `/hardware-config.json` | Pins, drivetrain, lights, animation, battery |
 | `configs/vehicle_configs/<set>/vehicle.json` | `/vehicle-config.json` | Sound engine: vehicle identity, engine, transmission, volumes |
 | `configs/vehicle_configs/<set>/sounds/*.json` | `/sounds/vehicles/<set>/*.json` | Sound samples (PCM) |
 

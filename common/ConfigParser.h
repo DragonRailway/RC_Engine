@@ -40,6 +40,7 @@ public:
         config = HardwareConfig();
 
         JsonObjectConst docObj = doc.as<JsonObjectConst>();
+        checkUnknownHardwareKeys(docObj);
 
         if (!docObj["sound"].isNull() || !docObj["SOUND"].isNull()) {
             JsonObjectConst soundObj = docObj["sound"] | docObj["SOUND"];
@@ -74,20 +75,6 @@ public:
             parseLights(docObj["lights"] | docObj["LIGHTS"], config.lights);
         }
 
-        if (!docObj["telemetry"].isNull() || !docObj["TELEMETRY"].isNull()) {
-            JsonObjectConst telObj = docObj["telemetry"] | docObj["TELEMETRY"];
-            // Board calibration: the board hardware config wins when present; fall back to
-            // the compile-time VSCALE/VOFFSET macros (defined per-env in platformio.ini).
-#ifndef VSCALE
-#define VSCALE 1.0f
-#endif
-#ifndef VOFFSET
-#define VOFFSET 0.0f
-#endif
-            config.telemetry.vScale = telObj["voltage_scale"] | telObj["VOLTAGE_SCALE"] | (float)VSCALE;
-            config.telemetry.vOffset = telObj["voltage_offset"] | telObj["VOLTAGE_OFFSET"] | (float)VOFFSET;
-        }
-
         if (!docObj["animation"].isNull() || !docObj["ANIMATION"].isNull()) {
             JsonObjectConst animObj = docObj["animation"] | docObj["ANIMATION"];
             config.animation.easingSpeedDegS = animObj["easing_speed_deg_s"] | animObj["EASING_SPEED_DEG_S"] | 180.0f;
@@ -102,7 +89,19 @@ public:
             config.battery.cutoffVoltage = batObj["cutoff_voltage"] | batObj["CUTOFF_VOLTAGE"] | 3.3f;
             config.battery.fullVoltage = batObj["full_voltage"] | batObj["FULL_VOLTAGE"] | 4.2f;
             config.battery.cellCount = constrain(config.battery.cellCount, 0, 4);
+            // Voltage sense calibration: config wins when present; fall back to the
+            // compile-time VSCALE/VOFFSET macros (defined per-env in platformio.ini).
+#ifndef VSCALE
+#define VSCALE 1.0f
+#endif
+#ifndef VOFFSET
+#define VOFFSET 0.0f
+#endif
+            config.battery.vScale = batObj["voltage_scale"] | batObj["VOLTAGE_SCALE"] | (float)VSCALE;
+            config.battery.vOffset = batObj["voltage_offset"] | batObj["VOLTAGE_OFFSET"] | (float)VOFFSET;
         }
+
+        validateHardwareConfig(config);
 
         Serial.printf("[ConfigParser] Loaded hardware config: %s\n", path);
         return true;
@@ -151,6 +150,9 @@ public:
         parseFeatures(doc, config);
         parseLoopPoints(doc, config);
         parseMixWeights(doc, config);
+
+        checkUnknownVehicleKeys(doc.as<JsonObjectConst>());
+        validateVehicleConfig(config);
 
         Serial.printf("[ConfigParser] Loaded vehicle config: %s (sound_set=%s, preset=%s)\n",
                       config.name, config.soundSet, config.preset);
@@ -305,11 +307,291 @@ private:
         return slot;
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // Semantic config validation (warn-and-continue; no halt). Unknown
+    // keys and unrecognized values are reported so a typo looks like a
+    // WARN line instead of a silently-dead output. Matching is
+    // case-insensitive so both the snake_case and legacy UPPER_CASE
+    // variants the parser accepts are covered.
+    // ────────────────────────────────────────────────────────────────
+
+    static bool keyAllowed(const char* key, const char* const* allowed, size_t n) {
+        for (size_t i = 0; i < n; i++) {
+            if (strcasecmp(key, allowed[i]) == 0) return true;
+        }
+        return false;
+    }
+
+    static void checkKeys(JsonObjectConst obj, const char* section,
+                          const char* const* allowed, size_t n) {
+        if (obj.isNull()) return;
+        for (JsonPairConst kv : obj) {
+            const char* key = kv.key().c_str();
+            if (!keyAllowed(key, allowed, n)) {
+                Serial.printf("[ConfigParser] WARN: %s: unknown key '%s' (ignored)\n",
+                              section, key);
+            }
+        }
+    }
+
+    static void warnUnresolvedHardware(const char* where, const char* hw) {
+        if (hw[0] != '\0' && PinMapper::resolve(hw) == 0xFF) {
+            Serial.printf("[ConfigParser] WARN: %s: hardware '%s' not recognized — output not configured\n",
+                          where, hw);
+        }
+    }
+
+    static void checkUnknownHardwareKeys(JsonObjectConst doc) {
+        static const char* top[] = {"sound", "drivetrain", "steering_servo",
+                                    "lights", "animation",
+                                    "battery", "drive_motor"};
+        checkKeys(doc, "hardware", top, 7);
+
+        JsonObjectConst sound = doc["sound"];
+        if (!sound.isNull()) {
+            static const char* k[] = {"volume"};
+            checkKeys(sound, "sound", k, 1);
+        }
+
+        JsonObjectConst dt = doc["drivetrain"];
+        if (!dt.isNull()) {
+            static const char* k[] = {"drive_motor", "steering_servo",
+                                      "left_motor", "right_motor",
+                                      "steering_sensitivity"};
+            checkKeys(dt, "drivetrain", k, 5);
+            for (const char* motorKey : {"drive_motor", "left_motor", "right_motor"}) {
+                JsonObjectConst m = dt[motorKey];
+                if (m.isNull()) continue;
+                static const char* mk[] = {"hardware", "frequency",
+                                           "direction", "duty"};
+                checkKeys(m, motorKey, mk, 4);
+                JsonObjectConst duty = m["duty"];
+                if (!duty.isNull()) {
+                    static const char* dk[] = {"min", "max"};
+                    checkKeys(duty, "duty", dk, 2);
+                }
+            }
+            JsonObjectConst ss = dt["steering_servo"];
+            if (!ss.isNull()) {
+                static const char* sk[] = {"hardware", "frequency", "endpoints"};
+                checkKeys(ss, "steering_servo", sk, 3);
+                JsonObjectConst ep = ss["endpoints"];
+                if (!ep.isNull()) {
+                    static const char* ek[] = {"left", "right", "center"};
+                    checkKeys(ep, "endpoints", ek, 3);
+                }
+            }
+        }
+
+        JsonObjectConst lights = doc["lights"];
+        if (!lights.isNull()) {
+            static const char* lk[] = {"head_light", "tail_light", "brake_light",
+                                       "turn_light", "reversing_light",
+                                       "ditch_light", "step_light", "cab_light"};
+            checkKeys(lights, "lights", lk, 8);
+            for (const char* lightKey : {"head_light", "tail_light", "brake_light",
+                                         "reversing_light",
+                                         "step_light", "cab_light"}) {
+                JsonObjectConst l = lights[lightKey];
+                if (l.isNull()) continue;
+                static const char* hk[] = {"hardware", "brightness_max"};
+                checkKeys(l, lightKey, hk, 2);
+            }
+            JsonObjectConst turn = lights["turn_light"];
+            if (!turn.isNull()) {
+                static const char* tk[] = {"left", "right", "brightness_max",
+                                           "type", "interval_on", "interval_off",
+                                           "left_hardware", "right_hardware"};
+                checkKeys(turn, "turn_light", tk, 8);
+                for (const char* side : {"left", "right"}) {
+                    JsonObjectConst s = turn[side];
+                    if (s.isNull()) continue;
+                    static const char* sk[] = {"hardware"};
+                    checkKeys(s, side, sk, 1);
+                }
+            }
+            JsonObjectConst ditch = lights["ditch_light"];
+            if (!ditch.isNull()) {
+                static const char* dk[] = {"left", "right", "brightness_max",
+                                           "interval_ms",
+                                           "left_hardware", "right_hardware"};
+                checkKeys(ditch, "ditch_light", dk, 6);
+                for (const char* side : {"left", "right"}) {
+                    JsonObjectConst s = ditch[side];
+                    if (s.isNull()) continue;
+                    static const char* sk[] = {"hardware"};
+                    checkKeys(s, side, sk, 1);
+                }
+            }
+        }
+
+        JsonObjectConst anim = doc["animation"];
+        if (!anim.isNull()) {
+            static const char* ak[] = {"easing_speed_deg_s", "easing_k_in",
+                                       "easing_k_out", "fade_duration_ms"};
+            checkKeys(anim, "animation", ak, 4);
+        }
+
+        JsonObjectConst bat = doc["battery"];
+        if (!bat.isNull()) {
+            static const char* bk[] = {"cell_count", "cutoff_voltage",
+                                       "full_voltage", "cells",
+                                       "voltage_scale", "voltage_offset"};
+            checkKeys(bat, "battery", bk, 6);
+        }
+    }
+
+    static void validateHardwareConfig(const HardwareConfig& cfg) {
+        auto checkMotor = [&](const HardwareConfig::DriveMotor& m, const char* name) {
+            if (m.type == HardwareConfig::DriveMotor::NONE) return;
+            if (m.duty.min > m.duty.max) {
+                Serial.printf("[ConfigParser] WARN: %s: duty.min (%d) > duty.max (%d)\n",
+                              name, m.duty.min, m.duty.max);
+            }
+            if (m.duty.min > 100 || m.duty.max > 100) {
+                Serial.printf("[ConfigParser] WARN: %s: duty out of range "
+                              "(min=%d max=%d, expected 0-100)\n",
+                              name, m.duty.min, m.duty.max);
+            }
+            if (m.frequency == 0 || m.frequency > 100000) {
+                Serial.printf("[ConfigParser] WARN: %s: frequency %d Hz out of sane range\n",
+                              name, m.frequency);
+            }
+        };
+        checkMotor(cfg.driveMotor, "drive_motor");
+        checkMotor(cfg.leftMotor, "left_motor");
+        checkMotor(cfg.rightMotor, "right_motor");
+
+        if (cfg.steeringServo.hardwareId != 0xFF) {
+            if (cfg.steeringServo.frequency < 40 || cfg.steeringServo.frequency > 400) {
+                Serial.printf("[ConfigParser] WARN: steering_servo: frequency %d Hz outside 40-400\n",
+                              cfg.steeringServo.frequency);
+            }
+            const auto& ep = cfg.steeringServo.endpoints;
+            if (ep.left < 500 || ep.left > 2500 || ep.right < 500 || ep.right > 2500 ||
+                ep.center < 500 || ep.center > 2500) {
+                Serial.printf("[ConfigParser] WARN: steering_servo: endpoints out of range "
+                              "(L=%d R=%d C=%d, expected ~500-2500 us)\n",
+                              ep.left, ep.right, ep.center);
+            }
+        }
+
+        auto checkLight = [&](bool configured, uint8_t brightness, const char* name) {
+            if (configured && brightness > 100) {
+                Serial.printf("[ConfigParser] WARN: %s: brightness %d > 100\n",
+                              name, brightness);
+            }
+        };
+        checkLight(cfg.lights.headLight.configured, cfg.lights.headLight.brightness, "head_light");
+        checkLight(cfg.lights.tailLight.configured, cfg.lights.tailLight.brightness, "tail_light");
+        checkLight(cfg.lights.turnLight.configured, cfg.lights.turnLight.brightness, "turn_light");
+        checkLight(cfg.lights.ditchLight.configured, cfg.lights.ditchLight.brightness, "ditch_light");
+        if (cfg.lights.ditchLight.configured && cfg.lights.ditchLight.intervalMs == 0) {
+            Serial.printf("[ConfigParser] WARN: ditch_light: interval_ms 0 — clamping to 1\n");
+        }
+        checkLight(cfg.lights.stepLight.configured, cfg.lights.stepLight.brightness, "step_light");
+        checkLight(cfg.lights.cabLight.configured, cfg.lights.cabLight.brightness, "cab_light");
+
+        if (cfg.battery.cellCount > 4) {
+            Serial.printf("[ConfigParser] WARN: battery: cell_count %d out of range (0-4)\n",
+                          cfg.battery.cellCount);
+        }
+        if (cfg.battery.cutoffVoltage > cfg.battery.fullVoltage) {
+            Serial.printf("[ConfigParser] WARN: battery: cutoff (%.1f) > full (%.1f)\n",
+                          cfg.battery.cutoffVoltage, cfg.battery.fullVoltage);
+        }
+    }
+
+    static void checkUnknownVehicleKeys(JsonObjectConst doc) {
+        static const char* top[] = {"vehicle", "engine", "transmission",
+                                    "loop_points", "mix_weights", "features",
+                                    "sound_volumes"};
+        checkKeys(doc, "vehicle config", top, 7);
+
+        JsonObjectConst v = doc["vehicle"];
+        if (!v.isNull()) {
+            static const char* k[] = {"name", "type", "sound_set", "preset"};
+            checkKeys(v, "vehicle", k, 4);
+        }
+
+        JsonObjectConst e = doc["engine"];
+        if (!e.isNull()) {
+            // Includes legacy keys carried by shipped configs that the parser
+            // does not read (idle_rpm, clutch_rpm, diesel_knock_start_point,
+            // fan_start_point) — accepted-but-ignored, not errors.
+            static const char* k[] = {"acceleration", "deceleration", "inertia",
+                                      "max_pitch_factor", "rev_switch_point",
+                                      "idle_end_point", "knock_pattern",
+                                      "diesel_knock_interval", "knock_adaptive_volume",
+                                      "min_knock_volume", "knock_start_rpm",
+                                      "jakebrake_min_rpm", "jakebrake_decel_rate",
+                                      "supercharger_start_point", "idle_rpm",
+                                      "clutch_rpm", "diesel_knock_start_point",
+                                      "fan_start_point"};
+            checkKeys(e, "engine", k, 18);
+        }
+
+        JsonObjectConst tr = doc["transmission"];
+        if (!tr.isNull()) {
+            static const char* k[] = {"type", "number_of_gears", "gear_ramp_times"};
+            checkKeys(tr, "transmission", k, 3);
+        }
+
+        JsonObjectConst lp = doc["loop_points"];
+        if (!lp.isNull()) {
+            static const char* k[] = {"horn_begin", "horn_end", "siren_begin",
+                                      "siren_end", "reversing_begin",
+                                      "reversing_end", "sound1_begin", "sound1_end"};
+            checkKeys(lp, "loop_points", k, 8);
+        }
+
+        JsonObjectConst mw = doc["mix_weights"];
+        if (!mw.isNull()) {
+            static const char* k[] = {"engine", "effects"};
+            checkKeys(mw, "mix_weights", k, 2);
+        }
+
+        JsonObjectConst ft = doc["features"];
+        if (!ft.isNull()) {
+            static const char* k[] = {"hydraulic_enabled", "hydrostatic_mode",
+                                      "track_rattle_enabled", "dump_bed_enabled",
+                                      "tire_squeal_threshold", "tire_squeal_max_speed",
+                                      "track_rattle_interval_min", "track_rattle_interval_max"};
+            checkKeys(ft, "features", k, 8);
+        }
+
+        JsonObjectConst sv = doc["sound_volumes"];
+        if (!sv.isNull()) {
+            // Includes legacy engine_idle/engine_rev carried by shipped configs
+            // (parser reads idle/rev); accepted-but-ignored, not errors.
+            static const char* k[] = {"start", "idle", "idle_min", "rev", "rev_min",
+                                      "full_throttle", "turbo", "turbo_min", "knock",
+                                      "knock_min", "wastegate", "wastegate_min", "horn",
+                                      "fan", "jakebrake", "jakebrake_min", "shifting",
+                                      "brake", "reversing", "siren", "parking_brake",
+                                      "supercharger", "supercharger_min", "indicator",
+                                      "coupling", "uncoupling", "sound1", "tire_squeal",
+                                      "hydraulic_pump", "hydraulic_flow", "track_rattle",
+                                      "bucket_rattle", "bell", "door", "scanner", "music",
+                                      "whistle", "gun", "out_of_fuel", "others",
+                                      "crawler_mode_threshold", "engine_idle", "engine_rev"};
+            checkKeys(sv, "sound_volumes", k, 43);
+        }
+    }
+
+    static void validateVehicleConfig(const RcEngineSound::Config& cfg) {
+        if (cfg.transmission.numberOfGears < 1 || cfg.transmission.numberOfGears > 6) {
+            Serial.printf("[ConfigParser] WARN: transmission: number_of_gears %d out of range (1-6)\n",
+                          cfg.transmission.numberOfGears);
+        }
+    }
+
     static void parseDriveMotor(JsonVariantConst motor, HardwareConfig::DriveMotor& config) {
         if (motor.isNull()) return;
         const char* hw = motor["hardware"] | motor["HARDWARE"] | "";
-        if (strcmp(hw, "HBRIDGE_A") == 0 || strcmp(hw, "HBRIDGE_B") == 0) {
-            config.type = HardwareConfig::DriveMotor::HBRIDGE;
+        warnUnresolvedHardware("drive motor", hw);
+        if (strcmp(hw, "DRIVER_A") == 0 || strcmp(hw, "DRIVER_B") == 0) {
+            config.type = HardwareConfig::DriveMotor::DRIVER;
         } else if (hw[0] == 'S') {
             config.type = HardwareConfig::DriveMotor::ESC;
         }
@@ -320,7 +602,12 @@ private:
         if (strcasecmp(dir, "REVERSE") == 0) config.direction = HardwareConfig::DriveMotor::REVERSE;
         else if (strcasecmp(dir, "UNI_FORWARD") == 0) config.direction = HardwareConfig::DriveMotor::UNI_FORWARD;
         else if (strcasecmp(dir, "UNI_REVERSE") == 0) config.direction = HardwareConfig::DriveMotor::UNI_REVERSE;
-        else config.direction = HardwareConfig::DriveMotor::FORWARD;
+        else {
+            if (strcasecmp(dir, "FORWARD") != 0) {
+                Serial.printf("[ConfigParser] WARN: drive motor: unknown direction '%s' — defaulting to forward\n", dir);
+            }
+            config.direction = HardwareConfig::DriveMotor::FORWARD;
+        }
 
         JsonVariantConst dutyObj = motor["duty"] | motor["DUTY"];
         config.duty.min = dutyObj["min"] | dutyObj["MIN"] | 20;
@@ -330,6 +617,7 @@ private:
     static void parseSteeringServo(JsonVariantConst servo, HardwareConfig::SteeringServo& config) {
         if (servo.isNull()) return;
         const char* hw = servo["hardware"] | servo["HARDWARE"] | "";
+        warnUnresolvedHardware("steering_servo", hw);
         config.hardwareId = PinMapper::resolve(hw);
         config.frequency = servo["frequency"] | servo["FREQUENCY"] | 50;
 
@@ -344,31 +632,77 @@ private:
 
         JsonVariantConst head = lights["head_light"] | lights["HEAD_LIGHT"];
         if (!head.isNull()) {
-            config.headLight.pin = PinMapper::resolve(head["hardware"] | head["HARDWARE"] | "");
+            const char* hw = head["hardware"] | head["HARDWARE"] | "";
+            warnUnresolvedHardware("head_light", hw);
+            config.headLight.pin = PinMapper::resolve(hw);
             config.headLight.brightness = head["brightness_max"] | head["BRIGHTNESS_MAX"] | 60;
             config.headLight.configured = config.headLight.pin != 0xFF;
         }
 
         JsonVariantConst tail = lights["tail_light"] | lights["TAIL_LIGHT"];
         if (!tail.isNull()) {
-            config.tailLight.pin = PinMapper::resolve(tail["hardware"] | tail["HARDWARE"] | "");
+            const char* hw = tail["hardware"] | tail["HARDWARE"] | "";
+            warnUnresolvedHardware("tail_light", hw);
+            config.tailLight.pin = PinMapper::resolve(hw);
             config.tailLight.brightness = tail["brightness_max"] | tail["BRIGHTNESS_MAX"] | 60;
             config.tailLight.configured = config.tailLight.pin != 0xFF;
         }
 
         JsonVariantConst brake = lights["brake_light"] | lights["BRAKE_LIGHT"];
         if (!brake.isNull()) {
-            config.brakeLight.pin = PinMapper::resolve(brake["hardware"] | brake["HARDWARE"] | "");
+            const char* hw = brake["hardware"] | brake["HARDWARE"] | "";
+            warnUnresolvedHardware("brake_light", hw);
+            config.brakeLight.pin = PinMapper::resolve(hw);
             config.brakeLight.brightness = 100;
             config.brakeLight.configured = config.brakeLight.pin != 0xFF;
+        }
+
+        // Ditch light: TWO outputs flashing alternately (left/right). Same shape
+        // as turn_light — two pins + alternation interval. Toggled from the app
+        // (loco light selector item F, bit 5); the firmware counter-phases them.
+        JsonVariantConst ditch = lights["ditch_light"] | lights["DITCH_LIGHT"];
+        if (!ditch.isNull()) {
+            JsonVariantConst ditchL = ditch["left"] | ditch["LEFT"];
+            JsonVariantConst ditchR = ditch["right"] | ditch["RIGHT"];
+            const char* hwL = ditchL["hardware"] | ditchL["HARDWARE"] | ditch["left_hardware"] | "";
+            const char* hwR = ditchR["hardware"] | ditchR["HARDWARE"] | ditch["right_hardware"] | "";
+            warnUnresolvedHardware("ditch_light.left", hwL);
+            warnUnresolvedHardware("ditch_light.right", hwR);
+            config.ditchLight.leftPin = PinMapper::resolve(hwL);
+            config.ditchLight.rightPin = PinMapper::resolve(hwR);
+            config.ditchLight.brightness = ditch["brightness_max"] | ditch["BRIGHTNESS_MAX"] | 100;
+            config.ditchLight.intervalMs = ditch["interval_ms"] | ditch["INTERVAL_MS"] | 8;
+            config.ditchLight.configured = config.ditchLight.leftPin != 0xFF || config.ditchLight.rightPin != 0xFF;
+        }
+
+        JsonVariantConst step = lights["step_light"] | lights["STEP_LIGHT"];
+        if (!step.isNull()) {
+            const char* hw = step["hardware"] | step["HARDWARE"] | "";
+            warnUnresolvedHardware("step_light", hw);
+            config.stepLight.pin = PinMapper::resolve(hw);
+            config.stepLight.brightness = step["brightness_max"] | step["BRIGHTNESS_MAX"] | 30;
+            config.stepLight.configured = config.stepLight.pin != 0xFF;
+        }
+
+        JsonVariantConst cab = lights["cab_light"] | lights["CAB_LIGHT"];
+        if (!cab.isNull()) {
+            const char* hw = cab["hardware"] | cab["HARDWARE"] | "";
+            warnUnresolvedHardware("cab_light", hw);
+            config.cabLight.pin = PinMapper::resolve(hw);
+            config.cabLight.brightness = cab["brightness_max"] | cab["BRIGHTNESS_MAX"] | 40;
+            config.cabLight.configured = config.cabLight.pin != 0xFF;
         }
 
         JsonVariantConst turn = lights["turn_light"] | lights["TURN_LIGHT"];
         if (!turn.isNull()) {
             JsonVariantConst turnL = turn["left"] | turn["LEFT"];
             JsonVariantConst turnR = turn["right"] | turn["RIGHT"];
-            config.turnLight.leftPin = PinMapper::resolve(turnL["hardware"] | turnL["HARDWARE"] | turn["left_hardware"] | "");
-            config.turnLight.rightPin = PinMapper::resolve(turnR["hardware"] | turnR["HARDWARE"] | turn["right_hardware"] | "");
+            const char* hwL = turnL["hardware"] | turnL["HARDWARE"] | turn["left_hardware"] | "";
+            const char* hwR = turnR["hardware"] | turnR["HARDWARE"] | turn["right_hardware"] | "";
+            warnUnresolvedHardware("turn_light.left", hwL);
+            warnUnresolvedHardware("turn_light.right", hwR);
+            config.turnLight.leftPin = PinMapper::resolve(hwL);
+            config.turnLight.rightPin = PinMapper::resolve(hwR);
             config.turnLight.brightness = turn["brightness_max"] | turn["BRIGHTNESS_MAX"] | 60;
             config.turnLight.intervalOn = turn["interval_on"] | turn["INTERVAL_ON"] | 500;
             config.turnLight.intervalOff = turn["interval_off"] | turn["INTERVAL_OFF"] | 500;
@@ -379,10 +713,14 @@ private:
         if (!reversing.isNull()) {
             const char* hw = reversing["hardware"] | reversing["HARDWARE"] | "";
             config.reversingLight.pin = PinMapper::resolve(hw);
+            bool alias = false;
             if (config.reversingLight.pin == 0xFF) {
-                if ((strcasecmp(hw, "head_light") == 0 || strcasecmp(hw, "HEAD_LIGHT") == 0) && config.headLight.configured) config.reversingLight.pin = config.headLight.pin;
-                else if ((strcasecmp(hw, "tail_light") == 0 || strcasecmp(hw, "TAIL_LIGHT") == 0) && config.tailLight.configured) config.reversingLight.pin = config.tailLight.pin;
-                else if ((strcasecmp(hw, "brake_light") == 0 || strcasecmp(hw, "BRAKE_LIGHT") == 0) && config.brakeLight.configured) config.reversingLight.pin = config.brakeLight.pin;
+                if ((strcasecmp(hw, "head_light") == 0 || strcasecmp(hw, "HEAD_LIGHT") == 0) && config.headLight.configured) { config.reversingLight.pin = config.headLight.pin; alias = true; }
+                else if ((strcasecmp(hw, "tail_light") == 0 || strcasecmp(hw, "TAIL_LIGHT") == 0) && config.tailLight.configured) { config.reversingLight.pin = config.tailLight.pin; alias = true; }
+                else if ((strcasecmp(hw, "brake_light") == 0 || strcasecmp(hw, "BRAKE_LIGHT") == 0) && config.brakeLight.configured) { config.reversingLight.pin = config.brakeLight.pin; alias = true; }
+            }
+            if (!alias && hw[0] != '\0' && config.reversingLight.pin == 0xFF) {
+                Serial.printf("[ConfigParser] WARN: reversing_light: hardware '%s' not recognized — output not configured\n", hw);
             }
             config.reversingLight.brightness = 100;
             config.reversingLight.configured = config.reversingLight.pin != 0xFF;
@@ -474,7 +812,12 @@ private:
         const char* transTypeStr = tr["type"] | tr["TYPE"] | "NONE";
         if (strcasecmp(transTypeStr, "AUTOMATIC") == 0) cfg.transmission.type = RcEngineSound::TRANS_AUTOMATIC;
         else if (strcasecmp(transTypeStr, "MANUAL") == 0) cfg.transmission.type = RcEngineSound::TRANS_MANUAL;
-        else cfg.transmission.type = RcEngineSound::TRANS_NONE;
+        else {
+            if (strcasecmp(transTypeStr, "NONE") != 0) {
+                Serial.printf("[ConfigParser] WARN: transmission: unknown type '%s' — defaulting to none\n", transTypeStr);
+            }
+            cfg.transmission.type = RcEngineSound::TRANS_NONE;
+        }
 
         cfg.transmission.numberOfGears = tr["number_of_gears"] | tr["NUMBER_OF_GEARS"] | 3;
 

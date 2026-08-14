@@ -77,7 +77,7 @@ public:
         float sumV = 0;
         for (int i = 0; i < 10; ++i) {
             float pinV = analogReadMilliVolts(POWER::VOLTAGE) / 1000.0f;
-            sumV += pinV * s_hw->telemetry.vScale + s_hw->telemetry.vOffset;
+            sumV += pinV * s_hw->battery.vScale + s_hw->battery.vOffset;
             delay(5);
         }
         float bootV = sumV / 10.0f;
@@ -129,7 +129,7 @@ public:
 
         // ── Battery Protection & Low Voltage Cutoff ──
         float pinV = analogReadMilliVolts(POWER::VOLTAGE) / 1000.0f;
-        float batV = pinV * s_hw->telemetry.vScale + s_hw->telemetry.vOffset;
+        float batV = pinV * s_hw->battery.vScale + s_hw->battery.vOffset;
 
         if (batV < s_cutoffVoltage) {
             if (s_lowVoltageStart == 0) s_lowVoltageStart = millis();
@@ -390,6 +390,8 @@ private:
     static bool     s_bellPrev;
     static bool     s_reversePrev;
     static uint32_t s_lastTelemetry;
+    static uint32_t s_ditchLastToggle;  // millis() of last ditch alternation flip
+    static bool     s_ditchSide;        // which ditch side is currently lit
     static char     s_battBuf[8];
     static char     s_speedBuf[8];
 
@@ -443,6 +445,30 @@ private:
         HardwareInit::setLight(L.brakeLight.pin,     brakeActive ? L.brakeLight.brightness : 0);
         HardwareInit::setLight(L.reversingLight.pin, manualRev ? L.reversingLight.brightness : 0);
 
+        // Aux lights (ditch/step/cab): loco light selector items F/G/H (bits
+        // 5/6/7). Only the loco page's 8-item selector can set these bits, so
+        // truck configs never light them from the app.
+        // Ditch lights alternate: each side on for intervalMs, counter-phased
+        // (left on while right off, and vice versa). Driven manually from the
+        // loop — the blink engine has no phase offset for two LEDs.
+        bool ditchOn = (bits & 0x20);
+        if (ditchOn) {
+            const uint32_t interval = L.ditchLight.intervalMs;
+            if (millis() - s_ditchLastToggle >= interval) {
+                s_ditchLastToggle = millis();
+                s_ditchSide = !s_ditchSide;
+            }
+            HardwareInit::setLight(L.ditchLight.leftPin,  s_ditchSide ? L.ditchLight.brightness : 0);
+            HardwareInit::setLight(L.ditchLight.rightPin, s_ditchSide ? 0 : L.ditchLight.brightness);
+        } else {
+            s_ditchLastToggle = 0;
+            s_ditchSide = false;
+            HardwareInit::setLight(L.ditchLight.leftPin, 0);
+            HardwareInit::setLight(L.ditchLight.rightPin, 0);
+        }
+        HardwareInit::setLight(L.stepLight.pin,  (bits & 0x40) ? L.stepLight.brightness  : 0);
+        HardwareInit::setLight(L.cabLight.pin,   (bits & 0x80) ? L.cabLight.brightness   : 0);
+
         // Turn signals / hazards run through the blink engine with the config
         // interval/duty. The blink engine owns the duty while active — no
         // static setLight() may target these pins during a blink.
@@ -474,6 +500,8 @@ bool     VehicleController::s_hornPrev = false;
 bool     VehicleController::s_bellPrev = false;
 bool     VehicleController::s_reversePrev = false;
 uint32_t VehicleController::s_lastTelemetry = 0;
+uint32_t VehicleController::s_ditchLastToggle = 0;
+bool     VehicleController::s_ditchSide = false;
 char     VehicleController::s_battBuf[8] = "--";
 char     VehicleController::s_speedBuf[8] = "--";
 

@@ -20,12 +20,12 @@ The project SHALL reference the PWM library dependency as `ESP32_EasyKit`, not `
 ### Requirement: EasyKit Hardware Abstraction
 `common/HardwareInit.h` SHALL use EasyKit classes for all PWM outputs — `EasyMotor` for the drive motor (DRIVER_2PWM and DRIVER_1PWM_1DIR), `EasyServo` for the steering servo and ESC (PPM pulse output), and `EasyLED` for light channels — instead of raw `ledcAttach`/`ledcWrite` calls.
 
-#### Scenario: H-Bridge A dual-PWM motor
-- **WHEN** a config specifies `HBRIDGE_A` with dual PWM pins and an enable pin
+#### Scenario: Driver A dual-PWM motor
+- **WHEN** a config specifies `DRIVER_A` with dual PWM pins and an enable pin
 - **THEN** an `EasyMotor` in DRIVER_2PWM mode drives both PWM pins, asserts the enable pin, and respects the configured min/max duty window
 
-#### Scenario: H-Bridge B DIR+PWM motor
-- **WHEN** a config specifies `HBRIDGE_B` with a direction pin and a PWM pin
+#### Scenario: Driver B DIR+PWM motor
+- **WHEN** a config specifies `DRIVER_B` with a direction pin and a PWM pin
 - **THEN** an `EasyMotor` in DRIVER_1PWM_1DIR mode drives the PWM pin and toggles the direction pin for forward/reverse
 
 #### Scenario: ESC output

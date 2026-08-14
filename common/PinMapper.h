@@ -4,26 +4,26 @@
 #include <cstring>
 #include "boards.h"
 
-struct HBridgePins {
+struct DriverPins {
     uint8_t pwm1;
     uint8_t pwm2;
     uint8_t bemf;
-    uint8_t enable;      // bridge enable pin (0xFF if none)
-    bool dualPwm;        // true = PWM1/PWM2 bridge, false = DIR+PWM bridge
+    uint8_t enable;      // driver enable pin (0xFF if none)
+    bool dualPwm;        // true = PWM1/PWM2 driver, false = DIR+PWM driver
 };
 
 class PinMapper {
 public:
-    // Distinct markers for the two H-bridge slots (stored in DriveMotor::hardwareId).
+    // Distinct markers for the two motor-driver slots (stored in DriveMotor::hardwareId).
     // High values keep them out of the GPIO pin range.
-    static constexpr uint8_t BRIDGE_A = 0xE1;
-    static constexpr uint8_t BRIDGE_B = 0xE2;
+    static constexpr uint8_t DRIVER_A = 0xE1;
+    static constexpr uint8_t DRIVER_B = 0xE2;
 
     static uint8_t resolve(const char* name) {
         if (!name) return 0xFF;
 
-        if (strcmp(name, "HBRIDGE_A") == 0) return BRIDGE_A;
-        if (strcmp(name, "HBRIDGE_B") == 0) return BRIDGE_B;
+        if (strcmp(name, "DRIVER_A") == 0) return DRIVER_A;
+        if (strcmp(name, "DRIVER_B") == 0) return DRIVER_B;
 
 #ifdef TRACKLINK_V3
         if (strcmp(name, "L0") == 0) return PIN::L0;
@@ -56,22 +56,22 @@ public:
         return 0xFF;
     }
 
-    static HBridgePins getHBridge(const char* name) {
+    static DriverPins getDriver(const char* name) {
         if (!name) return {0, 0, 0, 0xFF, false};
 
 #ifdef TRACKLINK_V3
-        if (strcmp(name, "HBRIDGE_A") == 0) {
-            return {HBRIDGE::A::PWM1, HBRIDGE::A::PWM2, HBRIDGE::A::BEMF, HBRIDGE::COMMON_EN, true};
+        if (strcmp(name, "DRIVER_A") == 0) {
+            return {DRIVER::A::PWM1, DRIVER::A::PWM2, DRIVER::A::BEMF, DRIVER::COMMON_EN, true};
         }
-        if (strcmp(name, "HBRIDGE_B") == 0) {
-            return {HBRIDGE::B::PWM, HBRIDGE::B::DIR, HBRIDGE::B::BEMF, HBRIDGE::COMMON_EN, false};
+        if (strcmp(name, "DRIVER_B") == 0) {
+            return {DRIVER::B::PWM, DRIVER::B::DIR, DRIVER::B::BEMF, DRIVER::COMMON_EN, false};
         }
 #elif defined(MIKRO_V2)
-        if (strcmp(name, "HBRIDGE_A") == 0) {
-            return {HBRIDGE::A::PWM1, HBRIDGE::A::PWM2, HBRIDGE::A::BEMF, HBRIDGE::A::EN, true};
+        if (strcmp(name, "DRIVER_A") == 0) {
+            return {DRIVER::A::PWM1, DRIVER::A::PWM2, DRIVER::A::BEMF, DRIVER::A::EN, true};
         }
-        if (strcmp(name, "HBRIDGE_B") == 0) {
-            return {HBRIDGE::B::PWM1, HBRIDGE::B::PWM2, HBRIDGE::B::BEMF, HBRIDGE::B::EN, true};
+        if (strcmp(name, "DRIVER_B") == 0) {
+            return {DRIVER::B::PWM1, DRIVER::B::PWM2, DRIVER::B::BEMF, DRIVER::B::EN, true};
         }
 #endif
 
@@ -88,8 +88,8 @@ public:
         return name[0] == 'S' && name[1] >= '1' && name[1] <= '4';
     }
 
-    static bool isHBridge(const char* name) {
+    static bool isDriver(const char* name) {
         if (!name) return false;
-        return strncmp(name, "HBRIDGE_", 8) == 0;
+        return strncmp(name, "DRIVER_", 7) == 0;
     }
 };

@@ -1,0 +1,155 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rc-brain.local/schemas/hardware_config.schema.json",
+  "title": "RC Brain hardware config",
+  "description": "Schema for configs/hardware_configs/hardware-<BOARD>.json. Mirrors what common/ConfigParser.h reads, including documented quirks: turn_light.type is accepted-but-ignored, brake/reversing brightness_max is accepted-but-ignored (firmware forces 100%), and reversing_light.hardware accepts a pin token or a light alias. Motor type is derived from the hardware token, so drive_motor/left_motor/right_motor have no 'type' key.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "sound": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "volume": { "type": "integer", "minimum": 0, "maximum": 100, "default": 80 }
+      }
+    },
+    "drivetrain": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "drive_motor": { "$ref": "#/definitions/motor" },
+        "left_motor": { "$ref": "#/definitions/motor" },
+        "right_motor": { "$ref": "#/definitions/motor" },
+        "steering_servo": { "$ref": "#/definitions/steering_servo" },
+        "steering_sensitivity": { "type": "integer", "minimum": 0, "maximum": 100, "default": 80 }
+      }
+    },
+    "steering_servo": { "$ref": "#/definitions/steering_servo" },
+    "lights": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "head_light": { "$ref": "#/definitions/light" },
+        "tail_light": { "$ref": "#/definitions/light" },
+        "brake_light": { "$ref": "#/definitions/light" },
+        "ditch_light": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "left": { "$ref": "#/definitions/pin_ref" },
+            "right": { "$ref": "#/definitions/pin_ref" },
+            "left_hardware": { "$ref": "#/definitions/pin_name" },
+            "right_hardware": { "$ref": "#/definitions/pin_name" },
+            "brightness_max": { "type": "integer", "minimum": 0, "maximum": 100, "default": 100 },
+            "interval_ms": { "type": "integer", "minimum": 1, "default": 8 }
+          }
+        },
+        "step_light": { "$ref": "#/definitions/light" },
+        "cab_light": { "$ref": "#/definitions/light" },
+        "turn_light": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "left": { "$ref": "#/definitions/pin_ref" },
+            "right": { "$ref": "#/definitions/pin_ref" },
+            "left_hardware": { "$ref": "#/definitions/pin_name" },
+            "right_hardware": { "$ref": "#/definitions/pin_name" },
+            "brightness_max": { "type": "integer", "minimum": 0, "maximum": 100, "default": 60 },
+            "type": { "type": "string" },
+            "interval_on": { "type": "integer", "minimum": 0, "default": 500 },
+            "interval_off": { "type": "integer", "minimum": 0, "default": 500 }
+          }
+        },
+        "reversing_light": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hardware": {
+              "oneOf": [
+                { "$ref": "#/definitions/pin_name" },
+                { "enum": ["head_light", "tail_light", "brake_light"] }
+              ]
+            },
+            "brightness_max": { "type": "integer", "minimum": 0, "maximum": 100 }
+          }
+        }
+      }
+    },
+    "animation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "easing_speed_deg_s": { "type": "number", "minimum": 0, "default": 180 },
+        "easing_k_in": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.2 },
+        "easing_k_out": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.8 },
+        "fade_duration_ms": { "type": "integer", "minimum": 0, "default": 250 }
+      }
+    },
+    "battery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cell_count": { "type": "integer", "minimum": 0, "maximum": 4, "default": 0 },
+        "cutoff_voltage": { "type": "number", "default": 3.3 },
+        "full_voltage": { "type": "number", "default": 4.2 },
+        "voltage_scale": { "type": "number", "default": 1.8 },
+        "voltage_offset": { "type": "number", "default": -0.2 }
+      }
+    }
+  },
+  "definitions": {
+    "pin_name": {
+      "type": "string",
+      "pattern": "^(L[0-8]|S[1-4]|DRIVER_[AB])$"
+    },
+    "pin_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hardware": { "$ref": "#/definitions/pin_name" }
+      }
+    },
+    "light": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hardware": { "$ref": "#/definitions/pin_name" },
+        "brightness_max": { "type": "integer", "minimum": 0, "maximum": 100, "default": 60 }
+      }
+    },
+    "motor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hardware": { "$ref": "#/definitions/pin_name" },
+        "frequency": { "type": "integer", "minimum": 1, "maximum": 100000, "default": 20000 },
+        "direction": { "type": "string", "enum": ["forward", "reverse", "uni_forward", "uni_reverse"], "default": "forward" },
+        "duty": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min": { "type": "integer", "minimum": 0, "maximum": 100, "default": 20 },
+            "max": { "type": "integer", "minimum": 0, "maximum": 100, "default": 90 }
+          }
+        }
+      }
+    },
+    "steering_servo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hardware": { "$ref": "#/definitions/pin_name" },
+        "frequency": { "type": "integer", "minimum": 40, "maximum": 400, "default": 50 },
+        "endpoints": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "left": { "type": "integer", "minimum": 500, "maximum": 2500, "default": 1350 },
+            "right": { "type": "integer", "minimum": 500, "maximum": 2500, "default": 1650 },
+            "center": { "type": "integer", "minimum": 500, "maximum": 2500, "default": 1500 }
+          }
+        }
+      }
+    }
+  }
+}

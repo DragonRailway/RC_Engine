@@ -34,13 +34,52 @@ import sys
 import tempfile
 from pathlib import Path
 
+try:
+    import jsonschema
+except ImportError:
+    jsonschema = None
+
 REPO = Path(__file__).resolve().parent.parent
 PARTITIONS_CSV = REPO / "partitions_ota_4MB.csv"
 CONFIGS = REPO / "configs"
 HW_DIR = CONFIGS / "hardware_configs"
 VEHICLE_DIR = CONFIGS / "vehicle_configs"
 COMMON_DIR = VEHICLE_DIR / "common"
+SCHEMAS_DIR = CONFIGS / "schemas"
 STAGING_ROOT = REPO / ".pio" / "fs_staging"
+
+
+def validate_hardware_config(hw_path):
+    """Validate a hardware config against configs/schemas/hardware_config.schema.json.
+
+    Fails fast with the violations listed. Requires the `jsonschema` Python
+    package; if it is missing, die with a clear message (a hard stop is safer
+    than silently skipping the check).
+    """
+    schema_path = SCHEMAS_DIR / "hardware_config.schema.json"
+    if not schema_path.is_file():
+        die(f"hardware config schema not found: {schema_path.relative_to(REPO)}")
+    if jsonschema is None:
+        die("jsonschema Python package is required for config validation "
+            "(pip install jsonschema)")
+
+    try:
+        with open(hw_path) as f:
+            data = json.load(f)
+        with open(schema_path) as f:
+            schema = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        die(f"cannot parse {hw_path.relative_to(REPO)} or schema: {e}")
+
+    validator = jsonschema.Draft7Validator(schema)
+    errors = sorted(validator.iter_errors(data),
+                    key=lambda e: list(e.path) if e.path else [])
+    if errors:
+        lines = [f"hardware config {hw_path.relative_to(REPO)} failed validation:"]
+        for e in errors:
+            loc = "/".join(str(p) for p in e.path) or "(root)"
+            lines.append(f"  {loc}: {e.message}")
+        die("\n".join(lines))
 
 # Parsed from partitions_ota_4MB.csv (data/spiffs row).
 SPIFFS_TYPE = "spiffs"
@@ -142,6 +181,7 @@ def assemble(board, vehicle, pio_home, fs_size, dry_run=False, no_flash=False, p
     hw_src = HW_DIR / f"hardware-{board}.json"
     if not hw_src.is_file():
         die(f"hardware config not found: {hw_src.relative_to(REPO)}")
+    validate_hardware_config(hw_src)
     bundle = VEHICLE_DIR / vehicle
     vc_src = bundle / "vehicle.json"
     sounds_src = bundle / "sounds"

@@ -1,0 +1,45 @@
+{
+    "sound": {
+        "volume": 80
+    },
+    "drivetrain": {
+        "drive_motor": {
+            "hardware": "DRIVER_A",
+            "frequency": 20000,
+            "direction": "forward",
+            "duty": {
+                "min": 20,
+                "max": 90
+            }
+        }
+    },
+    "lights": {
+        "head_light": {
+            "hardware": "L1",
+            "brightness_max": 60
+        },
+        "tail_light": {
+            "hardware": "L2",
+            "brightness_max": 60
+        },
+        "brake_light": {
+            "hardware": "L3"
+        },
+        "reversing_light": {
+            "hardware": "brake_light"
+        }
+    },
+    "animation": {
+        "easing_speed_deg_s": 180,
+        "easing_k_in": 0.2,
+        "easing_k_out": 0.8,
+        "fade_duration_ms": 250
+    },
+    "battery": {
+        "cell_count": 1,
+        "cutoff_voltage": 3.4,
+        "full_voltage": 4.2,
+        "voltage_scale": 1.8,
+        "voltage_offset": -0.2
+    }
+}

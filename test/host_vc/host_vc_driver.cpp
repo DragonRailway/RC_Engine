@@ -21,8 +21,8 @@ int main() {
     HardwareConfig hwConfig;
     hwConfig.battery.cellCount = 1;
     hwConfig.battery.cutoffVoltage = 3.4f;
-    hwConfig.telemetry.vScale = 1.0f;
-    hwConfig.telemetry.vOffset = 0.0f;
+    hwConfig.battery.vScale = 1.0f;
+    hwConfig.battery.vOffset = 0.0f;
 
     static int8_t dummyPcm[256] = {0};
     SoundData soundData;

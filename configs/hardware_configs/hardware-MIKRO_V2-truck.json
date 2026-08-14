@@ -1,11 +1,10 @@
-{
+/explo{
     "sound": {
         "volume": 80
     },
     "drivetrain": {
         "drive_motor": {
-            "type": "hbridge",
-            "hardware": "HBRIDGE_A",
+            "hardware": "DRIVER_A",
             "frequency": 20000,
             "direction": "forward",
             "duty": {
@@ -32,8 +31,11 @@
             "hardware": "L2",
             "brightness_max": 60
         },
-        "brake_light": {
+        "reversing_light": {
             "hardware": "L3"
+        },
+        "brake_light": {
+            "hardware": "reversing_light"
         },
         "turn_light": {
             "left": {
@@ -46,9 +48,6 @@
             "type": "blink",
             "interval_on": 500,
             "interval_off": 500
-        },
-        "reversing_light": {
-            "hardware": "brake_light"
         }
     },
     "animation": {
@@ -57,13 +56,11 @@
         "easing_k_out": 0.8,
         "fade_duration_ms": 250
     },
-    "telemetry": {
-        "voltage_scale": 1.8,
-        "voltage_offset": -0.2
-    },
     "battery": {
         "cell_count": 1,
         "cutoff_voltage": 3.4,
-        "full_voltage": 4.2
+        "full_voltage": 4.2,
+        "voltage_scale": 1.8,
+        "voltage_offset": -0.2
     }
 }

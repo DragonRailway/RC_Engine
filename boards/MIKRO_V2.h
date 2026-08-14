@@ -17,7 +17,7 @@ struct PIN {
   static constexpr uint8_t S4 = 8;
 };
 
-struct HBRIDGE {
+struct DRIVER {
   struct A {
     static constexpr uint8_t PWM1 = 18;
     static constexpr uint8_t PWM2 = 21;

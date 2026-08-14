@@ -4,22 +4,12 @@
     },
     "drivetrain": {
         "drive_motor": {
-            "type": "hbridge",
-            "hardware": "HBRIDGE_A",
+            "hardware": "DRIVER_A",
             "frequency": 20000,
             "direction": "forward",
             "duty": {
                 "min": 20,
                 "max": 90
-            }
-        },
-        "steering_servo": {
-            "hardware": "S1",
-            "frequency": 50,
-            "endpoints": {
-                "left": 1350,
-                "right": 1650,
-                "center": 1500
             }
         }
     },
@@ -32,23 +22,23 @@
             "hardware": "L2",
             "brightness_max": 60
         },
-        "brake_light": {
-            "hardware": "L3"
-        },
-        "turn_light": {
+        "ditch_light": {
             "left": {
                 "hardware": "L4"
             },
             "right": {
                 "hardware": "L5"
             },
-            "brightness_max": 60,
-            "type": "blink",
-            "interval_on": 500,
-            "interval_off": 500
+            "brightness_max": 100,
+            "interval_ms": 8
         },
-        "reversing_light": {
-            "hardware": "brake_light"
+        "step_light": {
+            "hardware": "L6",
+            "brightness_max": 30
+        },
+        "cab_light": {
+            "hardware": "L3",
+            "brightness_max": 40
         }
     },
     "animation": {
@@ -57,13 +47,11 @@
         "easing_k_out": 0.8,
         "fade_duration_ms": 250
     },
-    "telemetry": {
-        "voltage_scale": 1.8,
-        "voltage_offset": -0.2
-    },
     "battery": {
         "cell_count": 1,
         "cutoff_voltage": 3.4,
-        "full_voltage": 4.2
+        "full_voltage": 4.2,
+        "voltage_scale": 1.8,
+        "voltage_offset": -0.2
     }
 }
