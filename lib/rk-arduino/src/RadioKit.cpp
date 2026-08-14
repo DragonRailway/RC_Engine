@@ -1257,22 +1257,26 @@ uint16_t RadioKitClass::_buildConfPayload(uint8_t* buf, uint16_t bufSize) {
     const char* themeStr = config.theme ? config.theme : "dragon";
     uint8_t themeLen = (uint8_t)strnlen(themeStr, 64);
 
-    // v5 CONF_DATA: orientation + widget count + activePage + numPages + theme + per-widget layout
+    // v5 CONF_DATA: orientation + widget count + activePage + numPages + themeLen + per-page orientations + per-widget layout
     // v4 fallback (no pages): orientation + widget count + theme + per-widget layout
     if (_numPages > 1) {
-        if (out + 5 + themeLen > bufSize) return 0;
+        if (out + 5 + themeLen + _numPages > bufSize) return 0;
         buf[out++] = config.orientation;
         buf[out++] = visibleCount;
         buf[out++] = _activePage;
         buf[out++] = _numPages;
         buf[out++] = themeLen;
+        memcpy(&buf[out], themeStr, themeLen); out += themeLen;
+        for (uint8_t p = 0; p < _numPages && p < RADIOKIT_MAX_PAGES; p++) {
+            buf[out++] = _pageOrientations[p];
+        }
     } else {
         if (out + 3 + themeLen > bufSize) return 0;
         buf[out++] = config.orientation;
         buf[out++] = visibleCount;
         buf[out++] = themeLen;
+        memcpy(&buf[out], themeStr, themeLen); out += themeLen;
     }
-    memcpy(&buf[out], themeStr, themeLen); out += themeLen;
 
     for (uint8_t i = 0; i < _widgetCount; i++) {
         RadioKit_Widget* w = _widgets[i];

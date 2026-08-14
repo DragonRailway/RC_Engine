@@ -1,0 +1,82 @@
+#include "Arduino.h"
+#include <LittleFS.h>
+#include "boards.h"
+#include "Config.h"
+#include <EasyMotor.h>
+#include <EasyServo.h>
+#include <EasyLED.h>
+#include <RadioKitLib.h>
+#include <iostream>
+
+// Captured state variables for assertions
+float host_last_motor_speed = 0.0f;
+int host_last_servo_us = 0;
+int host_last_aux1_us = 0;
+int host_last_aux2_us = 0;
+
+uint8_t host_last_head_led = 0;
+uint8_t host_last_tail_led = 0;
+uint8_t host_last_brake_led = 0;
+
+// Dummy EasyMotor
+EasyMotor::EasyMotor() {}
+EasyMotor::EasyMotor(uint8_t, uint8_t) {}
+EasyMotor::EasyMotor(uint8_t, uint8_t, uint8_t) {}
+EasyMotor::EasyMotor(DriverType, uint8_t, uint8_t) {}
+EasyMotor::EasyMotor(DriverType, uint8_t, uint8_t, uint8_t) {}
+EasyMotor::~EasyMotor() {}
+
+EasyKit::Result EasyMotor::begin(uint8_t, uint8_t, uint8_t, bool) { return EasyKit::Result::OK; }
+EasyKit::Result EasyMotor::begin(uint8_t, uint8_t, bool) { return EasyKit::Result::OK; }
+EasyKit::Result EasyMotor::begin(DriverType, uint8_t, uint8_t, uint8_t, bool) { return EasyKit::Result::OK; }
+EasyKit::Result EasyMotor::begin(DriverType, uint8_t, uint8_t, bool) { return EasyKit::Result::OK; }
+EasyKit::Result EasyMotor::begin(const EasyKit::EasyMotorConfig&) { return EasyKit::Result::OK; }
+void EasyMotor::end() {}
+void EasyMotor::write(float speed) { host_last_motor_speed = speed; }
+void EasyMotor::stop() { host_last_motor_speed = 0.0f; }
+void EasyMotor::brake() { host_last_motor_speed = 0.0f; }
+void EasyMotor::coast() { host_last_motor_speed = 0.0f; }
+void EasyMotor::onPinStolen(uint8_t) {}
+
+// Dummy EasyServo
+EasyServo::EasyServo() {}
+EasyServo::~EasyServo() {}
+int EasyServo::attach(int pin) { return 0; }
+int EasyServo::attach(int pin, int minUs, int maxUs) { return 0; }
+EasyKit::Result EasyServo::attach(int pin, const EasyKit::ServoConfig& config) { return EasyKit::Result::OK; }
+void EasyServo::detach() {}
+float EasyServo::write(float value, float speed, float kIn, float kOut) { return value; }
+void EasyServo::writeMicroseconds(int us) { host_last_servo_us = us; }
+void EasyServo::update() {}
+void EasyServo::stop() {}
+int EasyServo::read() const { return 90; }
+int EasyServo::readMicroseconds() const { return 1500; }
+bool EasyServo::attached() const { return true; }
+void EasyServo::onPinStolen(uint8_t) {}
+
+// Dummy EasyLED
+EasyLED::EasyLED() {}
+EasyLED::~EasyLED() {}
+EasyKit::Result EasyLED::begin(uint8_t pin, const EasyKit::LEDConfig& config) { return EasyKit::Result::OK; }
+void EasyLED::end() {}
+void EasyLED::write(bool value) {}
+void EasyLED::write(uint16_t ticks) {}
+void EasyLED::write(float percent) { host_last_head_led = (uint8_t)percent; }
+void EasyLED::setDuty(uint32_t) {}
+void EasyLED::update() {}
+void EasyLED::stop() {}
+void EasyLED::startBlink(uint32_t, uint32_t, float) {}
+void EasyLED::stopBlink() {}
+bool EasyLED::fadeTo(uint32_t, uint32_t, EasyLED::Curve, void (*)(void*), void*) { return true; }
+float EasyLED::getDutyPercent() const { return (float)host_last_head_led; }
+uint32_t EasyLED::getMaxDuty() const { return 1023; }
+bool EasyLED::isAttached() const { return true; }
+void EasyLED::onPinStolen(uint8_t) {}
+
+// RadioKit Global Stubs
+RadioKitClass::RadioKitClass() {}
+RadioKitClass RadioKit;
+void RadioKitClass::_registerWidget(RadioKit_Widget*) {}
+void RadioKitClass::pushUpdate(uint8_t) {}
+void RadioKitClass::startSerial(Stream&) {}
+void RadioKitClass::update() {}

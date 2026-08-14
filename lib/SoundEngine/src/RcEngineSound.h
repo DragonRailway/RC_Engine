@@ -209,6 +209,29 @@ public:
     uint8_t getGear() const { return selectedGear; }
     float getPitchFactor() const { return pitchFactor; }
 
+    struct VoiceDebugInfo {
+        uint8_t id;
+        bool active;
+        float position;
+        uint32_t count;
+        uint8_t volume;
+        uint32_t loopBegin;
+        uint32_t loopEnd;
+    };
+    void getVoiceDebugSnapshot(VoiceDebugInfo outInfo[SOUND_COUNT]) {
+        portENTER_CRITICAL(&voiceMutex);
+        for (int i = 0; i < SOUND_COUNT; i++) {
+            outInfo[i].id = i;
+            outInfo[i].active = voices[i].active;
+            outInfo[i].position = voices[i].position;
+            outInfo[i].count = voices[i].count;
+            outInfo[i].volume = voices[i].volume;
+            outInfo[i].loopBegin = voices[i].loopBegin;
+            outInfo[i].loopEnd = voices[i].loopEnd;
+        }
+        portEXIT_CRITICAL(&voiceMutex);
+    }
+
 private:
     // Per-voice state for fractional step interpolation
     struct VoiceState {

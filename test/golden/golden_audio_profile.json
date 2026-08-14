@@ -1,0 +1,24 @@
+{
+  "description": "RC_brain reference audio metric profile",
+  "sampleRate": 22050,
+  "phases": {
+    "idle": {
+      "rms_min": 1000.0,
+      "rms_expected": 7000.0,
+      "zcr_min": 400.0,
+      "zcr_expected": 880.0,
+      "fft_peak_expected": 440.0
+    },
+    "rev_full": {
+      "rms_min": 3000.0,
+      "rms_expected": 12000.0,
+      "zcr_min": 800.0,
+      "zcr_expected": 1800.0
+    }
+  },
+  "tolerances": {
+    "rms_rel_tol": 0.15,
+    "zcr_rel_tol": 0.1,
+    "fft_rel_tol": 0.05
+  }
+}

@@ -483,10 +483,15 @@ void RcEngineSound::update(int16_t throttle) {
     // ── Idle/Rev cross-fade with throttle-dependent volume scaling ──
     int16_t idleProportion = 100;
     if (state == RUNNING && !engineMuted) {
+        voices[IDLE].active = (sounds.slots[IDLE].samples && sounds.slots[IDLE].sampleCount > 0);
+        voices[REV].active = (sounds.slots[REV].samples && sounds.slots[REV].sampleCount > 0);
         if (currentRpmFixed > cfg.engine.revSwitchPoint) {
             idleProportion = map(currentRpmFixed, cfg.engine.idleEndPoint, cfg.engine.revSwitchPoint, 0, 100);
             idleProportion = constrain(idleProportion, 0, 100);
         }
+    } else {
+        voices[IDLE].active = false;
+        voices[REV].active = false;
     }
     // Scale idle/rev volumes with throttle input (reference parity)
     // idleVol interpolates from idle (at 0% throttle) to idleMin (at 100% throttle)

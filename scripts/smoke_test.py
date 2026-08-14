@@ -72,17 +72,35 @@ def main():
     print(boot_txt[-1500:])
     ser.reset_input_buffer()
 
+    # Panic pattern list for firmware regression watch
+    PANIC_REGEX = re.compile(r'Guru Meditation|Coprocessor exception|abort\(\)|Backtrace:', re.IGNORECASE)
+
     # Boot sanity checks
+    boot_panic_match = PANIC_REGEX.search(boot_txt)
     checks = {
         "Vehicle type: TRUCK":         "Vehicle type: TRUCK" in boot_txt,
         "Engine OFF boot state":       ("Battery cell count from config" in boot_txt or "Auto-detected" in boot_txt),  # battery config/detection ran
         "Config loaded":               "Configs reloaded OK" in boot_txt or "System Ready" in boot_txt,
+        "No boot panic":               boot_panic_match is None,
     }
+    has_failed_check = False
     for name, ok in checks.items():
+        if not ok:
+            has_failed_check = True
         print(f"  [{'PASS' if ok else 'FAIL'}] boot: {name}")
+
+    if boot_panic_match:
+        print(f"  [CRITICAL] Boot panic pattern detected: '{boot_panic_match.group(0)}'", flush=True)
+        sys.exit(1)
 
     seq = 0
     ack_count = 0
+
+    def assert_no_panic(txt_data, label=''):
+        match = PANIC_REGEX.search(txt_data)
+        if match:
+            print(f"\n  [CRITICAL FAIL] Panic pattern '{match.group(0)}' detected during phase: {label}!", flush=True)
+            sys.exit(1)
 
     def send(cmd, payload=b'', label=''):
         nonlocal seq, ack_count
@@ -92,10 +110,12 @@ def main():
         data = ser.read(4096)
         if data:
             raw = data
+            txt = data.decode('utf-8', errors='replace')
+            assert_no_panic(txt, label)
             for i in range(len(raw) - 6):
                 if raw[i] == 0x55 and raw[i+3] == ACK:
                     ack_count += 1
-            printable = ''.join(ch if 32 <= ord(ch) < 127 else '.' for ch in data.decode('utf-8', errors='replace'))
+            printable = ''.join(ch if 32 <= ord(ch) < 127 else '.' for ch in txt)
             print(f"  [{label}] response({len(data)}B): {printable[:160]}", flush=True)
         else:
             print(f"  [{label}] (no response)", flush=True)

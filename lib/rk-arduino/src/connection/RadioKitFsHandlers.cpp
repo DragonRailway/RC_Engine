@@ -139,9 +139,6 @@ void setSender(SenderFn fn) { s_sender = fn; }
 
 bool begin() {
 #if RK_FS_HAS_LITTLEFS
-    // Idempotent: the host app may have already mounted LittleFS (e.g.
-    // ConfigParser::begin() runs before initRadioKit()). A second begin()
-    // on an already-mounted FS is a no-op that returns true, so this is safe.
 #if RK_ARCH_DETECTED == RK_ARCH_ESP32
     s_mounted = LittleFS.begin(true);  // ESP32: format-on-fail
 #else

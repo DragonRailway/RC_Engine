@@ -1,18 +1,12 @@
 //__RadioKit_Generated_Code__
 //__Might_Be_Overwritten_
 
-#ifndef RC_BRAIN_RADIOKIT_H
-#define RC_BRAIN_RADIOKIT_H   // must not collide with RadioKitLib.h's own RADIOKIT_H guard
+#ifndef RADIOKIT_GENERATED_H
+#define RADIOKIT_GENERATED_H
 
-#ifndef RK_ENABLE_OTA
 #define RK_ENABLE_OTA
-#endif
-#ifndef RK_ENABLE_FS
 #define RK_ENABLE_FS
-#endif
-#ifndef RK_ENABLE_BLE
 #define RK_ENABLE_BLE
-#endif
 
 #include <RadioKitLib.h>
 
@@ -20,6 +14,11 @@
 static const char* rk_pageNames[] = {
   "Truck",
   "Loco",
+};
+
+static const uint8_t rk_pageOrientations[] = {
+  0,  // Truck
+  1,  // Loco
 };
 
 // ─── Page 0: Truck ───
@@ -71,58 +70,42 @@ static inline void initRadioKit() {
   steering_wheel.rk.centering = RK_SPRING_NONE;
   steering_wheel.rk.startAngle = -135.0;
   steering_wheel.rk.endAngle = 135.0;
+  steering_wheel.rk.centerIcon = "renault";
   gas_pedal.rk.label = "gas_pedal";
   gas_pedal.setLabelHidden(true);
-  gas_pedal.rk.centering = RK_SPRING_CENTER;
+  gas_pedal.rk.centering = RK_SPRING_MIN;
   brake_pedal.rk.label = "brake_pedal";
   brake_pedal.setLabelHidden(true);
-  brake_pedal.rk.centering = RK_SPRING_CENTER;
+  brake_pedal.rk.centering = RK_SPRING_MIN;
   truck_light.rk.label = "truck_light";
   truck_light.setLabelHidden(true);
-  truck_light.rk.items[0].label = "A";
-  truck_light.rk.items[0].pos = 0;
-  truck_light.rk.items[1].label = "B";
-  truck_light.rk.items[1].pos = 1;
-  truck_light.rk.items[2].label = "C";
-  truck_light.rk.items[2].pos = 2;
-  truck_light.rk.items[3].label = "D";
-  truck_light.rk.items[3].pos = 3;
-  truck_light.rk.items[4].label = "E";
-  truck_light.rk.items[4].pos = 4;
-  truck_light.rk.itemCount = 5;
-  start_button.rk.label = "start_button";
+  truck_light.rk.items[0] = {"A", nullptr, 0};
+  truck_light.rk.items[1] = {"B", nullptr, 1};
+  truck_light.rk.items[2] = {"C", nullptr, 2};
+  truck_light.rk.itemCount = 3;
   start_button.rk.label = "start_button";
   start_button.setLabelHidden(true);
   start_button.rk.onText = "START";
   start_button.rk.offText = "STOP";
   left_indicator.rk.label = "left_indicator";
-  left_indicator.rk.label = "left_indicator";
   left_indicator.setLabelHidden(true);
-  left_indicator.rk.onText = "";
-  left_indicator.rk.offText = "";
   left_indicator.rk.icon = "arrow-left";
   right_indicator.rk.label = "right_indicator";
-  right_indicator.rk.label = "right_indicator";
   right_indicator.setLabelHidden(true);
-  right_indicator.rk.onText = "";
-  right_indicator.rk.offText = "";
   right_indicator.rk.icon = "arrow-right";
   aux_slider.rk.label = "aux_slider";
   aux_slider.setLabelHidden(true);
   aux_slider.rk.centering = RK_SPRING_NONE;
-  horn_button.rk.label = "horn_button";
+  aux_slider.rk.detents = 5;
   horn_button.rk.label = "horn_button";
   horn_button.setLabelHidden(true);
-  horn_button.rk.offText = "";
+  horn_button.rk.onText = "ON";
   horn_button.rk.icon = "bell";
   gear_switch.rk.label = "gear_switch";
   gear_switch.setLabelHidden(true);
-  gear_switch.rk.items[0].label = "D";
-  gear_switch.rk.items[0].pos = 0;
-  gear_switch.rk.items[1].label = "P";
-  gear_switch.rk.items[1].pos = 1;
-  gear_switch.rk.items[2].label = "R";
-  gear_switch.rk.items[2].pos = 2;
+  gear_switch.rk.items[0] = {"D", nullptr, 0};
+  gear_switch.rk.items[1] = {"P", nullptr, 1};
+  gear_switch.rk.items[2] = {"R", nullptr, 2};
   gear_switch.rk.itemCount = 3;
   throttle_slider.setPage(1);
   throttle_slider.rk.label = "throttle_slider";
@@ -131,34 +114,25 @@ static inline void initRadioKit() {
   dir_switch.setPage(1);
   dir_switch.rk.label = "dir_switch";
   dir_switch.setLabelHidden(true);
+  dir_switch.rk.onText = "ON";
+  dir_switch.rk.offText = "OFF";
   loco_light.setPage(1);
   loco_light.rk.label = "loco_light";
   loco_light.setLabelHidden(true);
-  loco_light.rk.items[0].label = "A";
-  loco_light.rk.items[0].pos = 0;
-  loco_light.rk.items[1].label = "B";
-  loco_light.rk.items[1].pos = 1;
-  loco_light.rk.items[2].label = "C";
-  loco_light.rk.items[2].pos = 2;
-  loco_light.rk.items[3].label = "D";
-  loco_light.rk.items[3].pos = 3;
-  loco_light.rk.items[4].label = "E";
-  loco_light.rk.items[4].pos = 4;
-  loco_light.rk.items[5].label = "F";
-  loco_light.rk.items[5].pos = 5;
-  loco_light.rk.items[6].label = "G";
-  loco_light.rk.items[6].pos = 6;
-  loco_light.rk.items[7].label = "H";
-  loco_light.rk.items[7].pos = 7;
-  loco_light.rk.itemCount = 8;
-  bell_button.rk.label = "bell_button";
+  loco_light.rk.items[0] = {"A", nullptr, 0};
+  loco_light.rk.items[1] = {"B", nullptr, 1};
+  loco_light.rk.items[2] = {"C", nullptr, 2};
+  loco_light.rk.itemCount = 3;
   bell_button.setPage(1);
   bell_button.rk.label = "bell_button";
   bell_button.setLabelHidden(true);
-  engine_button.rk.label = "engine_button";
+  bell_button.rk.onText = "ON";
+  bell_button.rk.offText = "OFF";
   engine_button.setPage(1);
   engine_button.rk.label = "engine_button";
   engine_button.setLabelHidden(true);
+  engine_button.rk.onText = "ON";
+  engine_button.rk.offText = "OFF";
   telemetry_Battery.rk.icon = "battery";
   telemetry_Battery.rk.unit = "%";
   telemetry_Battery.rk.content = "--";
@@ -167,6 +141,7 @@ static inline void initRadioKit() {
 
   RadioKit.setNumPages(RK_NUM_PAGES);
   RadioKit.setPageNames(rk_pageNames);
+  RadioKit.setPageOrientations(rk_pageOrientations);
 
   RadioKit.begin();
 
@@ -176,5 +151,5 @@ static inline void initRadioKit() {
   RadioKit.enableFS();
 }
 
-#endif // RC_BRAIN_RADIOKIT_H
+#endif // RADIOKIT_GENERATED_H
 

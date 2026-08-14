@@ -107,6 +107,23 @@ public:
         }
     }
 
+    enum SelftestMode {
+        SELFTEST_OFF = 0,
+        SELFTEST_SINE = 1,
+        SELFTEST_IMPULSE = 2,
+        SELFTEST_SWEEP = 3,
+        SELFTEST_SILENCE = 4
+    };
+
+    static volatile SelftestMode selftestMode;
+    static volatile uint32_t selftestSampleIndex;
+
+    static void setSelftestMode(SelftestMode mode) {
+        selftestMode = mode;
+        selftestSampleIndex = 0;
+        Serial.printf("[AudioOutput] Selftest mode set to %d\n", mode);
+    }
+
     static TaskHandle_t audioTaskHandle;
 
     // Audio output task: generate samples (FPU-safe task context), apply offset
@@ -116,11 +133,35 @@ public:
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
             if (!active || !tx_handle || !engine) continue;
 
+            int64_t t_start = esp_timer_get_time();
+
             // Generate one buffer of samples in task context
-            for (int i = 0; i < BUFFER_SIZE; i++) {
-                int8_t sample = engine->getNextSample();
-                buffer[i] = (int16_t)sample * 256;
+            if (selftestMode != SELFTEST_OFF) {
+                for (int i = 0; i < BUFFER_SIZE; i++) {
+                    uint32_t idx = selftestSampleIndex;
+                    selftestSampleIndex = idx + 1;
+                    float t = (float)idx / (float)SAMPLE_RATE;
+                    int8_t sample = 0;
+                    if (selftestMode == SELFTEST_SINE) {
+                        sample = (int8_t)(sinf(2.0f * M_PI * 440.0f * t) * 100.0f);
+                    } else if (selftestMode == SELFTEST_IMPULSE) {
+                        sample = (idx % 2205 == 0) ? 127 : 0;
+                    } else if (selftestMode == SELFTEST_SWEEP) {
+                        float freq = 100.0f + fmodf(t * 1000.0f, 3900.0f);
+                        sample = (int8_t)(sinf(2.0f * M_PI * freq * t) * 100.0f);
+                    } else if (selftestMode == SELFTEST_SILENCE) {
+                        sample = 0;
+                    }
+                    buffer[i] = (int16_t)sample * 256;
+                }
+            } else {
+                for (int i = 0; i < BUFFER_SIZE; i++) {
+                    int8_t sample = engine->getNextSample();
+                    buffer[i] = (int16_t)sample * 256;
+                }
             }
+
+            int64_t t_gen = esp_timer_get_time();
 
             // Apply volume ramp: scale 0.0→1.0 over ~12ms (276 samples)
             // At 22,050Hz with 64-sample buffers, increment ~30/128 per buffer
@@ -141,6 +182,29 @@ public:
 
             size_t bytes_written;
             i2s_channel_write(tx_handle, buffer, sizeof(buffer), &bytes_written, portMAX_DELAY);
+            int64_t t_i2s = esp_timer_get_time();
+
+#ifdef AUDIO_DEBUG
+            static uint32_t decimate = 0;
+            decimate++;
+            if (decimate >= 100) {
+                decimate = 0;
+                int16_t peak = 0;
+                int64_t sum_sq = 0;
+                int clips = 0;
+                for (int i = 0; i < BUFFER_SIZE; i++) {
+                    int16_t val = buffer[i];
+                    if (abs(val) > peak) peak = abs(val);
+                    sum_sq += (int64_t)val * val;
+                    if (val <= -32768 || val >= 32767) clips++;
+                }
+                uint16_t rms = (uint16_t)sqrtf((float)sum_sq / BUFFER_SIZE);
+                uint32_t gen_us = (uint32_t)(t_gen - t_start);
+                uint32_t i2s_us = (uint32_t)(t_i2s - t_gen);
+                Serial.printf("[AUDIO_STATS] {\"peak\":%d,\"rms\":%d,\"clips\":%d,\"nan\":0,\"task_us\":%u,\"i2s_us\":%u}\n",
+                              peak, rms, clips, gen_us, i2s_us);
+            }
+#endif
         }
     }
 };
@@ -154,3 +218,5 @@ i2s_chan_handle_t AudioOutput::tx_handle = nullptr;
 TaskHandle_t AudioOutput::audioTaskHandle = nullptr;
 volatile uint8_t AudioOutput::currentOffset = 0;
 volatile bool AudioOutput::offsetRamping = false;
+volatile AudioOutput::SelftestMode AudioOutput::selftestMode = AudioOutput::SELFTEST_OFF;
+volatile uint32_t AudioOutput::selftestSampleIndex = 0;

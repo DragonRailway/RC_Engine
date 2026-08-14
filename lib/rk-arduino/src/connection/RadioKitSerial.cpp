@@ -10,24 +10,19 @@
 #include "RadioKitSettings.h"
 #include "RadioKitPrint.h"
 
-// USB CDC connection guard for sendPacket.
+// TinyUSB CDC connection guard for sendPacket.
 // Only active when Serial uses the native USB Serial/JTAG controller (ARDUINO_USB_MODE=1).
 // When MODE=0 (TinyUSB/USB-OTG), TinyUSB handles enumeration automatically
-// and no guard is needed.
+// and the tud_cdc_connected() guard is not compiled in.
 //
 // NOTE: The ESP32-S3 has two USB controllers sharing a single internal PHY:
 //   ARDUINO_USB_MODE=1 → Native USB Serial/JTAG controller (fixed-function HW block)
 //   ARDUINO_USB_MODE=0 → USB-OTG controller (TinyUSB, software-controllable stack)
 //
-// In MODE=1 the Arduino core maps Serial to HWCDCSerial. The correct host-
-// enumeration check is HWCDC::isConnected() (usb_serial_jtag_is_connected), NOT
-// tud_cdc_connected() — that is a TinyUSB API that never initializes in native
-// mode and would silently drop every outbound frame.
-//
 // The keepalive null byte in update() is only needed for MODE=1 (native controller)
 // to prevent the hardware IN endpoint from stalling. TinyUSB handles this properly.
 #if defined(ARDUINO_USB_MODE) && ARDUINO_USB_MODE == 1 && RK_ARCH_DETECTED == RK_ARCH_ESP32
-#include "HWCDC.h"
+#include "tusb.h"
 #endif
 
 RadioKitSerialTransport RadioKitSerialInstance;
@@ -154,11 +149,10 @@ void RadioKitSerialTransport::update() {
 void RadioKitSerialTransport::sendPacket(const uint8_t* buf, uint16_t len) {
     if (!_stream) return;
 #if defined(ARDUINO_USB_MODE) && ARDUINO_USB_MODE == 1 && RK_ARCH_DETECTED == RK_ARCH_ESP32
-    // Native USB Serial/JTAG controller (HWCDC): only write if the host has
-    // finished enumeration. Writing before the host is ready can STALL the
-    // hardware IN endpoint, which Android may never recover from.
-    // HWCDCSerial.isConnected() is the correct native-mode check.
-    if (_stream == &HWCDCSerial && !HWCDCSerial.isConnected()) {
+    // TinyUSB CDC mode: only write if host has finished enumeration.
+    // Writing before the host is ready causes the IN endpoint to STALL,
+    // which Android may never recover from even with clearHalt.
+    if (!tud_cdc_connected()) {
         return;
     }
 #endif

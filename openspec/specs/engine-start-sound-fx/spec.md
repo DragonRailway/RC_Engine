@@ -28,12 +28,27 @@ The system SHALL boot in an engine OFF state and require a dedicated latched Eng
 - **THEN** the reversing light turns on and the engine power state is unaffected
 
 ### Requirement: Physics-Based Jake Brake and Turbo Wastegate
-The system SHALL evaluate engine RPM and throttle deceleration to automatically trigger Jake Brake compression sound and Turbo Wastegate blow-off sound.
+The system SHALL evaluate engine RPM and throttle deceleration to automatically trigger Jake Brake compression sound and Turbo Wastegate blow-off sound, and SHALL increase the engine deceleration rate per the configured `jakebrake_decel_rate` while the Jake brake is engaged.
 
 #### Scenario: Jake Brake auto-trigger
 - **WHEN** throttle drops to zero while engine RPM is above 60% of maximum
 - **THEN** Jake Brake compression sound effect triggers automatically
 
+#### Scenario: Jake brake increases deceleration rate
+- **WHEN** Jake brake is engaged while engine RPM is above the minimum threshold
+- **THEN** the engine deceleration rate increases per the configured `jakebrake_decel_rate` and the Jake Brake voice plays
+
 #### Scenario: Turbo Wastegate auto-trigger
 - **WHEN** throttle drops rapidly from high revs
 - **THEN** Turbo Wastegate blow-off pop sound effect triggers automatically
+
+### Requirement: Engine RPM Inertia Ramp
+The system SHALL simulate virtual flywheel mass by ramping engine RPM over time toward the throttle-commanded target, bounded by the configured acceleration (`acc`), deceleration (`dec`), and flywheel `inertia` parameters, so RPM does not jump instantly.
+
+#### Scenario: Throttle acceleration ramp
+- **WHEN** gas pedal is applied
+- **THEN** current RPM ramps smoothly from idle toward the target RPM bounded by the `acc` parameter and flywheel `inertia`
+
+#### Scenario: Throttle release deceleration
+- **WHEN** gas pedal is released to zero
+- **THEN** current RPM decays smoothly back to idle bounded by the `dec` parameter
