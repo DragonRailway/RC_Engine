@@ -88,6 +88,14 @@ public:
             config.telemetry.vOffset = telObj["voltage_offset"] | telObj["VOLTAGE_OFFSET"] | (float)VOFFSET;
         }
 
+        if (!docObj["animation"].isNull() || !docObj["ANIMATION"].isNull()) {
+            JsonObjectConst animObj = docObj["animation"] | docObj["ANIMATION"];
+            config.animation.easingSpeedDegS = animObj["easing_speed_deg_s"] | animObj["EASING_SPEED_DEG_S"] | 180.0f;
+            config.animation.easingKIn       = animObj["easing_k_in"]       | animObj["EASING_K_IN"]       | 0.2f;
+            config.animation.easingKOut      = animObj["easing_k_out"]      | animObj["EASING_K_OUT"]      | 0.8f;
+            config.animation.fadeDurationMs  = animObj["fade_duration_ms"]  | animObj["FADE_DURATION_MS"]  | 250;
+        }
+
         if (!docObj["battery"].isNull() || !docObj["BATTERY"].isNull()) {
             JsonObjectConst batObj = docObj["battery"] | docObj["BATTERY"];
             config.battery.cellCount = batObj["cell_count"] | batObj["CELL_COUNT"] | batObj["cells"] | 0;

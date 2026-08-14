@@ -180,6 +180,9 @@ void setup() {
 void loop() {
     RadioKit.update();
     VehicleController::update();
+    // Pump the EasyKit animation engines (servo easing, LED fades, blink
+    // patterns) so they advance non-blocking every iteration.
+    HardwareInit::update();
 
     // Watch for config changes saved via the RadioKit filesystem manager
     uint32_t now = millis();

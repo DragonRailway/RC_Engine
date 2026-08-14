@@ -32,6 +32,15 @@ struct HardwareConfig {
         } endpoints;
     } steeringServo;
 
+    // Animation tunables for the EasyKit easing/fade/blink engines. Global
+    // defaults; absent from a hardware config, these values apply as-is.
+    struct Animation {
+        float    easingSpeedDegS = 180.0f; // aux-servo move speed (0 = instant)
+        float    easingKIn       = 0.2f;   // easing strength at move start
+        float    easingKOut      = 0.8f;   // easing strength at move end
+        uint16_t fadeDurationMs  = 250;    // headlight fade transition time
+    } animation;
+
     struct Lights {
         struct Light {
             uint8_t pin = 0;

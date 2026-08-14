@@ -12,6 +12,13 @@ public:
     static void init(const HardwareConfig& hw) {
         Serial.println("[HardwareInit] Initializing peripherals...");
 
+        // Animation tunables (global; per-output tuning is a future extension)
+        s_easingSpeedDegS = hw.animation.easingSpeedDegS;
+        s_easingKIn       = hw.animation.easingKIn;
+        s_easingKOut      = hw.animation.easingKOut;
+        s_fadeDurationMs  = hw.animation.fadeDurationMs;
+        resetBlinkTracking();
+
         s_drivetrainType = hw.drivetrainType;
         if (hw.drivetrainType == HardwareConfig::SKID_STEER) {
             initDriveMotor(hw.leftMotor);
@@ -33,6 +40,14 @@ public:
     }
 
     static void stopAll() {
+        // Fully cancel animation state first so no blink/fade can strand an
+        // output (servo easing is cancelled by detach(), LEDs get stop()).
+        steeringServo.stop();
+        escServo.stop();
+        auxServo1.stop();
+        auxServo2.stop();
+        stopLightAnimations();
+
         // Release all EasyKit hardware so hotReload can re-attach cleanly.
         driveMotor.end();
         steeringServo.detach();
@@ -47,6 +62,22 @@ public:
         reversingLed.end();
         motorAttached = false;
         Serial.println("[HardwareInit] Stopped all outputs");
+    }
+
+    // Advance every EasyKit animation engine. Must be called every main-loop
+    // iteration (from src/main.cpp) so easing moves, fades, and blink patterns
+    // progress non-blocking.
+    static void update() {
+        steeringServo.update();
+        escServo.update();
+        auxServo1.update();
+        auxServo2.update();
+        headLed.update();
+        tailLed.update();
+        brakeLed.update();
+        turnLLed.update();
+        turnRLed.update();
+        reversingLed.update();
     }
 
     static void setSkidMotors(int16_t leftSpeed, int16_t rightSpeed) {
@@ -112,20 +143,84 @@ public:
         if (led) led->write((float)brightnessPct);
     }
 
+    // Edge-triggered blink control: a false->true edge starts the blink engine
+    // (honoring the config interval/duty), a true->false edge stops it and turns
+    // the light off. Repeated calls with an unchanged state are no-ops, so the
+    // caller can drive this every loop iteration. The pin's blink engine owns
+    // its duty while active — no setLight() may target it during a blink.
+    static void setLightBlink(uint8_t pin, bool active, uint16_t onMs, uint16_t offMs, uint8_t dutyPct) {
+        if (pin == 0xFF || pin == 0) return;
+        EasyLED* led = findLight(pin);
+        if (!led) return;
+
+        int8_t slot = blinkSlot(pin);
+        if (slot < 0) return;
+
+        if (active && !s_blinkActive[slot]) {
+            s_blinkActive[slot] = true;
+            led->startBlink(onMs, offMs, (float)dutyPct);
+        } else if (!active && s_blinkActive[slot]) {
+            s_blinkActive[slot] = false;
+            led->stopBlink();
+        }
+    }
+
+    // Fade a light to a target duty percent over durationMs using an ease-in-out
+    // curve (starts from the light's current duty, cancelling any active blink).
+    static void setLightFade(uint8_t pin, uint8_t targetPct, uint16_t durationMs) {
+        if (pin == 0xFF || pin == 0) return;
+        EasyLED* led = findLight(pin);
+        if (!led) return;
+        uint32_t targetTicks = (uint32_t)led->getMaxDuty() * targetPct / 100;
+        led->fadeTo(targetTicks, durationMs, EasyLED::Curve::EASE_IN_OUT);
+    }
+
+    // Live duty read-back (0..100) of a light, for consumers that track another
+    // light's actual brightness (e.g. tail following the headlight's fade).
+    static uint8_t getLightDutyPercent(uint8_t pin) {
+        if (pin == 0xFF || pin == 0) return 0;
+        EasyLED* led = findLight(pin);
+        if (!led) return 0;
+        return (uint8_t)led->getDutyPercent();
+    }
+
+    // Cancel blink/fade/breathing on every attached LED without detaching them
+    // (lights stay usable afterwards). Used by battery-cutoff so a hazard or
+    // turn blink can never strand an LED on.
+    static void stopLightAnimations() {
+        headLed.stop();
+        tailLed.stop();
+        brakeLed.stop();
+        turnLLed.stop();
+        turnRLed.stop();
+        reversingLed.stop();
+        resetBlinkTracking();
+    }
+
     // position: -100 .. +100
     static void setAuxServo1(int16_t position) {
         if (!auxServo1.attached()) return;
         int32_t us = 1500 + (int32_t)position * 500 / 100;
         us = constrain(us, 1000, 2000);
-        auxServo1.writeMicroseconds(us);
+        if (s_easingSpeedDegS > 0.0f) {
+            // Eased µs-space move (EasyServo::write treats value >= 500 as µs)
+            auxServo1.write((float)us, s_easingSpeedDegS, s_easingKIn, s_easingKOut);
+        } else {
+            auxServo1.writeMicroseconds(us);
+        }
     }
 
     static void setAuxServo2(int16_t position) {
         if (!auxServo2.attached()) return;
         int32_t us = 1500 + (int32_t)position * 500 / 100;
         us = constrain(us, 1000, 2000);
-        auxServo2.writeMicroseconds(us);
+        if (s_easingSpeedDegS > 0.0f) {
+            auxServo2.write((float)us, s_easingSpeedDegS, s_easingKIn, s_easingKOut);
+        } else {
+            auxServo2.writeMicroseconds(us);
+        }
     }
+
 
 private:
     static uint8_t s_drivetrainType;
@@ -155,6 +250,18 @@ private:
     static uint16_t servoLeft;
     static uint16_t servoRight;
     static uint16_t servoCenter;
+
+    // Animation tunables captured from config at init (used by the output paths)
+    static float    s_easingSpeedDegS;
+    static float    s_easingKIn;
+    static float    s_easingKOut;
+    static uint16_t s_fadeDurationMs;
+
+    // Blink edge-tracking state (pin -> last commanded active state). A pin is
+    // added on first use with active=false so the first active command is a
+    // rising edge. Capacity 4 covers both turn pins plus headroom.
+    static uint8_t s_blinkPin[4];
+    static bool    s_blinkActive[4];
 
     // EasyKit hardware objects
     static EasyMotor driveMotor;
@@ -200,6 +307,25 @@ private:
         if (pin == turnRPin    && turnRLed.isAttached())    return &turnRLed;
         if (pin == reversingPin && reversingLed.isAttached()) return &reversingLed;
         return nullptr;
+    }
+
+    static void resetBlinkTracking() {
+        for (int i = 0; i < 4; i++) {
+            s_blinkPin[i] = 0xFF;
+            s_blinkActive[i] = false;
+        }
+    }
+
+    static int8_t blinkSlot(uint8_t pin) {
+        for (int i = 0; i < 4; i++) {
+            if (s_blinkPin[i] == pin) return i;
+            if (s_blinkPin[i] == 0xFF) {
+                s_blinkPin[i] = pin;
+                s_blinkActive[i] = false;
+                return i;
+            }
+        }
+        return -1;
     }
 
     static void initDriveMotor(const HardwareConfig::DriveMotor& motor) {
@@ -364,6 +490,14 @@ uint32_t HardwareInit::servoFrequency = 50;
 uint16_t HardwareInit::servoLeft = 1350;
 uint16_t HardwareInit::servoRight = 1650;
 uint16_t HardwareInit::servoCenter = 1500;
+
+float    HardwareInit::s_easingSpeedDegS = 180.0f;
+float    HardwareInit::s_easingKIn = 0.2f;
+float    HardwareInit::s_easingKOut = 0.8f;
+uint16_t HardwareInit::s_fadeDurationMs = 250;
+
+uint8_t  HardwareInit::s_blinkPin[4] = { 0xFF, 0xFF, 0xFF, 0xFF };
+bool     HardwareInit::s_blinkActive[4] = { false, false, false, false };
 
 EasyMotor HardwareInit::driveMotor;
 EasyServo HardwareInit::steeringServo;

@@ -47,9 +47,11 @@ public:
         s_prevThrottlePct = 0;
         s_decelBrakeTime = 0;
         s_headlightMode = 0;
+        s_lastHeadBright = 0;
         s_lastBit0State = false;
         s_autoTurnLeft = false;
         s_autoTurnRight = false;
+        s_cutoffLightResetDone = false;
         s_jakeBrakePrev = false;
         s_indicatorPrev = false;
         s_gearPrev = 1;             // default Park until the radio reports a selection
@@ -142,12 +144,19 @@ public:
         if (s_batteryCutoff) {
             HardwareInit::setMotor(0);
             s_engine->triggerOutOfFuel(true);
-            bool hazardFlash = (millis() / 333) % 2 == 0;
-            // Minimal alarm state: zeroed bits so only the hazard flashes (and out-of-fuel sound) show.
-            applyLightsWithAutomation(0, hazardFlash, hazardFlash, false, false, 0, false);
+            // Once on entering cutoff, cancel every LED animation so a hazard or
+            // turn blink can never strand an LED on; the fade-out below then runs
+            // uninterrupted. Skipped on later iterations to preserve the fade.
+            if (!s_cutoffLightResetDone) {
+                s_cutoffLightResetDone = true;
+                HardwareInit::stopLightAnimations();
+            }
+            // Minimal alarm state: zeroed bits (non-blinking) + out-of-fuel sound.
+            applyLightsWithAutomation(0, false, false, false, false, 0, false);
             updateTelemetry(0, batV);
             return;
         } else {
+            s_cutoffLightResetDone = false;
             s_engine->triggerOutOfFuel(false);
         }
 
@@ -344,12 +353,13 @@ public:
         s_lastBit0State = bit0State;
 
         // ── Apply Lights with Automation ──
-        bool hazardActive = (bits & 0x08); // Bit 3 / Item D triggers manual Hazards
-        bool hazardFlash = hazardActive && ((millis() / 333) % 2 == 0);
-
+        // Hazard (Bit 3 / Item D) drives both indicators; the blink engine
+        // handles the on/off timing from the config interval — no hand-rolled
+        // flash here.
+        bool hazardActive = (bits & 0x08);
         applyLightsWithAutomation(bits,
-                                 hazardActive ? hazardFlash : turnSignalL,
-                                 hazardActive ? hazardFlash : turnSignalR,
+                                 hazardActive || turnSignalL,
+                                 hazardActive || turnSignalR,
                                  decelBrakeActive,
                                  brakePressed,
                                  s_headlightMode,
@@ -393,9 +403,11 @@ private:
     static int16_t  s_prevThrottlePct;
     static uint32_t s_decelBrakeTime;
     static uint8_t  s_headlightMode;
+    static uint8_t  s_lastHeadBright;   // last commanded headlight target (fade-on-change)
     static bool     s_lastBit0State;
     static bool     s_autoTurnLeft;
     static bool     s_autoTurnRight;
+    static bool     s_cutoffLightResetDone;
     static bool     s_jakeBrakePrev;
     static bool     s_indicatorPrev;
     static uint8_t  s_gearPrev;
@@ -413,12 +425,29 @@ private:
         if (headlightMode == 1)      headBright = (uint8_t)(L.headLight.brightness * 0.40f);
         else if (headlightMode == 2 || manualHead) headBright = L.headLight.brightness;
 
-        HardwareInit::setLight(L.headLight.pin,       headBright);
-        HardwareInit::setLight(L.tailLight.pin,       manualTail ? L.tailLight.brightness : (headBright > 0 ? (uint8_t)(L.tailLight.brightness * 0.30f) : 0));
-        HardwareInit::setLight(L.brakeLight.pin,      brakeActive ? L.brakeLight.brightness : 0);
-        HardwareInit::setLight(L.turnLight.leftPin,   turnL ? L.turnLight.brightness : 0);
-        HardwareInit::setLight(L.turnLight.rightPin,  turnR ? L.turnLight.brightness : 0);
-        HardwareInit::setLight(L.reversingLight.pin,  manualRev ? L.reversingLight.brightness : 0);
+        // Headlight steps transition via a fade, triggered only on a target
+        // change so the animation engine ramps (Off -> 40% -> 100%) instead of
+        // snapping. The fade engine owns the duty while running.
+        if (headBright != s_lastHeadBright) {
+            s_lastHeadBright = headBright;
+            HardwareInit::setLightFade(L.headLight.pin, headBright, s_hw->animation.fadeDurationMs);
+        }
+
+        // Tail tracks the headlight's LIVE duty so it follows the fade naturally
+        // (instead of snapping to the final target mid-ramp).
+        uint8_t headLive = HardwareInit::getLightDutyPercent(L.headLight.pin);
+        uint8_t tailBright = manualTail ? L.tailLight.brightness
+                                       : (uint8_t)(headLive * 0.30f);
+
+        HardwareInit::setLight(L.tailLight.pin,      tailBright);
+        HardwareInit::setLight(L.brakeLight.pin,     brakeActive ? L.brakeLight.brightness : 0);
+        HardwareInit::setLight(L.reversingLight.pin, manualRev ? L.reversingLight.brightness : 0);
+
+        // Turn signals / hazards run through the blink engine with the config
+        // interval/duty. The blink engine owns the duty while active — no
+        // static setLight() may target these pins during a blink.
+        HardwareInit::setLightBlink(L.turnLight.leftPin,  turnL, L.turnLight.intervalOn, L.turnLight.intervalOff, L.turnLight.brightness);
+        HardwareInit::setLightBlink(L.turnLight.rightPin, turnR, L.turnLight.intervalOn, L.turnLight.intervalOff, L.turnLight.brightness);
     }
 
     static void updateTelemetry(int16_t motorSpeed, float batV) {
@@ -456,9 +485,11 @@ bool     VehicleController::s_batteryCutoff = false;
 int16_t  VehicleController::s_prevThrottlePct = 0;
 uint32_t VehicleController::s_decelBrakeTime = 0;
 uint8_t  VehicleController::s_headlightMode = 0;
+uint8_t  VehicleController::s_lastHeadBright = 0;
 bool     VehicleController::s_lastBit0State = false;
 bool     VehicleController::s_autoTurnLeft = false;
 bool     VehicleController::s_autoTurnRight = false;
+bool     VehicleController::s_cutoffLightResetDone = false;
 bool     VehicleController::s_jakeBrakePrev = false;
 bool     VehicleController::s_indicatorPrev = false;
 uint8_t  VehicleController::s_gearPrev = 1;
