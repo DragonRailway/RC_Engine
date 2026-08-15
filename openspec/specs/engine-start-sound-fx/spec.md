@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Engine Start & Sound FX Specification
+
+## Purpose
+Defines requirements for engine power state machine, cranking audio, and physics-based sound effects.
+
+## Requirements
 
 ### Requirement: Engine Start and Stop State Machine
 The system SHALL boot in an engine OFF state and require a dedicated latched Engine Power toggle widget (`engine_start`, `RK_ToggleButton`) to start the engine: the engine transitions OFF → STARTING (cranking sound) when the toggle switches ON and RUNNING → OFF when the toggle switches OFF. Throttle input SHALL NOT start the engine; while the engine is OFF or STARTING, motor drive commands are disabled regardless of throttle widget position.

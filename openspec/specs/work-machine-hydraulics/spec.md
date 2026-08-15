@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Work Machine Hydraulics Specification
+
+## Purpose
+Defines requirements for hydraulic flow sounds, load governor RPM bumps, track rattle, and auxiliary actuator controls.
+
+## Requirements
 
 ### Requirement: Hydraulic Flow Sound and Load Governor
 The system SHALL detect auxiliary hydraulic control activity (> 10% magnitude), trigger hydraulic flow sound hiss, and increase engine target RPM by +20% of maximum RPM to simulate hydraulic pump load.
@@ -18,23 +23,23 @@ The system SHALL evaluate vehicle movement speed when track rattle is enabled an
 - **WHEN** vehicle speed is greater than zero and track rattle is enabled
 - **THEN** track pin rattle sound triggers with clank intervals scaling from 500ms at low speed down to 90ms at top speed
 
-### Requirement: Physical Auxiliary Servo Channel Control
-The system SHALL map auxiliary hydraulic control values (provided through the public input surface) to physical ESP32 servo channels via `EasyServo`: Aux Servo 1 on the S2 pin and Aux Servo 2 on the S3 pin. Boards without an S3 pin (TRACKLINK_V3 has only S1/S2) SHALL provide Aux Servo 1 only; Aux Servo 2 requires a board with an S3 pin (MIKRO_V2).
+### Requirement: Config-driven auxiliary outputs
+The system SHALL map auxiliary hydraulic control values (provided through the public input surface) to the configured aux output channel. Aux outputs are declared in the **hardware config** (`aux_motor` / `aux_light`), not hardcoded to pins: the `hardware` token decides the output kind (`DRIVER_*` → H-bridge via `EasyMotor`, `S*` → servo/ESC PPM via `EasyServo`, `L*` → LED via `EasyLED`), and `aux_motor.type` selects the control profile (mixer: proportional incl. direction; tipper: momentary). The former hardcoded S2/S3 auto-attach is removed — an undeclared aux config initializes no channel.
 
-#### Scenario: Auxiliary servo positioning
-- **WHEN** auxiliary hydraulic control values change
-- **THEN** available physical servo channels adjust pulse width proportionally between 1000us and 2000us
+#### Scenario: Auxiliary positioning on a configured channel
+- **WHEN** auxiliary hydraulic control values change on a config with `aux_motor` declared
+- **THEN** the configured aux motor channel adjusts output proportionally (PPM pulse width for `S*`, H-bridge duty for `DRIVER_*`)
 
-#### Scenario: Aux Servo 2 on a board without S3
-- **WHEN** the active board has no S3 pin (TRACKLINK_V3)
-- **THEN** Aux Servo 2 remains uninitialized and Aux Servo 1 continues to operate
+#### Scenario: Board without aux config
+- **WHEN** the active board's hardware config declares no `aux_motor` / `aux_light`
+- **THEN** no aux output channel is initialized and no pin is driven
 
 ### Requirement: Auxiliary hydraulic input surface
 The firmware SHALL expose the work-machine hydraulic channel values, dump bed toggle, and bucket rattle trigger as writable public fields so external UI wiring (RadioKit widget bindings) can drive work-machine behavior without firmware-side input mapping. The UI bindings themselves are out of scope for the firmware.
 
 #### Scenario: UI writes a hydraulic value
 - **WHEN** external UI wiring writes a hydraulic channel value with magnitude above 10%
-- **THEN** the control loop applies the corresponding servo output, activates hydraulic flow sound, and applies the engine load governor
+- **THEN** the control loop applies the corresponding aux output, activates hydraulic flow sound, and applies the engine load governor
 
 #### Scenario: UI triggers dump bed
 - **WHEN** external UI wiring sets the dump bed toggle

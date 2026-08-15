@@ -1,4 +1,4 @@
-/explo{
+{
     "sound": {
         "volume": 80
     },
@@ -22,6 +22,20 @@
             }
         }
     },
+    "aux_motor": {
+        "hardware": "DRIVER_B",
+        "frequency": 20000,
+        "direction": "forward",
+        "duty": {
+            "min": 20,
+            "max": 90
+        },
+        "type": "mixer"
+    },
+    "aux_light": {
+        "hardware": "L6",
+        "brightness_max": 60
+    },
     "lights": {
         "head_light": {
             "hardware": "L1",
@@ -32,12 +46,23 @@
             "brightness_max": 60
         },
         "reversing_light": {
-            "hardware": "L3"
+            "hardware": "brake_light"
         },
         "brake_light": {
-            "hardware": "reversing_light"
+            "hardware": "L3"
+        },
+        "ditch_light": {
+            "left": {
+                "hardware": "L7"
+            },
+            "right": {
+                "hardware": "L8"
+            },
+            "brightness_max": 100,
+            "interval_ms": 500
         },
         "turn_light": {
+
             "left": {
                 "hardware": "L4"
             },
@@ -58,9 +83,21 @@
     },
     "battery": {
         "cell_count": 1,
-        "cutoff_voltage": 3.4,
+        "warning_voltage": 3.5,
+        "cutoff_voltage": 3.3,
         "full_voltage": 4.2,
         "voltage_scale": 1.8,
         "voltage_offset": -0.2
+    },
+    "power": {
+        "boot_latch_s": 1,
+        "button_hold_s": 4,
+        "disconnect_timeout_s": 60,
+        "warning_window_s": 10,
+        "cutoff_delay_s": 2
+    },
+    "charging": {
+        "hardware": "head_light",
+        "mode": "solid"
     }
 }

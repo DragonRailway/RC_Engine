@@ -38,6 +38,24 @@ static bool     pendingReload = false;
 static uint32_t pendingHwT = 0;
 static uint32_t pendingVcT = 0;
 
+// Aux slider control profile from aux_motor.type. mixer: 5 detents, no
+// self-centering (the user sets a speed/direction that keeps running); tipper:
+// no detents, self-centering (momentary — follows the finger). trailer_dcc
+// leaves the default (no aux channel), matching the deferred state.
+// Must run after config load and before the app connects (RadioKit sends the
+// widget config on connect).
+static void applyAuxSliderProfile() {
+    if (hwConfig.auxMotor.purpose == HardwareConfig::AuxMotor::MIXER) {
+        aux_slider.rk.centering = RK_SPRING_NONE;
+        aux_slider.rk.detents = 5;
+    } else if (hwConfig.auxMotor.purpose == HardwareConfig::AuxMotor::TIPPER) {
+        aux_slider.rk.centering = RK_SPRING_CENTER;
+        aux_slider.rk.detents = 0;
+    }
+    // trailer_dcc / no aux_motor: leave the generated defaults (mixer-shaped);
+    // the channel itself is unconfigured with a parser warning.
+}
+
 static uint32_t fileWriteTime(const char* path) {
     File f = LittleFS.open(path, "r");
     if (!f) return 0;
@@ -69,6 +87,7 @@ static bool reloadConfigs() {
 
     HardwareInit::hotReload(hwConfig);
     engine.setConfig(profile.config);
+    applyAuxSliderProfile();
 
     if (nameChanged) {
         ConfigParser::loadSounds(profile.config, profile.sounds);
@@ -106,6 +125,8 @@ void printConfig(const HardwareConfig& hw, const RcEngineSound::Config& vc) {
 }
 
 void setup() {
+    HardwareInit::latchPower();
+
     // HWCDC RX buffer defaults to 256 bytes — too small for a single
     // RadioKit FS-upload frame (~KB scale), which caused dropped/corrupted
     // chunks. Enlarge before begin() so serial protocol frames arrive intact.
@@ -151,6 +172,7 @@ void setup() {
 
     Serial.println("\n── Starting RadioKit (BLE) ──");
     initRadioKit();
+    applyAuxSliderProfile();
 
     // ── Vehicle-type-driven app surface ──
     // RadioKit.config.type is informational (sent to the app on connect); the
@@ -182,7 +204,7 @@ void loop() {
     VehicleController::update();
     // Pump the EasyKit animation engines (servo easing, LED fades, blink
     // patterns) so they advance non-blocking every iteration.
-    HardwareInit::update();
+    HardwareInit::update(hwConfig.power.buttonHoldS, hwConfig.power.indicatorPin);
 
     // Watch for config changes saved via the RadioKit filesystem manager
     uint32_t now = millis();

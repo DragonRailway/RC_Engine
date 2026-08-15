@@ -1,7 +1,8 @@
-# EasyKit LED Group
+# easykit-led-group Specification
 
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change easykit-led-group. Update Purpose after archive.
+## Requirements
 ### Requirement: Coordinated multi-LED patterns via a step-sequencer group
 
 The EasyKit library SHALL provide an `EasyLEDGroup` class that owns multiple
@@ -68,3 +69,4 @@ The existing per-LED blink modes (SIMPLE, BURST, HEARTBEAT, CANDLE, MORSE) and t
 - **WHEN** a turn-signal blink runs on `turnLLed`/`turnRLed` while a group
   pattern runs on the ditch LEDs
 - **THEN** both operate independently and correctly
+

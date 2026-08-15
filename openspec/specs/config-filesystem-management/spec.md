@@ -1,6 +1,10 @@
-# Config Filesystem Management
+# Config Filesystem Management Specification
 
-## ADDED Requirements
+## Purpose
+Defines requirements for LittleFS configuration parsing, lower snake_case JSON keys, and config validation.
+
+## Requirements
+
 
 ### Requirement: Lower snake_case JSON schema
 The firmware SHALL parse hardware configuration (board-specific: `/hardware-MIKRO_V2.json` or `/hardware-TRACKLINK_V3.json`, selected at compile time by the board define) and vehicle configuration (`/vehicle-config.json`) using `lower_snake_case` JSON keys. The hardware schema SHALL additionally accept an optional `"animation"` block (easing speed/strength, fade duration) whose absence falls back to firmware defaults.

@@ -25,7 +25,6 @@ class VehicleController {
 public:
     // Modular control variables for Work Machine Hydraulics & Actuators
     static int16_t aux_hydraulic1;
-    static int16_t aux_hydraulic2;
     static bool    bucket_rattle_trigger;
     static bool    dump_bed_toggle;
 
@@ -57,18 +56,17 @@ public:
         s_gearPrev = 1;             // default Park until the radio reports a selection
         s_parkingBrakePrev = false;
         aux_hydraulic1 = 0;
-        aux_hydraulic2 = 0;
         bucket_rattle_trigger = false;
         dump_bed_toggle = false;
 
         strcpy(s_battBuf, "--");
         strcpy(s_speedBuf, "--");
 
-        // Safe startup: center steering, stop motor, center aux servos
+        // Safe startup: center steering, stop motor, zero aux outputs
         HardwareInit::setServo(0);
         HardwareInit::setMotor(0);
-        HardwareInit::setAuxServo1(0);
-        HardwareInit::setAuxServo2(0);
+        HardwareInit::setAuxMotor(0);
+        HardwareInit::setAuxLight(0);
 
         // ── Battery Cell Count: config-driven, voltage auto-detect as fallback ──
         // Board hardware config is authoritative (cell_count: 1..4). Only when the
@@ -76,7 +74,8 @@ public:
         // detection so the cutoff still engages for unknown packs.
         float sumV = 0;
         for (int i = 0; i < 10; ++i) {
-            float pinV = analogReadMilliVolts(POWER::VOLTAGE) / 1000.0f;
+            float pinV = analogReadMilliVolts(POWER::VOLTAGE_SENS) / 1000.0f;
+
             sumV += pinV * s_hw->battery.vScale + s_hw->battery.vOffset;
             delay(5);
         }
@@ -97,11 +96,16 @@ public:
                           s_cellCount, bootV);
         }
 
+        s_warningVoltage = s_cellCount * s_hw->battery.warningVoltage;
         s_cutoffVoltage = s_cellCount * s_hw->battery.cutoffVoltage;
         s_lowVoltageStart = 0;
+        s_batteryWarning = false;
         s_batteryCutoff = false;
+        s_disconnectStart = millis();
+        s_inWarningPhase = false;
 
-        Serial.printf("[VehicleController] Battery cutoff: %.2fV (%.2fV/cell)\n",
+        Serial.printf("[VehicleController] Battery warning: %.2fV (%.2fV/cell), cutoff: %.2fV (%.2fV/cell)\n",
+                      s_warningVoltage, s_hw->battery.warningVoltage,
                       s_cutoffVoltage, s_hw->battery.cutoffVoltage);
 
         // ── Vehicle type boot visibility ──
@@ -117,8 +121,65 @@ public:
         }
     }
 
+    static bool isBatteryWarning() { return s_batteryWarning; }
+    static bool isBatteryCutoff() { return s_batteryCutoff; }
+    static bool isDisconnectWarning() { return s_inWarningPhase; }
+    static bool isChargingState() { return HardwareInit::isCharging(); }
+
     static void update() {
         if (!s_hw || !s_engine || !s_profile) return;
+
+        // ── Power Button Click Handler ──
+        if (HardwareInit::consumeButtonClicked()) {
+            s_disconnectStart = millis();
+            s_inWarningPhase = false;
+        }
+
+        // ── 3-State Board Power & Disconnect Auto Power-Off ──
+        bool isCharging = HardwareInit::isCharging();
+        if (isCharging) {
+            s_disconnectStart = 0;
+            s_inWarningPhase = false;
+            HardwareInit::setAllMotors(0);
+
+            // Drive charging indicator (configured pin or headlight fallback)
+            uint8_t chgPin = s_hw->charging.configured ? s_hw->charging.pin : s_hw->lights.headLight.pin;
+            if (chgPin != 0xFF) {
+                if (s_hw->charging.mode == 1) {
+                    HardwareInit::setLightBlink(chgPin, true, 500, 500, 100);
+                } else if (s_hw->charging.mode == 2) {
+                    uint8_t pulseDuty = (uint8_t)(50.0f + 50.0f * sinf(millis() * 0.005f));
+                    HardwareInit::setLight(chgPin, pulseDuty);
+                } else {
+                    HardwareInit::setLight(chgPin, 100);
+                }
+            }
+        } else if (RadioKit.isConnected()) {
+            s_disconnectStart = 0;
+            s_inWarningPhase = false;
+        } else {
+            // Disconnected state
+            uint32_t timeoutMs = (uint32_t)s_hw->power.disconnectTimeoutS * 1000U;
+            uint32_t warningMs = (uint32_t)s_hw->power.warningWindowS * 1000U;
+            if (timeoutMs > 0) {
+                if (s_disconnectStart == 0) {
+                    s_disconnectStart = millis();
+                }
+                uint32_t elapsed = millis() - s_disconnectStart;
+                if (elapsed >= timeoutMs) {
+                    Serial.println("[VehicleController] Disconnect timeout reached -> powerOff()");
+                    HardwareInit::powerOff();
+                    return;
+                } else if (warningMs > 0 && elapsed >= (timeoutMs - warningMs)) {
+                    s_inWarningPhase = true;
+                    if (s_hw->power.indicatorPin != 0xFF) {
+                        HardwareInit::setLightBlink(s_hw->power.indicatorPin, true, 500, 500, 100);
+                    }
+                } else {
+                    s_inWarningPhase = false;
+                }
+            }
+        }
 
         // Vehicle type from vehicle-config.json is the single source of truth:
         // TRUCK and LOCOMOTIVE widget sets are mutually exclusive, never active together.
@@ -128,12 +189,20 @@ public:
         const bool isLoco = (vtype == RcEngineSound::VEHICLE_LOCOMOTIVE);
 
         // ── Battery Protection & Low Voltage Cutoff ──
-        float pinV = analogReadMilliVolts(POWER::VOLTAGE) / 1000.0f;
+        float pinV = analogReadMilliVolts(POWER::VOLTAGE_SENS) / 1000.0f;
+
         float batV = pinV * s_hw->battery.vScale + s_hw->battery.vOffset;
 
+        if (batV < s_warningVoltage) {
+            s_batteryWarning = true;
+        } else if (batV > (s_warningVoltage + 0.2f * s_cellCount)) {
+            s_batteryWarning = false;
+        }
+
+        uint32_t cutoffDelayMs = (uint32_t)(s_hw->power.cutoffDelayS * 1000.0f);
         if (batV < s_cutoffVoltage) {
             if (s_lowVoltageStart == 0) s_lowVoltageStart = millis();
-            else if (millis() - s_lowVoltageStart >= 1500) {
+            else if (millis() - s_lowVoltageStart >= cutoffDelayMs) {
                 s_batteryCutoff = true;
             }
         } else if (batV > (s_cutoffVoltage + 0.2f * s_cellCount)) {
@@ -142,7 +211,7 @@ public:
         }
 
         if (s_batteryCutoff) {
-            HardwareInit::setMotor(0);
+            HardwareInit::setAllMotors(0);
             s_engine->triggerOutOfFuel(true);
             // Once on entering cutoff, cancel every LED animation so a hazard or
             // turn blink can never strand an LED on; the fade-out below then runs
@@ -154,6 +223,7 @@ public:
             // Minimal alarm state: zeroed bits (non-blinking) + out-of-fuel sound.
             applyLightsWithAutomation(0, false, false, false, false, 0, false);
             updateTelemetry(0, batV);
+            HardwareInit::powerOff();
             return;
         } else {
             s_cutoffLightResetDone = false;
@@ -175,11 +245,11 @@ public:
             if (engineStartToggle) {  // Strict per spec: the Engine Power toggle is the sole start trigger
                 s_engine->startEngine();
             }
-            HardwareInit::setMotor(0);
+            HardwareInit::setAllMotors(0);
             throttlePct = 0;
         } else if (eState == RcEngineSound::STARTING) {
             if (!engineStartToggle) s_engine->stopEngine();  // toggled OFF mid-crank cancels the start
-            HardwareInit::setMotor(0);
+            HardwareInit::setAllMotors(0);
             throttlePct = 0;
         } else if (eState == RcEngineSound::RUNNING && !engineStartToggle) {
             s_engine->stopEngine();
@@ -252,15 +322,24 @@ public:
             }
         }
 
-        // ── Work Machine Physical Servos ──
-        // Truck page aux_slider drives the tipper/cement-mixer channel (Aux Servo 1 +
-        // hydraulic flow sound + load governor); Loco page has no aux control.
+        // ── Work Machine Aux Outputs ──
+        // Truck page aux_slider drives the configured aux motor channel (mixer:
+        // proportional incl. direction; tipper: momentary since the slider is
+        // self-centering) + hydraulic flow sound + load governor. Loco page has
+        // no aux control. trailer_dcc configs never get here: the parser leaves
+        // the channel unconfigured, so setAuxMotor() is a no-op.
         aux_hydraulic1 = isLoco ? 0 : aux_slider.rk.value;
-        HardwareInit::setAuxServo1(aux_hydraulic1);
-        HardwareInit::setAuxServo2(aux_hydraulic2);
+        HardwareInit::setAuxMotor(aux_hydraulic1);
+
+        // Aux light (work lamp) follows aux activity: on while the aux channel is
+        // active (slider or dump bed), off when idle.
+        bool auxActive = (abs(aux_hydraulic1) > 10 || dump_bed_toggle);
+        if (s_hw->auxLight.configured) {
+            HardwareInit::setAuxLight(auxActive ? s_hw->auxLight.brightness : 0);
+        }
 
         // ── Work Machine Sound FX & Engine Pump Load Governor ──
-        bool hydraulicFlowActive = (abs(aux_hydraulic1) > 10 || abs(aux_hydraulic2) > 10 || dump_bed_toggle);
+        bool hydraulicFlowActive = auxActive;
         s_engine->triggerHydraulicFlow(hydraulicFlowActive);
 
         if (dump_bed_toggle) {
@@ -356,7 +435,7 @@ public:
         // Hazard (Bit 3 / Item D) drives both indicators; the blink engine
         // handles the on/off timing from the config interval — no hand-rolled
         // flash here.
-        bool hazardActive = (bits & 0x08);
+        bool hazardActive = (bits & 0x08) || s_inWarningPhase;
         applyLightsWithAutomation(bits,
                                  hazardActive || turnSignalL,
                                  hazardActive || turnSignalR,
@@ -390,16 +469,19 @@ private:
     static bool     s_bellPrev;
     static bool     s_reversePrev;
     static uint32_t s_lastTelemetry;
-    static uint32_t s_ditchLastToggle;  // millis() of last ditch alternation flip
-    static bool     s_ditchSide;        // which ditch side is currently lit
     static char     s_battBuf[8];
+
     static char     s_speedBuf[8];
 
     // Battery safety
     static uint8_t  s_cellCount;
+    static float    s_warningVoltage;
     static float    s_cutoffVoltage;
     static uint32_t s_lowVoltageStart;
+    static bool     s_batteryWarning;
     static bool     s_batteryCutoff;
+    static uint32_t s_disconnectStart;
+    static bool     s_inWarningPhase;
 
     // Lighting automation
     static int16_t  s_prevThrottlePct;
@@ -448,26 +530,12 @@ private:
         // Aux lights (ditch/step/cab): loco light selector items F/G/H (bits
         // 5/6/7). Only the loco page's 8-item selector can set these bits, so
         // truck configs never light them from the app.
-        // Ditch lights alternate: each side on for intervalMs, counter-phased
-        // (left on while right off, and vice versa). Driven manually from the
-        // loop — the blink engine has no phase offset for two LEDs.
+        // Ditch lights run the EasyLEDGroup alternate pattern.
         bool ditchOn = (bits & 0x20);
-        if (ditchOn) {
-            const uint32_t interval = L.ditchLight.intervalMs;
-            if (millis() - s_ditchLastToggle >= interval) {
-                s_ditchLastToggle = millis();
-                s_ditchSide = !s_ditchSide;
-            }
-            HardwareInit::setLight(L.ditchLight.leftPin,  s_ditchSide ? L.ditchLight.brightness : 0);
-            HardwareInit::setLight(L.ditchLight.rightPin, s_ditchSide ? 0 : L.ditchLight.brightness);
-        } else {
-            s_ditchLastToggle = 0;
-            s_ditchSide = false;
-            HardwareInit::setLight(L.ditchLight.leftPin, 0);
-            HardwareInit::setLight(L.ditchLight.rightPin, 0);
-        }
+        HardwareInit::setDitchLights(ditchOn, L.ditchLight.intervalMs);
         HardwareInit::setLight(L.stepLight.pin,  (bits & 0x40) ? L.stepLight.brightness  : 0);
         HardwareInit::setLight(L.cabLight.pin,   (bits & 0x80) ? L.cabLight.brightness   : 0);
+
 
         // Turn signals / hazards run through the blink engine with the config
         // interval/duty. The blink engine owns the duty while active — no
@@ -500,15 +568,18 @@ bool     VehicleController::s_hornPrev = false;
 bool     VehicleController::s_bellPrev = false;
 bool     VehicleController::s_reversePrev = false;
 uint32_t VehicleController::s_lastTelemetry = 0;
-uint32_t VehicleController::s_ditchLastToggle = 0;
-bool     VehicleController::s_ditchSide = false;
 char     VehicleController::s_battBuf[8] = "--";
+
 char     VehicleController::s_speedBuf[8] = "--";
 
 uint8_t  VehicleController::s_cellCount = 2;
+float    VehicleController::s_warningVoltage = 7.0f;
 float    VehicleController::s_cutoffVoltage = 6.6f;
 uint32_t VehicleController::s_lowVoltageStart = 0;
+bool     VehicleController::s_batteryWarning = false;
 bool     VehicleController::s_batteryCutoff = false;
+uint32_t VehicleController::s_disconnectStart = 0;
+bool     VehicleController::s_inWarningPhase = false;
 
 int16_t  VehicleController::s_prevThrottlePct = 0;
 uint32_t VehicleController::s_decelBrakeTime = 0;
@@ -524,6 +595,5 @@ uint8_t  VehicleController::s_gearPrev = 1;
 bool     VehicleController::s_parkingBrakePrev = false;
 
 int16_t  VehicleController::aux_hydraulic1 = 0;
-int16_t  VehicleController::aux_hydraulic2 = 0;
 bool     VehicleController::bucket_rattle_trigger = false;
 bool     VehicleController::dump_bed_toggle = false;

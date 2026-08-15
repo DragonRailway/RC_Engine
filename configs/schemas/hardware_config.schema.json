@@ -5,6 +5,7 @@
   "description": "Schema for configs/hardware_configs/hardware-<BOARD>.json. Mirrors what common/ConfigParser.h reads, including documented quirks: turn_light.type is accepted-but-ignored, brake/reversing brightness_max is accepted-but-ignored (firmware forces 100%), and reversing_light.hardware accepts a pin token or a light alias. Motor type is derived from the hardware token, so drive_motor/left_motor/right_motor have no 'type' key.",
   "type": "object",
   "additionalProperties": false,
+  "required": ["drivetrain"],
   "properties": {
     "sound": {
       "type": "object",
@@ -17,6 +18,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "type": { "type": "string", "enum": ["ackermann", "skid_steer"] },
         "drive_motor": { "$ref": "#/definitions/motor" },
         "left_motor": { "$ref": "#/definitions/motor" },
         "right_motor": { "$ref": "#/definitions/motor" },
@@ -25,6 +27,8 @@
       }
     },
     "steering_servo": { "$ref": "#/definitions/steering_servo" },
+    "aux_motor": { "$ref": "#/definitions/aux_motor" },
+    "aux_light": { "$ref": "#/definitions/light" },
     "lights": {
       "type": "object",
       "additionalProperties": false,
@@ -90,12 +94,44 @@
       "additionalProperties": false,
       "properties": {
         "cell_count": { "type": "integer", "minimum": 0, "maximum": 4, "default": 0 },
-        "cutoff_voltage": { "type": "number", "default": 3.3 },
+        "warning_voltage": { "type": "number", "minimum": 3.0, "maximum": 4.0, "default": 3.5 },
+        "cutoff_voltage": { "type": "number", "minimum": 3.0, "maximum": 3.8, "default": 3.3 },
         "full_voltage": { "type": "number", "default": 4.2 },
         "voltage_scale": { "type": "number", "default": 1.8 },
         "voltage_offset": { "type": "number", "default": -0.2 }
       }
+    },
+    "power": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hardware": {
+          "oneOf": [
+            { "$ref": "#/definitions/pin_name" },
+            { "enum": ["head_light", "tail_light", "brake_light", "cab_light", "step_light", "aux_light", "turn_light"] }
+          ]
+        },
+        "boot_latch_s": { "type": "integer", "minimum": 0, "maximum": 30, "default": 1 },
+        "button_hold_s": { "type": "integer", "minimum": 1, "maximum": 30, "default": 4 },
+        "disconnect_timeout_s": { "type": "integer", "minimum": 0, "maximum": 3600, "default": 60 },
+        "warning_window_s": { "type": "integer", "minimum": 1, "maximum": 60, "default": 10 },
+        "cutoff_delay_s": { "type": "integer", "minimum": 0, "maximum": 60, "default": 1 }
+      }
+    },
+    "charging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hardware": {
+          "oneOf": [
+            { "$ref": "#/definitions/pin_name" },
+            { "enum": ["head_light", "tail_light", "brake_light", "cab_light", "step_light", "aux_light", "turn_light"] }
+          ]
+        },
+        "mode": { "type": "string", "enum": ["solid", "blink", "pulse"], "default": "solid" }
+      }
     }
+
   },
   "definitions": {
     "pin_name": {
@@ -149,6 +185,24 @@
             "center": { "type": "integer", "minimum": 500, "maximum": 2500, "default": 1500 }
           }
         }
+      }
+    },
+    "aux_motor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hardware": { "$ref": "#/definitions/pin_name" },
+        "frequency": { "type": "integer", "minimum": 1, "maximum": 100000, "default": 20000 },
+        "direction": { "type": "string", "enum": ["forward", "reverse", "uni_forward", "uni_reverse"], "default": "forward" },
+        "duty": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min": { "type": "integer", "minimum": 0, "maximum": 100, "default": 20 },
+            "max": { "type": "integer", "minimum": 0, "maximum": 100, "default": 90 }
+          }
+        },
+        "type": { "type": "string", "enum": ["mixer", "tipper", "trailer_dcc"], "default": "mixer" }
       }
     }
   }

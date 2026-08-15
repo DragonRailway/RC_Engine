@@ -15,6 +15,33 @@
 #define BIN 2
 #define OCT 8
 
+#ifndef HIGH
+#define HIGH 0x1
+#endif
+#ifndef LOW
+#define LOW 0x0
+#endif
+#ifndef INPUT
+#define INPUT 0x0
+#endif
+#ifndef OUTPUT
+#define OUTPUT 0x1
+#endif
+
+extern uint8_t host_gpio_pin_mode[128];
+extern uint8_t host_gpio_pin_val[128];
+
+inline void pinMode(uint8_t pin, uint8_t mode) {
+    if (pin < 128) host_gpio_pin_mode[pin] = mode;
+}
+inline void digitalWrite(uint8_t pin, uint8_t val) {
+    if (pin < 128) host_gpio_pin_val[pin] = val;
+}
+inline int digitalRead(uint8_t pin) {
+    if (pin < 128) return host_gpio_pin_val[pin];
+    return LOW;
+}
+
 using String = std::string;
 
 inline char* itoa(int value, char* str, int base) {
@@ -45,6 +72,8 @@ inline char* dtostrf(double val, signed char width, unsigned char prec, char* so
 }
 
 extern uint32_t host_virtual_millis;
+extern uint32_t host_analog_read_mv;
+extern bool     host_radiokit_connected;
 
 inline uint32_t millis() { return host_virtual_millis; }
 inline void delay(uint32_t ms) { host_virtual_millis += ms; }
@@ -52,7 +81,7 @@ inline uint32_t micros() { return host_virtual_millis * 1000; }
 inline int64_t esp_timer_get_time() { return (int64_t)host_virtual_millis * 1000; }
 
 inline uint32_t analogReadMilliVolts(int pin) {
-    return 3960; // Default ~3.96V (safe battery)
+    return host_analog_read_mv; // Default ~3.96V (safe battery)
 }
 
 // Math helpers

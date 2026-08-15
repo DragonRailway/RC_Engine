@@ -22,6 +22,7 @@ Usage:
   scripts/build_fs.py --board MIKRO_V2 --vehicle ScaniaV8            # build + flash
   scripts/build_fs.py --board MIKRO_V2 --vehicle ScaniaV8 --dry-run  # size report only
   scripts/build_fs.py --board MIKRO_V2 --vehicle ScaniaV8 --no-flash # build image only
+  scripts/build_fs.py --board MIKRO_V2 --vehicle ScaniaV8 --hardware skid  # skid-steer hw config
 """
 import argparse
 import configparser
@@ -177,10 +178,29 @@ def board_chip(board, pio_ini):
     return "esp32"
 
 
-def assemble(board, vehicle, pio_home, fs_size, dry_run=False, no_flash=False, port=None):
+def assemble(board, vehicle, pio_home, fs_size, dry_run=False, no_flash=False,
+             port=None, hardware=None):
+    # The repo names hardware configs descriptively (hardware-MIKRO_V2-truck.json,
+    # hardware-TRACKLINK_V3-locomotive.json), while the firmware always loads
+    # /hardware-<BOARD>.json. An explicit variant (--hardware skid →
+    # hardware-MIKRO_V2-skid.json) wins; otherwise accept either the bare name
+    # or a unique hardware-<BOARD>-*.json match, and stage it under the
+    # firmware's name.
     hw_src = HW_DIR / f"hardware-{board}.json"
+    if hardware:
+        hw_src = HW_DIR / f"hardware-{board}-{hardware}.json"
+        if not hw_src.is_file():
+            die(f"hardware config variant not found: {hw_src.relative_to(HW_DIR)}")
+    elif not hw_src.is_file():
+        matches = sorted(HW_DIR.glob(f"hardware-{board}-*.json"))
+        if len(matches) == 1:
+            hw_src = matches[0]
+        elif len(matches) > 1:
+            die(f"multiple hardware configs match board '{board}': "
+                + ", ".join(m.relative_to(HW_DIR).name for m in matches))
     if not hw_src.is_file():
-        die(f"hardware config not found: {hw_src.relative_to(REPO)}")
+        die(f"hardware config not found: {HW_DIR / f'hardware-{board}.json'} "
+            f"(looked for hardware-{board}.json / hardware-{board}-*.json)")
     validate_hardware_config(hw_src)
     bundle = VEHICLE_DIR / vehicle
     vc_src = bundle / "vehicle.json"
@@ -202,8 +222,9 @@ def assemble(board, vehicle, pio_home, fs_size, dry_run=False, no_flash=False, p
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
 
-    # /hardware-<BOARD>.json
-    shutil.copy2(hw_src, staging / hw_src.name)
+    # /hardware-<BOARD>.json (always the bare board name — the firmware's
+    # HW_CONFIG_PATH is /hardware-<BOARD>.json regardless of the repo suffix).
+    shutil.copy2(hw_src, staging / f"hardware-{board}.json")
     # /vehicle-config.json
     shutil.copy2(vc_src, staging / "vehicle-config.json")
     # /sounds/vehicles/<V>/<slot>.json
@@ -276,6 +297,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="print size report only")
     ap.add_argument("--no-flash", action="store_true", help="build image, don't flash")
     ap.add_argument("--port", default=None, help="serial port (default $UPLOAD_PORT or /dev/ttyACM0)")
+    ap.add_argument("--hardware", default=None,
+                    help="hardware config variant, e.g. skid (selects hardware-<BOARD>-<variant>.json)")
     args = ap.parse_args()
 
     if not PARTITIONS_CSV.is_file():
@@ -283,7 +306,8 @@ def main():
     offset, fs_size = parse_partition(PARTITIONS_CSV, SPIFFS_TYPE)
     pio_home = find_pio_home()
     assemble(args.board, args.vehicle, pio_home, fs_size,
-             dry_run=args.dry_run, no_flash=args.no_flash, port=args.port)
+             dry_run=args.dry_run, no_flash=args.no_flash, port=args.port,
+             hardware=args.hardware)
 
 
 if __name__ == "__main__":

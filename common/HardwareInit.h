@@ -6,8 +6,29 @@
 #include <EasyMotor.h>
 #include <EasyServo.h>
 #include <EasyLED.h>
+#include <EasyLEDGroup.h>
+
 
 class HardwareInit {
+
+    // A motor output channel: one configurable H-bridge or ESC/servo output
+    // with the polarity/duty state captured from its config. s_leftCh is the
+    // drive motor (Ackermann) or left track (skid-steer); s_rightCh is the
+    // skid-steer right track only (NONE otherwise). The driver/esc pointers
+    // select the physical EasyKit output: driveMotor/escServo for the
+    // drive/left side, auxMotor/auxServo for the skid right side (the aux
+    // work-machine channel is excluded in skid mode).
+    struct MotorChannel {
+        uint8_t    type = HardwareConfig::DriveMotor::NONE;   // DRIVER | ESC
+        uint8_t    direction = HardwareConfig::DriveMotor::FORWARD;
+        uint8_t    dutyMin = 20;
+        uint8_t    dutyMax = 90;
+        uint32_t   frequency = 20000;
+        bool       attached = false;
+        EasyMotor* driver = nullptr;   // used when type == DRIVER
+        EasyServo* esc = nullptr;      // used when type == ESC
+    };
+
 public:
     static void init(const HardwareConfig& hw) {
         Serial.println("[HardwareInit] Initializing peripherals...");
@@ -19,16 +40,22 @@ public:
         s_fadeDurationMs  = hw.animation.fadeDurationMs;
         resetBlinkTracking();
 
+        // Motor channels are rebuilt from scratch on every init (hotReload
+        // calls stopAll() then init()), so reset both before wiring.
+        s_leftCh = MotorChannel();
+        s_rightCh = MotorChannel();
         s_drivetrainType = hw.drivetrainType;
         if (hw.drivetrainType == HardwareConfig::SKID_STEER) {
-            initDriveMotor(hw.leftMotor);
-            initDriveMotor(hw.rightMotor);
+            // Left track on the drive output, right track on the aux output
+            // (the aux work-machine channel is excluded in skid mode).
+            initChannel(s_leftCh, hw.leftMotor, &driveMotor, &escServo);
+            initChannel(s_rightCh, hw.rightMotor, &auxMotor, &auxServo);
         } else {
-            initDriveMotor(hw.driveMotor);
+            initChannel(s_leftCh, hw.driveMotor, &driveMotor, &escServo);
             initSteeringServo(hw.steeringServo);
         }
         initLights(hw.lights);
-        initAuxServos();
+        initAuxOutputs(hw);
 
         Serial.println("[HardwareInit] Done");
     }
@@ -44,44 +71,156 @@ public:
         // output (servo easing is cancelled by detach(), LEDs get stop()).
         steeringServo.stop();
         escServo.stop();
-        auxServo1.stop();
-        auxServo2.stop();
+        auxServo.stop();
         stopLightAnimations();
 
         // Release all EasyKit hardware so hotReload can re-attach cleanly.
         driveMotor.end();
         steeringServo.detach();
         escServo.detach();
-        auxServo1.detach();
-        auxServo2.detach();
+        auxServo.detach();
+        auxMotor.end();
+        auxLed.end();
         headLed.end();
         tailLed.end();
         brakeLed.end();
         turnLLed.end();
         turnRLed.end();
         reversingLed.end();
-        motorAttached = false;
+        s_leftCh.attached = false;
+        s_rightCh.attached = false;
         Serial.println("[HardwareInit] Stopped all outputs");
     }
 
     // Advance every EasyKit animation engine. Must be called every main-loop
     // iteration (from src/main.cpp) so easing moves, fades, and blink patterns
-    // progress non-blocking.
-    static void update() {
+    // progress non-blocking. Also monitors the physical power button.
+    static void update(uint16_t buttonHoldS = 4, uint8_t indicatorPin = 0xFF) {
+        updatePowerButton(buttonHoldS, indicatorPin);
         steeringServo.update();
         escServo.update();
-        auxServo1.update();
-        auxServo2.update();
+        auxServo.update();
+        auxLed.update();
         headLed.update();
         tailLed.update();
         brakeLed.update();
         turnLLed.update();
         turnRLed.update();
         reversingLed.update();
+        ditchLLed.update();
+        ditchRLed.update();
+        stepLed.update();
+        cabLed.update();
+        s_ditchGroup.update();
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // Power Management API
+    // ────────────────────────────────────────────────────────────────
+    static void latchPower(uint16_t bootLatchS = 1) {
+        if (POWER::POWER_ENABLE == 0xFF || POWER::POWER_BUTTON == 0xFF) {
+            Serial.println("[HardwareInit] Board lacks power control pins; skipping latchPower()");
+            s_powerLatched = true;
+            return;
+        }
+        pinMode(POWER::POWER_ENABLE, OUTPUT);
+        digitalWrite(POWER::POWER_ENABLE, LOW);
+        pinMode(POWER::POWER_BUTTON, INPUT);
+        s_powerLatched = false;
+
+        uint32_t thresholdMs = (uint32_t)bootLatchS * 1000U;
+        uint32_t startMs = millis();
+        while (digitalRead(POWER::POWER_BUTTON) == HIGH) {
+            if (millis() - startMs >= thresholdMs) {
+                digitalWrite(POWER::POWER_ENABLE, HIGH);
+                s_powerLatched = true;
+                Serial.printf("[HardwareInit] Power latched ON (%us boot hold)\n", (unsigned)bootLatchS);
+                break;
+            }
+            delay(1);
+        }
+        if (!s_powerLatched) {
+            Serial.printf("[HardwareInit] Power button released before %us; power not latched\n", (unsigned)bootLatchS);
+        }
+    }
+
+    static void updatePowerButton(uint16_t buttonHoldS = 4, uint8_t indicatorPin = 0xFF) {
+        if (POWER::POWER_BUTTON == 0xFF) return;
+
+        uint32_t now = millis();
+        uint32_t holdMs = (uint32_t)buttonHoldS * 1000U;
+        if (digitalRead(POWER::POWER_BUTTON) == HIGH) {
+            if (!s_powerButtonHolding) {
+                s_powerButtonHolding = true;
+                s_powerButtonHoldStart = now;
+            }
+
+            // Rapid blink feedback (200ms ON / 200ms OFF) while holding power button
+            uint8_t duty = ((now / 200) % 2 == 0) ? 100 : 0;
+            if (indicatorPin != 0xFF) {
+                setLight(indicatorPin, duty);
+            } else {
+                setLight(turnLPin, duty);
+                setLight(turnRPin, duty);
+            }
+
+            if (now - s_powerButtonHoldStart >= holdMs) {
+                Serial.printf("[HardwareInit] %us button hold detected -> powerOff()\n", (unsigned)buttonHoldS);
+                s_powerButtonHolding = false;
+                s_powerButtonHoldStart = 0;
+                if (indicatorPin != 0xFF) {
+                    setLight(indicatorPin, 0);
+                } else {
+                    setLight(turnLPin, 0);
+                    setLight(turnRPin, 0);
+                }
+                powerOff();
+            }
+        } else {
+            if (s_powerButtonHolding) {
+                if (now - s_powerButtonHoldStart < holdMs) {
+                    s_buttonClicked = true;
+                }
+                s_powerButtonHolding = false;
+                s_powerButtonHoldStart = 0;
+            }
+        }
+    }
+
+    static bool consumeButtonClicked() {
+        bool clicked = s_buttonClicked;
+        s_buttonClicked = false;
+        return clicked;
+    }
+
+    static bool isCharging() {
+        if (POWER::CHARGE_SENS == 0xFF) return false;
+        return digitalRead(POWER::CHARGE_SENS) == HIGH;
+    }
+
+    static void powerOff() {
+        Serial.println("[HardwareInit] Powering off hardware...");
+        stopAll();
+        if (POWER::POWER_ENABLE != 0xFF) {
+            digitalWrite(POWER::POWER_ENABLE, LOW);
+        }
+        s_powerLatched = false;
+    }
+
+    static bool isPowerLatched() { return s_powerLatched; }
+
+
     static void setSkidMotors(int16_t leftSpeed, int16_t rightSpeed) {
-        setMotor(leftSpeed);
+        setChannel(s_leftCh, leftSpeed);
+        setChannel(s_rightCh, rightSpeed);
+    }
+
+    // Zero/command every configured motor channel (drive/left + skid right).
+    // Used by the safety paths (engine OFF/STARTING, battery cutoff) so no
+    // track can keep its last commanded speed when the vehicle is not drivable.
+    static void setAllMotors(int16_t speed) {
+        setChannel(s_leftCh, speed);
+        setChannel(s_rightCh, speed);
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -90,37 +229,45 @@ public:
 
     // speed: -100 (full reverse) .. +100 (full forward)
     static void setMotor(int16_t speed) {
-        if (motorType == HardwareConfig::DriveMotor::NONE || !motorAttached) return;
+        setChannel(s_leftCh, speed);
+    }
+
+    // Drive one motor channel at speed (-100..+100). Applies the channel's
+    // configured polarity (direction), duty window (duty.min..max), and
+    // electrical kind (H-bridge duty vs ESC/PPM pulse). Shared by the
+    // Ackermann drive motor and both skid-steer tracks.
+    static void setChannel(MotorChannel& ch, int16_t speed) {
+        if (ch.type == HardwareConfig::DriveMotor::NONE || !ch.attached) return;
 
         int16_t eff = speed;
-        switch (motorDirection) {
-            case HardwareConfig::DriveMotor::REVERSE:    eff = -eff;     break;
-            case HardwareConfig::DriveMotor::UNI_FORWARD: eff = abs(eff); break;
+        switch (ch.direction) {
+            case HardwareConfig::DriveMotor::REVERSE:     eff = -eff;      break;
+            case HardwareConfig::DriveMotor::UNI_FORWARD: eff = abs(eff);  break;
             case HardwareConfig::DriveMotor::UNI_REVERSE: eff = -abs(eff); break;
             default: break;   // FORWARD
         }
 
-        // Duty percent within configured min..max window; 0 when neutral
+        // Duty percent within the configured min..max window; 0 when neutral
         uint8_t pct = 0;
         if (eff > 0) {
-            pct = motorDutyMin + (uint8_t)((uint32_t)eff * (motorDutyMax - motorDutyMin) / 100);
+            pct = ch.dutyMin + (uint8_t)((uint32_t)eff * (ch.dutyMax - ch.dutyMin) / 100);
         } else if (eff < 0) {
-            pct = motorDutyMin + (uint8_t)((uint32_t)(-eff) * (motorDutyMax - motorDutyMin) / 100);
+            pct = ch.dutyMin + (uint8_t)((uint32_t)(-eff) * (ch.dutyMax - ch.dutyMin) / 100);
         }
-        if (pct > motorDutyMax) pct = motorDutyMax;
+        if (pct > ch.dutyMax) pct = ch.dutyMax;
 
-        if (motorType == HardwareConfig::DriveMotor::ESC) {
+        if (ch.type == HardwareConfig::DriveMotor::ESC) {
             // PPM pulse: 1000..2000us, neutral 1500us, deadband around center
             uint16_t us = 1500;
             if (abs(eff) >= 5) us = (uint16_t)(1500 + (int32_t)eff * 500 / 100);
             if (us < 1000) us = 1000;
             if (us > 2000) us = 2000;
-            escServo.writeMicroseconds(us);
+            if (ch.esc) ch.esc->writeMicroseconds(us);
             return;
         }
 
         // Motor driver via EasyMotor: signed percent, direction handled by the driver
-        driveMotor.write(eff >= 0 ? (float)pct : -(float)pct);
+        if (ch.driver) ch.driver->write(eff >= 0 ? (float)pct : -(float)pct);
     }
 
     // position: -100 (left) .. +100 (right), 0 = center
@@ -198,41 +345,79 @@ public:
         ditchRLed.stop();
         stepLed.stop();
         cabLed.stop();
+        auxLed.stop();
+        s_ditchGroup.stop();
+        s_ditchActive = false;
         resetBlinkTracking();
     }
 
-    // position: -100 .. +100
-    static void setAuxServo1(int16_t position) {
-        if (!auxServo1.attached()) return;
-        int32_t us = 1500 + (int32_t)position * 500 / 100;
-        us = constrain(us, 1000, 2000);
-        if (s_easingSpeedDegS > 0.0f) {
-            // Eased µs-space move (EasyServo::write treats value >= 500 as µs)
-            auxServo1.write((float)us, s_easingSpeedDegS, s_easingKIn, s_easingKOut);
-        } else {
-            auxServo1.writeMicroseconds(us);
+    // Edge-triggered ditch light control: active starts alternate pattern, !active stops it.
+    static void setDitchLights(bool active, uint16_t intervalMs) {
+        if (ditchLPin == 0xFF && ditchRPin == 0xFF) return;
+        if (active && !s_ditchActive) {
+            s_ditchActive = true;
+            s_ditchGroup.alternate(intervalMs);
+        } else if (!active && s_ditchActive) {
+            s_ditchActive = false;
+            s_ditchGroup.stop();
         }
     }
 
-    static void setAuxServo2(int16_t position) {
-        if (!auxServo2.attached()) return;
-        int32_t us = 1500 + (int32_t)position * 500 / 100;
-        us = constrain(us, 1000, 2000);
-        if (s_easingSpeedDegS > 0.0f) {
-            auxServo2.write((float)us, s_easingSpeedDegS, s_easingKIn, s_easingKOut);
-        } else {
-            auxServo2.writeMicroseconds(us);
+
+    // Aux motor: config-driven output channel. The hardware token decided at
+    // init whether this drives an H-bridge (EasyMotor) or a servo/ESC PPM
+    // output (EasyServo); speed semantics match setMotor (-100..+100).
+    static void setAuxMotor(int16_t speed) {
+        if (auxMotorType == HardwareConfig::DriveMotor::NONE || !auxMotorAttached) return;
+
+        int16_t eff = speed;
+        switch (auxMotorDirection) {
+            case HardwareConfig::DriveMotor::REVERSE:    eff = -eff;     break;
+            case HardwareConfig::DriveMotor::UNI_FORWARD: eff = abs(eff); break;
+            case HardwareConfig::DriveMotor::UNI_REVERSE: eff = -abs(eff); break;
+            default: break;   // FORWARD
         }
+
+        // Duty percent within configured min..max window; 0 when neutral
+        uint8_t pct = 0;
+        if (eff > 0) {
+            pct = auxMotorDutyMin + (uint8_t)((uint32_t)eff * (auxMotorDutyMax - auxMotorDutyMin) / 100);
+        } else if (eff < 0) {
+            pct = auxMotorDutyMin + (uint8_t)((uint32_t)(-eff) * (auxMotorDutyMax - auxMotorDutyMin) / 100);
+        }
+        if (pct > auxMotorDutyMax) pct = auxMotorDutyMax;
+
+        if (auxMotorType == HardwareConfig::DriveMotor::ESC) {
+            // PPM pulse: 1000..2000us, neutral 1500us, deadband around center
+            uint16_t us = 1500;
+            if (abs(eff) >= 5) us = (uint16_t)(1500 + (int32_t)eff * 500 / 100);
+            if (us < 1000) us = 1000;
+            if (us > 2000) us = 2000;
+            if (s_easingSpeedDegS > 0.0f) {
+                // Eased µs-space move (EasyServo::write treats value >= 500 as µs)
+                auxServo.write((float)us, s_easingSpeedDegS, s_easingKIn, s_easingKOut);
+            } else {
+                auxServo.writeMicroseconds(us);
+            }
+            return;
+        }
+
+        // H-bridge via EasyMotor: signed percent, direction handled by the driver
+        auxMotor.write(eff >= 0 ? (float)pct : -(float)pct);
+    }
+
+    // Aux light: config-driven LED output (0..100 percent).
+    static void setAuxLight(uint8_t brightnessPct) {
+        if (auxLedPin == 0xFF || !auxLed.isAttached()) return;
+        auxLed.write((float)brightnessPct);
     }
 
 
 private:
     static uint8_t s_drivetrainType;
-    static uint8_t motorPwm1Pin;
-    static uint8_t motorPwm2Pin;
-    static uint8_t motorEnablePin;
+    static MotorChannel s_leftCh;
+    static MotorChannel s_rightCh;
     static uint8_t servoPin;
-    static uint8_t escPin;
 
     // Light pins (tracked for setLight routing + hotReload teardown)
     static uint8_t headPin;
@@ -246,13 +431,16 @@ private:
     static uint8_t stepPin;
     static uint8_t cabPin;
 
-    // Runtime control state captured from config at init
-    static uint8_t  motorType;        // HardwareConfig::DriveMotor::Type
-    static uint8_t  motorDirection;   // HardwareConfig::DriveMotor::Direction
-    static uint8_t  motorDutyMin;
-    static uint8_t  motorDutyMax;
-    static bool     motorAttached;
-    static uint32_t motorFrequency;
+
+    // Aux motor channel state (mirrors the drive-motor state, but for the aux
+    // output). auxMotorType is the electrical kind decided by the hardware
+    // token: NONE (not configured / trailer_dcc), DRIVER (H-bridge), ESC (PPM).
+    static uint8_t  auxMotorType;        // HardwareConfig::DriveMotor::Type
+    static uint8_t  auxMotorDirection;   // HardwareConfig::DriveMotor::Direction
+    static uint8_t  auxMotorDutyMin;
+    static uint8_t  auxMotorDutyMax;
+    static bool     auxMotorAttached;
+    static uint8_t  auxLedPin;
 
     static uint32_t servoFrequency;
     static uint16_t servoLeft;
@@ -275,8 +463,9 @@ private:
     static EasyMotor driveMotor;
     static EasyServo steeringServo;
     static EasyServo escServo;      // used when drive motor type == ESC (PPM output)
-    static EasyServo auxServo1;     // Aux Servo 1 (Servo 2 Pin / S2)
-    static EasyServo auxServo2;     // Aux Servo 2 (Servo 3 Pin / S3) — MIKRO_V2 only; TRACKLINK_V3 has no S3/S4 pin
+    static EasyServo auxServo;      // used when aux motor type == ESC (PPM output)
+    static EasyMotor auxMotor;      // used when aux motor type == DRIVER (H-bridge)
+    static EasyLED   auxLed;        // aux_light LED output
     static EasyLED   headLed;
     static EasyLED   tailLed;
     static EasyLED   brakeLed;
@@ -287,27 +476,71 @@ private:
     static EasyLED   ditchRLed;
     static EasyLED   stepLed;
     static EasyLED   cabLed;
+    static EasyLEDGroup s_ditchGroup;
+    static bool      s_ditchActive;
 
-    static void initAuxServos() {
-        EasyKit::ServoConfig cfg;
-        cfg.minUs = 1000;
-        cfg.maxUs = 2000;
-        cfg.centerUs = 1500;
-        cfg.freq = 50;
 
-        uint8_t pinS2 = PinMapper::resolve("S2");
-        if (pinS2 != 0xFF) {
-            if (auxServo1.attach(pinS2, cfg) == EasyKit::Result::OK) {
-                Serial.printf("[HardwareInit] Aux Servo 1 attached on Pin=%d\n", pinS2);
+    // Config-driven aux outputs. The hardware token decides the channel kind:
+    // DRIVER_* → EasyMotor H-bridge, S* → EasyServo PPM, L* → EasyLED. No aux
+    // key in the config means no channel is initialized (no legacy auto-attach).
+    static void initAuxOutputs(const HardwareConfig& hw) {
+        const HardwareConfig::AuxMotor& aux = hw.auxMotor;
+
+        if (aux.motor.type == HardwareConfig::DriveMotor::NONE) {
+            auxMotorType = HardwareConfig::DriveMotor::NONE;
+            auxMotorAttached = false;
+            Serial.println("[HardwareInit] No aux motor configured");
+        } else {
+            auxMotorType = aux.motor.type;
+            auxMotorDirection = aux.motor.direction;
+            auxMotorDutyMin = aux.motor.duty.min;
+            auxMotorDutyMax = aux.motor.duty.max;
+
+            if (aux.motor.type == HardwareConfig::DriveMotor::DRIVER) {
+                const char* name = (aux.motor.hardwareId == PinMapper::DRIVER_A) ? "DRIVER_A" : "DRIVER_B";
+                DriverPins pins = PinMapper::getDriver(name);
+
+                if (pins.dualPwm) {
+                    // Dual-PWM driver (DRIVER_A): both pins are PWM
+                    auxMotor.begin(EasyMotor::DriverType::DRIVER_2PWM,
+                                   pins.pwm1, pins.pwm2, pins.enable, false);
+                } else {
+                    // DIR + PWM driver (DRIVER_B): pin1 = speed PWM, pin2 = direction.
+                    // Same polarity convention as the drive motor: invert to preserve.
+                    auxMotor.begin(EasyMotor::DriverType::DRIVER_1PWM_1DIR,
+                                   pins.pwm1, pins.pwm2, pins.enable, true);
+                }
+                auxMotor.setFrequency(aux.motor.frequency);
+                auxMotorAttached = true;
+                Serial.printf("[HardwareInit] Aux motor (driver): %s Freq=%dHz\n",
+                              name, aux.motor.frequency);
+            }
+            else if (aux.motor.type == HardwareConfig::DriveMotor::ESC) {
+                EasyKit::ServoConfig cfg;
+                cfg.minUs = 1000;
+                cfg.maxUs = 2000;
+                cfg.centerUs = 1500;
+                cfg.freq = (aux.motor.frequency >= 40 && aux.motor.frequency <= 900)
+                               ? (uint16_t)aux.motor.frequency : 50;
+                if (auxServo.attach(aux.motor.hardwareId, cfg) == EasyKit::Result::OK) {
+                    auxMotorAttached = true;
+                    Serial.printf("[HardwareInit] Aux motor (servo/ESC): Pin=%d Freq=%dHz\n",
+                                  aux.motor.hardwareId, cfg.freq);
+                } else {
+                    auxMotorAttached = false;
+                    Serial.printf("[HardwareInit] Aux motor ESC attach FAILED on Pin=%d\n",
+                                  aux.motor.hardwareId);
+                }
             }
         }
-        // S3 exists on MIKRO_V2 only; on TRACKLINK_V3 (S1/S2 only) resolve returns
-        // 0xFF and Aux Servo 2 stays uninitialized, which is expected.
-        uint8_t pinS3 = PinMapper::resolve("S3");
-        if (pinS3 != 0xFF) {
-            if (auxServo2.attach(pinS3, cfg) == EasyKit::Result::OK) {
-                Serial.printf("[HardwareInit] Aux Servo 2 attached on Pin=%d\n", pinS3);
-            }
+
+        auxLedPin = 0xFF;
+        if (hw.auxLight.configured) {
+            auxLedPin = hw.auxLight.pin;
+            const EasyKit::LEDConfig cfg = {5000, EasyKit::LEDCResolution::Bits10, -1, false};
+            auxLed.begin(auxLedPin, cfg);
+            Serial.printf("[HardwareInit] Aux light: Pin=%d Brightness=%d%%\n",
+                          auxLedPin, hw.auxLight.brightness);
         }
     }
 
@@ -322,6 +555,7 @@ private:
         if (pin == ditchRPin   && ditchRLed.isAttached())    return &ditchRLed;
         if (pin == stepPin     && stepLed.isAttached())     return &stepLed;
         if (pin == cabPin      && cabLed.isAttached())      return &cabLed;
+        if (pin == auxLedPin   && auxLed.isAttached())      return &auxLed;
         return nullptr;
     }
 
@@ -344,61 +578,65 @@ private:
         return -1;
     }
 
-    static void initDriveMotor(const HardwareConfig::DriveMotor& motor) {
+    // Configure one motor channel from a config: wire the physical output
+    // (H-bridge via EasyMotor, or ESC/servo PPM via EasyServo) and capture
+    // the polarity/duty state. `driver`/`esc` select which EasyKit object the
+    // channel drives — driveMotor/escServo for the drive/left side,
+    // auxMotor/auxServo for the skid-steer right side.
+    static void initChannel(MotorChannel& ch, const HardwareConfig::DriveMotor& motor,
+                            EasyMotor* driver, EasyServo* esc) {
+        ch.type = HardwareConfig::DriveMotor::NONE;
+        ch.driver = driver;
+        ch.esc = esc;
+        ch.attached = false;
+
         if (motor.type == HardwareConfig::DriveMotor::NONE) {
-            motorAttached = false;
-            Serial.println("[HardwareInit] No drive motor configured");
+            Serial.println("[HardwareInit] No motor configured");
             return;
         }
 
-        motorType = motor.type;
-        motorDirection = motor.direction;
-        motorDutyMin = motor.duty.min;
-        motorDutyMax = motor.duty.max;
-        motorFrequency = motor.frequency;
+        ch.type = motor.type;
+        ch.direction = motor.direction;
+        ch.dutyMin = motor.duty.min;
+        ch.dutyMax = motor.duty.max;
+        ch.frequency = motor.frequency;
 
         if (motor.type == HardwareConfig::DriveMotor::DRIVER) {
             const char* name = (motor.hardwareId == PinMapper::DRIVER_A) ? "DRIVER_A" : "DRIVER_B";
             DriverPins pins = PinMapper::getDriver(name);
 
-            motorPwm1Pin = pins.pwm1;
-            motorPwm2Pin = pins.pwm2;
-            motorEnablePin = pins.enable;
-
             if (pins.dualPwm) {
                 // Dual-PWM driver (DRIVER_A): both pins are PWM
-                driveMotor.begin(EasyMotor::DriverType::DRIVER_2PWM,
+                ch.driver->begin(EasyMotor::DriverType::DRIVER_2PWM,
                                  pins.pwm1, pins.pwm2, pins.enable, false);
             } else {
                 // DIR + PWM driver (DRIVER_B): pin1 = speed PWM, pin2 = direction.
                 // EasyKit drives DIR HIGH for forward; this driver drives DIR LOW for
                 // forward, so invert to preserve the previous polarity.
-                driveMotor.begin(EasyMotor::DriverType::DRIVER_1PWM_1DIR,
+                ch.driver->begin(EasyMotor::DriverType::DRIVER_1PWM_1DIR,
                                  pins.pwm1, pins.pwm2, pins.enable, true);
             }
-            driveMotor.setFrequency(motorFrequency);
-            motorAttached = true;
+            ch.driver->setFrequency(ch.frequency);
+            ch.attached = true;
 
-            Serial.printf("[HardwareInit] Driver: PWM1=%d PWM2=%d EN=%d Freq=%dHz\n",
-                          motorPwm1Pin, motorPwm2Pin, motorEnablePin, motor.frequency);
+            Serial.printf("[HardwareInit] Driver: %s PWM1=%d PWM2=%d EN=%d Freq=%dHz\n",
+                          name, pins.pwm1, pins.pwm2, pins.enable, motor.frequency);
         }
-        else if (motor.type == HardwareConfig::DriveMotor::ESC) {
-            escPin = motor.hardwareId;
-
+        else if (motor.type == HardwareConfig::DriveMotor::ESC && ch.esc) {
             EasyKit::ServoConfig cfg;
             cfg.minUs = 1000;
             cfg.maxUs = 2000;
             cfg.centerUs = 1500;
             // ESC runs on a servo-style PPM pulse; fall back to 50 Hz if the
             // config frequency is not a sane servo refresh rate.
-            cfg.freq = (motorFrequency >= 40 && motorFrequency <= 900)
-                           ? (uint16_t)motorFrequency : 50;
+            cfg.freq = (ch.frequency >= 40 && ch.frequency <= 900)
+                           ? (uint16_t)ch.frequency : 50;
 
-            if (escServo.attach(escPin, cfg) == EasyKit::Result::OK) {
-                motorAttached = true;
-                Serial.printf("[HardwareInit] ESC: Pin=%d Freq=%dHz\n", escPin, cfg.freq);
+            if (ch.esc->attach(motor.hardwareId, cfg) == EasyKit::Result::OK) {
+                ch.attached = true;
+                Serial.printf("[HardwareInit] ESC: Pin=%d Freq=%dHz\n", motor.hardwareId, cfg.freq);
             } else {
-                Serial.printf("[HardwareInit] ESC attach FAILED on Pin=%d\n", escPin);
+                Serial.printf("[HardwareInit] ESC attach FAILED on Pin=%d\n", motor.hardwareId);
             }
         }
     }
@@ -462,10 +700,15 @@ private:
             ditchRPin = lights.ditchLight.rightPin;
             if (ditchLPin != 0xFF) ditchLLed.begin(ditchLPin, cfg);
             if (ditchRPin != 0xFF) ditchRLed.begin(ditchRPin, cfg);
+            s_ditchGroup.clearMembers();
+            if (ditchLPin != 0xFF) s_ditchGroup.addMember(&ditchLLed);
+            if (ditchRPin != 0xFF) s_ditchGroup.addMember(&ditchRLed);
+            s_ditchActive = false;
             Serial.printf("[HardwareInit] Ditch lights: L=%d R=%d Interval=%dms Brightness=%d%%\n",
                           ditchLPin, ditchRPin, lights.ditchLight.intervalMs,
                           lights.ditchLight.brightness);
         }
+
 
         if (lights.stepLight.configured) {
             stepPin = lights.stepLight.pin;
@@ -505,13 +748,23 @@ private:
                           reversingPin == brakePin ? " (shares brake output)" : "");
         }
     }
+
+private:
+    static bool     s_powerLatched;
+    static bool     s_powerButtonHolding;
+    static uint32_t s_powerButtonHoldStart;
+    static bool     s_buttonClicked;
 };
 
-uint8_t HardwareInit::motorPwm1Pin = 0xFF;
-uint8_t HardwareInit::motorPwm2Pin = 0xFF;
-uint8_t HardwareInit::motorEnablePin = 0xFF;
+bool     HardwareInit::s_powerLatched = false;
+bool     HardwareInit::s_powerButtonHolding = false;
+uint32_t HardwareInit::s_powerButtonHoldStart = 0;
+bool     HardwareInit::s_buttonClicked = false;
+
 uint8_t HardwareInit::servoPin = 0xFF;
-uint8_t HardwareInit::escPin = 0xFF;
+
+HardwareInit::MotorChannel HardwareInit::s_leftCh;
+HardwareInit::MotorChannel HardwareInit::s_rightCh;
 
 uint8_t HardwareInit::headPin = 0xFF;
 uint8_t HardwareInit::tailPin = 0xFF;
@@ -524,12 +777,13 @@ uint8_t HardwareInit::ditchRPin = 0xFF;
 uint8_t HardwareInit::stepPin = 0xFF;
 uint8_t HardwareInit::cabPin = 0xFF;
 
-uint8_t  HardwareInit::motorType = HardwareConfig::DriveMotor::NONE;
-uint8_t  HardwareInit::motorDirection = HardwareConfig::DriveMotor::FORWARD;
-uint8_t  HardwareInit::motorDutyMin = 20;
-uint8_t  HardwareInit::motorDutyMax = 90;
-bool     HardwareInit::motorAttached = false;
-uint32_t HardwareInit::motorFrequency = 20000;
+
+uint8_t  HardwareInit::auxMotorType = HardwareConfig::DriveMotor::NONE;
+uint8_t  HardwareInit::auxMotorDirection = HardwareConfig::DriveMotor::FORWARD;
+uint8_t  HardwareInit::auxMotorDutyMin = 20;
+uint8_t  HardwareInit::auxMotorDutyMax = 90;
+bool     HardwareInit::auxMotorAttached = false;
+uint8_t  HardwareInit::auxLedPin = 0xFF;
 
 uint32_t HardwareInit::servoFrequency = 50;
 uint16_t HardwareInit::servoLeft = 1350;
@@ -547,8 +801,9 @@ bool     HardwareInit::s_blinkActive[4] = { false, false, false, false };
 EasyMotor HardwareInit::driveMotor;
 EasyServo HardwareInit::steeringServo;
 EasyServo HardwareInit::escServo;
-EasyServo HardwareInit::auxServo1;
-EasyServo HardwareInit::auxServo2;
+EasyServo HardwareInit::auxServo;
+EasyMotor HardwareInit::auxMotor;
+EasyLED   HardwareInit::auxLed;
 EasyLED   HardwareInit::headLed;
 EasyLED   HardwareInit::tailLed;
 EasyLED   HardwareInit::brakeLed;
@@ -559,4 +814,7 @@ EasyLED   HardwareInit::ditchLLed;
 EasyLED   HardwareInit::ditchRLed;
 EasyLED   HardwareInit::stepLed;
 EasyLED   HardwareInit::cabLed;
+EasyLEDGroup HardwareInit::s_ditchGroup;
+bool      HardwareInit::s_ditchActive = false;
 uint8_t   HardwareInit::s_drivetrainType = HardwareConfig::ACKERMANN;
+

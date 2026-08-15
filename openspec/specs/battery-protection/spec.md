@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Battery Protection Specification
+
+## Purpose
+Defines requirements for LiPo battery cell detection and low-voltage protection cutoff.
+
+## Requirements
 
 ### Requirement: Config-Driven LiPo Cell Count
 The system SHALL determine the connected LiPo cell count from the board-specific hardware config (`/hardware-MIKRO_V2.json` or `/hardware-TRACKLINK_V3.json`, selected at compile time by the board define; `battery.cell_count`, 1–4 cells) and establish a low-voltage cutoff threshold equal to the configured `battery.cutoff_voltage` (default 3.3V) per cell.

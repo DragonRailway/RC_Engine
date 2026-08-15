@@ -23,5 +23,7 @@
 #include "EasyServo.h"
 #include "EasyMotor.h"
 
-// LEDC — EasyLED Class
+// LEDC — EasyLED Class & Group
 #include "EasyLED.h"
+#include "EasyLEDGroup.h"
+

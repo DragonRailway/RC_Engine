@@ -1,6 +1,10 @@
-# Sound Engine Config
+# Sound Engine Config Specification
 
-## ADDED Requirements
+## Purpose
+Defines requirements for sound engine vehicle profiles, sound set properties, and preset inheritance.
+
+## Requirements
+
 
 ### Requirement: Sound set and preset properties
 The `vehicle` section of `/vehicle-config.json` SHALL support optional `"sound_set"` and `"preset"` string fields to specify the sound asset directory and inherited sound preset category.

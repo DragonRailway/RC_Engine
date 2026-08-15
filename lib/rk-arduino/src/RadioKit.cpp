@@ -1187,10 +1187,6 @@ void RadioKitClass::_handleSetPage(const uint8_t* payload, uint16_t len) {
     uint8_t pktBuf[RK_MAX_PACKET_SIZE];
     uint16_t pktLen = rk_buildPacket(pktBuf, RK_CMD_PAGE_CHANGED, &page, 1);
     _sendPacket(pktBuf, pktLen);
-
-    // Send updated CONF_DATA and VAR_DATA for the new page
-    _handleGetConf();
-    _handleGetVars();
     _confDirty = false;  // page switch sends fresh CONF_DATA
 }
 
@@ -1257,25 +1253,28 @@ uint16_t RadioKitClass::_buildConfPayload(uint8_t* buf, uint16_t bufSize) {
     const char* themeStr = config.theme ? config.theme : "dragon";
     uint8_t themeLen = (uint8_t)strnlen(themeStr, 64);
 
-    // v5 CONF_DATA: orientation + widget count + activePage + numPages + themeLen + per-page orientations + per-widget layout
+    // v5 CONF_DATA: orientation + widget count + activePage + numPages + theme + per-widget layout
     // v4 fallback (no pages): orientation + widget count + theme + per-widget layout
     if (_numPages > 1) {
-        if (out + 5 + themeLen + _numPages > bufSize) return 0;
+        if (out + 5 + themeLen > bufSize) return 0;
         buf[out++] = config.orientation;
         buf[out++] = visibleCount;
         buf[out++] = _activePage;
         buf[out++] = _numPages;
         buf[out++] = themeLen;
-        memcpy(&buf[out], themeStr, themeLen); out += themeLen;
-        for (uint8_t p = 0; p < _numPages && p < RADIOKIT_MAX_PAGES; p++) {
-            buf[out++] = _pageOrientations[p];
-        }
     } else {
         if (out + 3 + themeLen > bufSize) return 0;
         buf[out++] = config.orientation;
         buf[out++] = visibleCount;
         buf[out++] = themeLen;
-        memcpy(&buf[out], themeStr, themeLen); out += themeLen;
+    }
+    memcpy(&buf[out], themeStr, themeLen); out += themeLen;
+
+    // Per-page orientations (1 byte per page: 0=landscape, 1=portrait)
+    if (_numPages > 1) {
+        for (uint8_t i = 0; i < _numPages; i++) {
+            buf[out++] = _pageOrientations[i];
+        }
     }
 
     for (uint8_t i = 0; i < _widgetCount; i++) {

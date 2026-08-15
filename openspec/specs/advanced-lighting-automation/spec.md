@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Advanced Lighting Automation Specification
+
+## Purpose
+Defines requirements for automated lighting behaviors including steering auto turn signals, dynamic deceleration brake lights, and 3-state headlight stepping.
+
+## Requirements
 
 ### Requirement: Steering Auto-Cancel Turn Signals
 The system SHALL activate turn indicators when steering input exceeds ±35% and automatically cancel them when steering returns to center (|steer| < 10%).

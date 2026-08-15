@@ -24,9 +24,9 @@ static const uint8_t rk_pageOrientations[] = {
 // ─── Page 0: Truck ───
 RK_Knob steering_wheel(163, 54, 64, 0, 0);  // knob: pos=(163,54) size=?x64 label="steering_wheel"
 
-RK_GasPedal gas_pedal(22, 54, 58, 20, 0);  // slider: pos=(22,54) size=20x58 label="gas_pedal"
+RK_GasPedal gas_pedal(50, 59, 56, 20, 0);  // slider: pos=(50,59) size=20x56 label="gas_pedal"
 
-RK_GasPedal brake_pedal(48, 62, 41, 20, 0);  // slider: pos=(48,62) size=20x41 label="brake_pedal"
+RK_GasPedal brake_pedal(21, 69, 33, 32, 0);  // slider: pos=(21,69) size=32x33 label="brake_pedal"
 
 RK_MultipleSelect truck_light(97, 81, 21, 70, 0);  // multiple: pos=(97,81) size=70x21 label="truck_light"
 
@@ -68,8 +68,8 @@ static inline void initRadioKit() {
   steering_wheel.setLabelHidden(true);
   steering_wheel.rk.variant = 1;     // steeringWheel
   steering_wheel.rk.centering = RK_SPRING_NONE;
-  steering_wheel.rk.startAngle = -135.0;
-  steering_wheel.rk.endAngle = 135.0;
+  steering_wheel.rk.startAngle = -200;
+  steering_wheel.rk.endAngle = 200;
   steering_wheel.rk.centerIcon = "renault";
   gas_pedal.rk.label = "gas_pedal";
   gas_pedal.setLabelHidden(true);
@@ -95,11 +95,10 @@ static inline void initRadioKit() {
   right_indicator.rk.icon = "arrow-right";
   aux_slider.rk.label = "aux_slider";
   aux_slider.setLabelHidden(true);
-  aux_slider.rk.centering = RK_SPRING_NONE;
+  aux_slider.rk.centering = RK_SPRING_MIN;
   aux_slider.rk.detents = 5;
   horn_button.rk.label = "horn_button";
   horn_button.setLabelHidden(true);
-  horn_button.rk.onText = "ON";
   horn_button.rk.icon = "bell";
   gear_switch.rk.label = "gear_switch";
   gear_switch.setLabelHidden(true);

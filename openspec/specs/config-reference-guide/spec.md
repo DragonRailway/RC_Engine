@@ -3,9 +3,7 @@
 ## Purpose
 
 Document the hardware config (`hardware-<BOARD>.json`) for users in a Klipper-style reference guide, covering every config section, parameter defaults, the per-board pin vocabulary, and the quirks and legacy behaviors that the firmware does not validate. The guide exists because the firmware applies no schema validation — it is the de-facto schema for the hardware config.
-
 ## Requirements
-
 ### Requirement: Hardware config reference documentation
 The repository SHALL provide a Klipper-style reference guide at `GUIDE/HARDWARE_CONFIG.md` documenting the hardware config (`hardware-<BOARD>.json`) end-to-end: every config section (`sound`, `drivetrain`, `lights`, `animation`, `battery`) with each parameter's name, type, default value, allowed values, and a description, where defaults match the firmware's `HardwareConfig` struct defaults.
 
@@ -13,9 +11,13 @@ The repository SHALL provide a Klipper-style reference guide at `GUIDE/HARDWARE_
 - **WHEN** a user consults the reference for `drivetrain.drive_motor.duty.min`
 - **THEN** they find its type (integer), default (`20`), allowed range (0–100), and meaning
 
-#### Scenario: Drivetrain fork documented
+#### Scenario: Drivetrain mode declared by type
 - **WHEN** a user reads the `drivetrain` section
-- **THEN** they learn that presence of `left_motor` selects skid-steer (with `right_motor` + `steering_sensitivity`) while its absence selects Ackermann (`drive_motor` + `steering_servo`), and that mixing the two layouts is not supported
+- **THEN** they learn the drivetrain is declared via `drivetrain.type` (`"ackermann"` | `"skid_steer"`, default inferred from key presence when absent), that `"skid_steer"` uses `left_motor` + `right_motor` + `steering_sensitivity` while `"ackermann"` uses `drive_motor` + `steering_servo`, and that mixing the two layouts is not supported
+
+#### Scenario: Skid-steer exclusion documented
+- **WHEN** a user reads the `drivetrain` or `aux_motor` sections
+- **THEN** they learn that `aux_motor` is not usable on a skid-steer config (the second motor output is the right track) and that the firmware logs a `WARN` and leaves the aux channel unconfigured
 
 ### Requirement: Per-board pin reference
 The reference guide SHALL include per-board pin tables for MIKRO_V2 and TRACKLINK_V3 mapping every `hardware` token (`L<n>`, `S<n>`, `DRIVER_A`, `DRIVER_B`) to its physical GPIO and driver pin assignments, and SHALL document the motor-driver tokens as semantic markers resolved per board.
@@ -49,3 +51,4 @@ The repository SHALL provide `GUIDE/README.md` as an index of the guide director
 #### Scenario: Opening the guide directory
 - **WHEN** a user opens the `GUIDE/` directory
 - **THEN** `README.md` links to the hardware config reference and notes the vehicle-config reference is planned but not yet written
+

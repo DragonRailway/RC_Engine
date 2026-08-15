@@ -1,5 +1,8 @@
-## ADDED Requirements
+# config-schema-validation Specification
 
+## Purpose
+TBD - created by archiving change config-schema-validation. Update Purpose after archive.
+## Requirements
 ### Requirement: Firmware warns on semantic config errors
 The firmware SHALL detect and log semantic errors in hardware and vehicle configs — unrecognized `hardware` tokens, unknown keys, out-of-range values, and unrecognized enum strings — as `WARN:` lines on boot and on config hot-reload, without halting execution, and SHALL preserve the previously loaded config's behavior (degraded-but-running) exactly as before validation existed.
 
@@ -43,3 +46,4 @@ The schema and firmware checks SHALL match the parser's actual behavior, includi
 #### Scenario: Quirk-aware validation
 - **WHEN** the schema is authored
 - **THEN** it allows the accepted-but-ignored keys and light-alias values the parser honors, and rejects only what the parser would not honor
+

@@ -52,6 +52,22 @@ For a deep dive into the library architecture and performance tuning, start with
 - 📑 [**Servo Functions**](docs/SERVO_Functions.md): Precise motion with asymmetric easing.
 - 📑 [**DC Motor Functions**](docs/DCMOTOR_Functions.md): Low-latency direct-drive control.
 - 📑 [**LED & PWM Functions**](docs/LED_Functions.md): Flicker-free transitions and patterns.
+- 💡 **EasyLEDGroup**: Coordinated multi-LED step sequencing (`alternate`, `syncFlash`, `chase`, `doubleStrobe`).
+
+### EasyLEDGroup Example
+```cpp
+EasyLED ditchL(4), ditchR(5);
+EasyLEDGroup ditchGroup({&ditchL, &ditchR});
+
+void setup() {
+  ditchGroup.alternate(16); // Alternate ditch lights every 16ms
+}
+
+void loop() {
+  ditchGroup.update();
+}
+```
+
 
 ---
 

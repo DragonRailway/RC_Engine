@@ -1,6 +1,10 @@
-# Unified Firmware Entrypoint
+# Unified Firmware Entrypoint Specification
+
+## Purpose
+Defines requirements for the main firmware entrypoint, initialization sequence, and service startup.
 
 ## Requirements
+
 
 ### Requirement: Unified Main Entrypoint
 The firmware SHALL have a single main entrypoint at `src/main.cpp` that initializes LittleFS, parses hardware and vehicle configurations, and starts audio and control services for any supported vehicle type.

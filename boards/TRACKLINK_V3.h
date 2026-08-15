@@ -39,8 +39,9 @@ struct AUDIO {
 };
 
 struct POWER {
-  static constexpr uint8_t ENABLE = 33; // set high to enable board
-  static constexpr uint8_t BUTTON = 48; // Detect power button press
-  static constexpr uint8_t VOLTAGE = 4;   // Voltage sense pin
-  static constexpr uint8_t CHRG_SENS = 34; // Charging status indicator
+  static constexpr uint8_t POWER_ENABLE = 33; // set high to enable board
+  static constexpr uint8_t POWER_BUTTON = 48; // Detect power button press
+  static constexpr uint8_t VOLTAGE_SENS = 4;   // Voltage sense pin
+  static constexpr uint8_t CHARGE_SENS = 34; // Charging status indicator
 };
+

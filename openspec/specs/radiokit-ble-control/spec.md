@@ -1,6 +1,10 @@
-# RadioKit BLE Control
+# RadioKit BLE Control Specification
 
-## ADDED Requirements
+## Purpose
+Defines requirements for RadioKit BLE stack integration, widget control surfaces, and remote API interactions.
+
+## Requirements
+
 
 ### Requirement: RadioKit library integration
 The build SHALL include the RadioKit Arduino library v2.0.0 (local symlink to `/home/sun/Apps/RadioKit/rk-arduino`) as a `lib_dep` so `RadioKitLib.h` and its widget classes are available to `src/`.

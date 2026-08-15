@@ -1,0 +1,80 @@
+{
+    "sound": {
+        "volume": 80
+    },
+    "drivetrain": {
+        "type": "skid_steer",
+        "left_motor": {
+            "hardware": "DRIVER_A",
+            "frequency": 20000,
+            "direction": "forward",
+            "duty": {
+                "min": 20,
+                "max": 90
+            }
+        },
+        "right_motor": {
+            "hardware": "DRIVER_B",
+            "frequency": 20000,
+            "direction": "forward",
+            "duty": {
+                "min": 20,
+                "max": 90
+            }
+        },
+        "steering_sensitivity": 80
+    },
+    "lights": {
+        "head_light": {
+            "hardware": "L1",
+            "brightness_max": 60
+        },
+        "tail_light": {
+            "hardware": "L2",
+            "brightness_max": 60
+        },
+        "reversing_light": {
+            "hardware": "brake_light"
+        },
+        "brake_light": {
+            "hardware": "L3"
+        },
+        "turn_light": {
+            "left": {
+                "hardware": "L4"
+            },
+            "right": {
+                "hardware": "L5"
+            },
+            "brightness_max": 60,
+            "type": "blink",
+            "interval_on": 500,
+            "interval_off": 500
+        }
+    },
+    "animation": {
+        "easing_speed_deg_s": 180,
+        "easing_k_in": 0.2,
+        "easing_k_out": 0.8,
+        "fade_duration_ms": 250
+    },
+    "battery": {
+        "cell_count": 1,
+        "warning_voltage": 3.5,
+        "cutoff_voltage": 3.3,
+        "full_voltage": 4.2,
+        "voltage_scale": 1.8,
+        "voltage_offset": -0.2
+    },
+    "power": {
+        "boot_latch_s": 1,
+        "button_hold_s": 4,
+        "disconnect_timeout_s": 60,
+        "warning_window_s": 10,
+        "cutoff_delay_s": 2
+    },
+    "charging": {
+        "hardware": "head_light",
+        "mode": "solid"
+    }
+}

@@ -23,13 +23,17 @@ configs in `configs/hardware_configs/`.
    - [lights.turn_light](#43-lightsturn_light)
    - [lights.reversing_light](#44-lightsreversing_light)
    - [lights.ditch_light / step_light / cab_light](#45-lightsditch_light-step_light-cab_light)
-5. [animation](#5-animation)
-6. [battery](#6-battery)
-7. [Pin Reference](#7-pin-reference)
-   - [MIKRO_V2 pins](#71-mikro_v2-pins)
-   - [TRACKLINK_V3 pins](#72-tracklink_v3-pins)
-   - [Hardware token vocabulary](#73-hardware-token-vocabulary)
-8. [Example](#8-example)
+5. [aux_motor / aux_light](#5-aux_motor--aux_light)
+   - [aux_motor](#51-aux_motor)
+   - [aux_motor.type (mixer / tipper)](#52-aux_motortype-mixer--tipper)
+   - [aux_light](#53-aux_light)
+6. [animation](#6-animation)
+7. [battery](#7-battery)
+8. [Pin Reference](#8-pin-reference)
+   - [MIKRO_V2 pins](#81-mikro_v2-pins)
+   - [TRACKLINK_V3 pins](#82-tracklink_v3-pins)
+   - [Hardware token vocabulary](#83-hardware-token-vocabulary)
+9. [Example](#9-example)
 
 ---
 
@@ -49,7 +53,7 @@ python3 scripts/build_fs.py --board MIKRO_V2 --vehicle ScaniaV8
 The board is selected at compile time (`-D MIKRO_V2` or `-D TRACKLINK_V3`);
 the same config keys mean the same thing on both boards, but the `hardware`
 **tokens resolve to different physical GPIOs per board** — see
-[§7 Pin Reference](#7-pin-reference).
+[§8 Pin Reference](#8-pin-reference).
 
 ### How a config is read
 
@@ -100,17 +104,23 @@ Example:
 
 ## 3. drivetrain
 
-Describes how the vehicle is driven. The parser detects the drivetrain type
-**by which keys are present**:
+Describes how the vehicle is driven. The drivetrain type is declared with
+`drivetrain.type`; when the token is absent it is inferred **by which keys are
+present** (legacy behavior):
 
-| Keys present | Drivetrain type | Parameters honored |
-|---|---|---|
-| `left_motor` (and `right_motor`) | Skid-steer | `left_motor`, `right_motor`, `steering_sensitivity` |
-| otherwise (default) | Ackermann | `drive_motor`, `steering_servo` |
+| `drivetrain.type` | Parameters honored |
+|---|---|
+| `"skid_steer"` | `left_motor`, `right_motor`, `steering_sensitivity` |
+| `"ackermann"` (default) | `drive_motor`, `steering_servo` |
 
-> ⚠️ **The fork.** A `left_motor` key anywhere in `drivetrain` switches the
-> whole section to skid-steer mode — `drive_motor` and `steering_servo` are
-> then **ignored**. Don't mix the two layouts.
+- `type`: the drivetrain layout. **Type:** string · **Default:** inferred from
+  key presence (`left_motor` present ⇒ `"skid_steer"`, otherwise `"ackermann"`).
+  Allowed values: `"ackermann"`, `"skid_steer"`. An unrecognized value logs a
+  boot `WARN` and falls back to the key-presence inference.
+
+> ⚠️ **The fork.** `"skid_steer"` uses `left_motor` + `right_motor` —
+> `drive_motor` and `steering_servo` are then **ignored**. `"ackermann"` uses
+> the opposite layout. Don't mix the two.
 >
 > Legacy: a top-level `DRIVE_MOTOR` (outside `drivetrain`) and a top-level
 > `STEERING_SERVO` are still parsed as Ackermann.
@@ -127,7 +137,7 @@ The following parameters are available in the `drivetrain.drive_motor`
 - `hardware`: the hardware the motor is attached to. **Required** for the
   motor to be configured. Allowed values:
   - `DRIVER_A`, `DRIVER_B` — on-board motor drivers (see
-    [§7 Pin Reference](#7-pin-reference) for pin assignments)
+    [§8 Pin Reference](#8-pin-reference) for pin assignments)
   - `S1` … `S4` — an ESC on a servo pin
 - `frequency`: PWM frequency in Hz. **Type:** integer · **Default:** `20000`.
 - `direction`: motor polarity behavior. **Type:** string · **Default:**
@@ -163,7 +173,7 @@ The following parameters are available in the `drivetrain.steering_servo`
 section:
 
 - `hardware`: the servo pin. **Required** for steering to be configured.
-  Allowed values: `S1` … `S4` (see [§7 Pin Reference](#7-pin-reference)).
+  Allowed values: `S1` … `S4` (see [§8 Pin Reference](#8-pin-reference)).
 - `frequency`: servo PWM frequency in Hz. **Type:** integer · **Default:** `50`.
 - `endpoints.left`: pulse width (µs) at full left lock.
   **Type:** integer · **Default:** `1350`.
@@ -195,12 +205,46 @@ left/right motor speeds diverge for a given steering command).
 
   > Only read in skid-steer mode; ignored for Ackermann layouts.
 
+### 3.4 Example: skid-steer layout
+
+Two tracks, each on its own motor driver (MIKRO_V2: `DRIVER_A` + `DRIVER_B`):
+
+```json
+"drivetrain": {
+    "type": "skid_steer",
+    "left_motor": {
+        "hardware": "DRIVER_A",
+        "frequency": 20000,
+        "direction": "forward",
+        "duty": { "min": 20, "max": 90 }
+    },
+    "right_motor": {
+        "hardware": "DRIVER_B",
+        "frequency": 20000,
+        "direction": "forward",
+        "duty": { "min": 20, "max": 90 }
+    },
+    "steering_sensitivity": 80
+}
+```
+
+The left track runs on the drive output (`DRIVER_A` or an `S*` ESC), the right
+track on the second motor output (`DRIVER_B` or another `S*` ESC). The `right`
+track's polarity, duty window, and electrical kind are configured independently
+of the left track, per [`left_motor`/`right_motor`](#31-drivetraindrive_motor--left_motor--right_motor).
+
+> ⚠️ **Aux exclusion.** In skid-steer mode the second motor output is the right
+> track, so `aux_motor` cannot be configured — the firmware logs
+> `WARN: aux_motor: ignored in skid-steer mode` and the aux channel stays
+> unconfigured. A missing `left_motor`/`right_motor` on a skid config logs a
+> `WARN` and that track stays unconfigured.
+
 ---
 
 ## 4. lights
 
 On-board LED outputs. All `hardware` values are `L0` … `L8` tokens (the
-available range depends on the board — see [§7 Pin Reference](#7-pin-reference)).
+available range depends on the board — see [§8 Pin Reference](#8-pin-reference)).
 
 > **Unconfigured lights.** A light whose `hardware` token doesn't resolve is
 > simply never driven — no error is raised. Verify the token against your
@@ -303,14 +347,16 @@ these bits, so on a truck config these lights simply never light from the app.
 #### lights.ditch_light
 
 **Two outputs that flash alternately** — counter-phased, left on while right
-is off and vice versa, like real locomotive ditch lights. The alternation is
-driven by the firmware from `interval_ms`; there is no other automation.
+is off and vice versa, like real locomotive ditch lights. Driven by an `EasyLEDGroup`
+step-sequencer pattern runner in the firmware (`alternate` pattern at `interval_ms`).
+The group sequencer also provides built-in pattern factories (`alternate`, `syncFlash`,
+`chase`, `doubleStrobe`) for future vehicle types.
 
 The following parameters are available in the `lights.ditch_light` section:
 
 - `left.hardware` / `right.hardware`: pin tokens for the two ditch outputs.
   **Type:** string · Allowed values: `L0` … `L8` (see
-  [§7 Pin Reference](#7-pin-reference)).
+  [§8 Pin Reference](#8-pin-reference)).
 - `interval_ms`: alternation half-period — how long **each** side stays lit
   before flipping. **Type:** integer · **Default:** `8` — alternation rate
   ≈ 1000/(2·interval) per second (`8` ≈ 60/s; `5`–`10` covers 50–100/s).
@@ -328,6 +374,7 @@ Example:
 }
 ```
 
+
 #### lights.step_light / cab_light
 
 Plain on/off outputs (no automation). Each accepts `hardware` and
@@ -337,13 +384,109 @@ The following parameters are available in the `lights.step_light` (or
 `cab_light`) section:
 
 - `hardware`: pin token the light is wired to. **Type:** string · Allowed
-  values: `L0` … `L8` (see [§7 Pin Reference](#7-pin-reference)).
+  values: `L0` … `L8` (see [§8 Pin Reference](#8-pin-reference)).
 - `brightness_max`: on-state brightness (percent). **Type:** integer ·
   **Default:** `30` (step), `40` (cab) · **Range:** 0–100.
 
 ---
 
-## 5. animation
+## 5. aux_motor / aux_light
+
+Auxiliary work-machine outputs — the dump-truck tipper, cement-mixer drum, or
+other add-on channels. Both are **optional**: absent from the hardware config,
+no aux channel is initialized (no legacy auto-attached outputs exist anymore —
+the old hardcoded S2/S3 aux servos are gone).
+
+> ⚠️ **Skid-steer exclusion.** `aux_motor` is not usable on a skid-steer config
+> ([§3 drivetrain](#3-drivetrain)) — the second motor output is the right
+> track. The firmware logs `WARN: aux_motor: ignored in skid-steer mode` and
+> leaves the aux channel unconfigured.
+
+The **hardware config is the sole owner of aux wiring and purpose** — the
+vehicle config never mentions pins, so the same `vehicle.json` works on any
+board. Aux behavior (hydraulic flow sound, load governor) is keyed off aux
+activity generically.
+
+### 5.1 aux_motor
+
+The aux motor channel. Electrically identical to
+[`drivetrain.drive_motor`](#31-drivetraindrive_motor-left_motor-right_motor) —
+the `hardware` token decides the output kind, so there is no separate
+`aux_servo` key.
+
+The following parameters are available in the `aux_motor` section:
+
+- `hardware`: the output the motor is wired to. **Required** for the channel
+  to be configured. Allowed values:
+  - `DRIVER_A`, `DRIVER_B` — on-board motor drivers (H-bridge output)
+  - `S1` … `S4` — a servo/ESC on a servo pin (PPM output, like the drive ESC)
+- `frequency`: PWM frequency in Hz. **Type:** integer · **Default:** `20000`
+  (driver) / `50` (servo/ESC output).
+- `direction`: motor polarity. **Type:** string · **Default:** `forward` —
+  same values as the drive motor (`forward`, `reverse`, `uni_forward`,
+  `uni_reverse`).
+- `duty.min` / `duty.max`: minimum/maximum duty percent applied at non-zero
+  speed. **Type:** integer · **Default:** `20` / `90` · **Range:** 0–100.
+- `type`: the aux *purpose*, which selects the app control profile.
+  **Type:** string · **Default:** `mixer`.
+
+### 5.2 aux_motor.type (mixer / tipper)
+
+`type` is **purpose, not electrical kind** — the electrical kind (servo vs
+H-bridge) is already derived from the `hardware` token. The type selects how
+the app's `aux_slider` behaves:
+
+| type | slider detents | slider centering | drive behavior |
+|---|---|---|---|
+| `mixer` | 5 (snap positions) | none (`RK_SPRING_NONE`) | proportional to position incl. direction; keeps running |
+| `tipper` | 0 (continuous) | self-centering (`RK_SPRING_CENTER`) | momentary — follows the finger |
+| `trailer_dcc` | — (deferred) | — | not implemented: channel unconfigured + boot warning |
+
+> ⚠️ **`trailer_dcc` is deferred.** The DCC-like trailer control protocol is
+> reserved in the schema enum but not yet implemented. A config declaring it
+> loads fine but logs `WARN: aux_motor: type 'trailer_dcc' not yet
+> implemented` and the channel stays unconfigured until a later change adds
+> the protocol.
+
+Example (cement-mixer drum on the second motor driver):
+
+```json
+"aux_motor": {
+    "hardware": "DRIVER_B",
+    "frequency": 20000,
+    "direction": "forward",
+    "duty": {
+        "min": 20,
+        "max": 90
+    },
+    "type": "mixer"
+}
+```
+
+### 5.3 aux_light
+
+Auxiliary work lamp on an LED channel. Same shape as
+[`lights.head_light`](#41-lightshead_light-tail_light).
+
+The following parameters are available in the `aux_light` section:
+
+- `hardware`: the LED pin. **Required** for the light to be configured.
+  Allowed values: `L0` … `L8` (see [§8 Pin Reference](#8-pin-reference)).
+- `brightness_max`: on-state brightness (percent). **Type:** integer ·
+  **Default:** `60` · **Range:** 0–100.
+
+Example:
+
+```json
+"aux_light": {
+    "hardware": "L6",
+    "brightness_max": 60
+}
+```
+
+---
+
+## 6. animation
 
 Tuning for the EasyKit easing/fade/blink animation engines. Global defaults —
 absent from a hardware config, these values apply as-is.
@@ -372,7 +515,7 @@ Example:
 
 ---
 
-## 6. battery
+## 7. battery
 
 LiPo pack configuration and voltage-sense calibration. All voltages are
 **per cell**.
@@ -383,8 +526,10 @@ The following parameters are available in the `battery` section:
   `0` (auto-detect) · **Range:** 0–4.
   - `0` — voltage-based auto-detection at boot (legacy behavior)
   - `1`–`4` — fixed cell count; the single source of truth for the pack
-- `cutoff_voltage`: low-voltage cutoff **per cell** (V).
-  **Type:** float · **Default:** `3.3`.
+- `warning_voltage`: low-voltage warning threshold **per cell** (V).
+  **Type:** float · **Default:** `3.5` · **Range:** 3.0–4.0.
+- `cutoff_voltage`: low-voltage cutoff threshold **per cell** (V).
+  **Type:** float · **Default:** `3.3` · **Range:** 3.0–3.8.
 - `full_voltage`: fully-charged voltage **per cell** (V).
   **Type:** float · **Default:** `4.2`.
 - `voltage_scale`: scale factor applied to the voltage sense reading.
@@ -403,7 +548,8 @@ Example:
 ```json
 "battery": {
     "cell_count": 1,
-    "cutoff_voltage": 3.4,
+    "warning_voltage": 3.5,
+    "cutoff_voltage": 3.3,
     "full_voltage": 4.2,
     "voltage_scale": 1.8,
     "voltage_offset": -0.2
@@ -412,13 +558,70 @@ Example:
 
 ---
 
-## 7. Pin Reference
+## 8. power
+
+Board power management, 3-state control (`OFF`, `ON`, `CHARGING`), and timing configuration. All time parameters are specified in **integer seconds** (`uint16_t`).
+
+The following parameters are available in the `power` section:
+
+- `hardware`: optional pin token (`"L0"`) or light alias (`"head_light"`, `"cab_light"`, etc.) for power status indicator & active button-hold feedback.
+- `boot_latch_s`: boot button hold required to latch hardware power ON (s).
+  **Type:** integer · **Default:** `1` · **Range:** 0–30.
+- `button_hold_s`: continuous button hold duration to trigger graceful power-off (s).
+  **Type:** integer · **Default:** `4` · **Range:** 1–30.
+- `disconnect_timeout_s`: idle/disconnected auto power-off timeout (s).
+  **Type:** integer · **Default:** `60` · **Range:** 0–3600 (`0` disables auto-off).
+- `warning_window_s`: warning phase duration (hazard blinks & sound alert) before disconnect auto-off (s).
+  **Type:** integer · **Default:** `10` · **Range:** 1–60.
+- `cutoff_delay_s`: continuous low-voltage cutoff duration before power-off (s).
+  **Type:** integer · **Default:** `2` · **Range:** 0–60.
+
+Example:
+
+```json
+"power": {
+    "hardware": "head_light",
+    "boot_latch_s": 1,
+    "button_hold_s": 4,
+    "disconnect_timeout_s": 60,
+    "warning_window_s": 10,
+    "cutoff_delay_s": 2
+}
+```
+
+> 💡 **3-State Board Behavior & Charging:**
+> When charging is active (`CHARGE_SENS` pin HIGH), the board enters `CHARGING` state. Motor drive is disabled for safety, and the disconnect auto-off timer is suspended.
+> During disconnection, single-clicking the physical power button resets the disconnect timer to 0, granting a fresh timeout window.
+
+---
+
+## 9. charging
+
+Charging indicator channel and animation mode.
+
+The following parameters are available in the `charging` section:
+
+- `hardware`: pin token (`"L1"`) or light alias (`"head_light"`, `"cab_light"`, etc.) for the charging status indicator output.
+- `mode`: animation mode during charging (`"solid"`, `"blink"`, or `"pulse"`). **Default:** `"solid"`.
+
+Example:
+
+```json
+"charging": {
+    "hardware": "head_light",
+    "mode": "solid"
+}
+```
+
+---
+
+## 10. Pin Reference
 
 The `hardware` values in a config are **logical tokens**, not GPIO numbers.
 Each token resolves to a different physical pin depending on the board
 selected at compile time. **Always check your board's table.**
 
-### 7.1 MIKRO_V2 pins
+### 8.1 MIKRO_V2 pins
 
 | Token | GPIO | Notes |
 |---|---|---|
@@ -438,7 +641,7 @@ selected at compile time. **Always check your board's table.**
 | `DRIVER_A` | — | PWM1=18, PWM2=21, EN=17, BEMF=9 · dual-PWM bridge |
 | `DRIVER_B` | — | PWM1=12, PWM2=13, EN=11, BEMF=10 · dual-PWM bridge |
 
-### 7.2 TRACKLINK_V3 pins
+### 8.2 TRACKLINK_V3 pins
 
 | Token | GPIO | Notes |
 |---|---|---|
@@ -458,7 +661,7 @@ Note the per-board differences — e.g. `L1` is **GPIO 38** on MIKRO_V2 but
 **GPIO 6** on TRACKLINK_V3, and `S2` is available on TRACKLINK_V3 only up to
 `S2` (MIKRO_V2 goes to `S4`).
 
-### 7.3 Hardware token vocabulary
+### 8.3 Hardware token vocabulary
 
 - `L<n>` — LED channels, `L0`–`L8` (board-dependent upper bound).
 - `S<n>` — servo/ESC channels, `S1`–`S4` (board-dependent upper bound).
@@ -471,7 +674,7 @@ Note the per-board differences — e.g. `L1` is **GPIO 38** on MIKRO_V2 but
 
 ---
 
-## 8. Example
+## 9. Example
 
 A complete annotated hardware config (the shipped MIKRO_V2 config):
 
@@ -510,10 +713,10 @@ A complete annotated hardware config (the shipped MIKRO_V2 config):
             "brightness_max": 60
         },
         "reversing_light": {
-            "hardware": "L3"
+            "hardware": "brake_light"                  // alias: shares the brake lamp
         },
         "brake_light": {
-            "hardware": "reversing_light"                // brightness forced to 100
+            "hardware": "L3"                            // GPIO 40; brightness forced to 100
         },
         "turn_light": {
             "left":  { "hardware": "L4" },  // GPIO 41
@@ -523,6 +726,20 @@ A complete annotated hardware config (the shipped MIKRO_V2 config):
             "interval_on": 500,             // ms
             "interval_off": 500             // ms
         }
+    },
+    "aux_motor": {
+        "hardware": "DRIVER_B",             // mixer drum on the 2nd driver
+        "frequency": 20000,
+        "direction": "forward",
+        "duty": {
+            "min": 20,
+            "max": 90
+        },
+        "type": "mixer"                     // mixer | tipper | trailer_dcc (deferred)
+    },
+    "aux_light": {
+        "hardware": "L6",                   // work lamp
+        "brightness_max": 60
     },
     "animation": {
         "easing_speed_deg_s": 180,          // 0 = instant

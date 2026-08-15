@@ -1,0 +1,4 @@
+the pedals seem to be stuck in the center position at startup until i touch it.
+likewise the steering is stuck at the min position. also note that the steering seems to auto center even when auto center is set to none in the saved design, check.
+
+I suppose we need to define the startup behaviour of the control Ui right
