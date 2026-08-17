@@ -2,9 +2,7 @@
 
 ## Purpose
 Defines requirements for automated lighting behaviors including steering auto turn signals, dynamic deceleration brake lights, and 3-state headlight stepping.
-
 ## Requirements
-
 ### Requirement: Steering Auto-Cancel Turn Signals
 The system SHALL activate turn indicators when steering input exceeds ±35% and automatically cancel them when steering returns to center (|steer| < 10%).
 
@@ -86,3 +84,19 @@ The truck reversing light SHALL be illuminated automatically whenever the truck 
 #### Scenario: Manual reversing override still works
 - **WHEN** the truck light Item E is selected
 - **THEN** the reversing light turns on regardless of gear position
+
+### Requirement: Dedicated Full Beam and Fog Lamp Outputs
+The system SHALL support independent physical pin configurations for `full_beam` (high beam) and `fog_lamp` (fog lamp), completely independent from low beam (`head_light`) and locomotive ditch lights (`ditch_light`).
+
+#### Scenario: Full beam activated with dedicated pin
+- **WHEN** High Beam (Bit 1) is selected on the lighting control surface and `lights.full_beam` is configured
+- **THEN** the dedicated `full_beam` output pin is energized to its configured brightness
+
+#### Scenario: Fog lamp activated with dedicated pin
+- **WHEN** Fog Lamp (Bit 2) is selected on the lighting control surface and `lights.fog_lamp` is configured
+- **THEN** the dedicated `fog_lamp` output pin is energized to its configured brightness
+
+#### Scenario: Full beam fallback when unconfigured
+- **WHEN** High Beam (Bit 1) is selected and `lights.full_beam` is not configured
+- **THEN** the system falls back gracefully to driving `head_light` at 100% duty
+

@@ -250,11 +250,30 @@ available range depends on the board — see [§8 Pin Reference](#8-pin-referenc
 > simply never driven — no error is raised. Verify the token against your
 > board's pin table.
 
+### Lighting Bitmask Reference (8-Bit Control Mapping)
+
+The RadioKit control surface transmits lighting states via an 8-bit selection mask (`truck_light` for Road Vehicles / Trucks, `loco_light` for Locomotives). The firmware decodes these bits as follows:
+
+| Bit | Hex / Val | Road Vehicle / Truck (`truck_light`) | Locomotive (`loco_light`) | Automation & Mixing |
+| :---: | :---: | :--- | :--- | :--- |
+| **0** | `0x01` (1) | **Head Light** (`lights.head_light`) | **Headlight** (`lights.head_light`) | Truck fades `head_light` to 40%; Loco runs at 100%. `tail_light` automatically glows at 30% when active. |
+| **1** | `0x02` (2) | **High Beam** (`lights.full_beam`) | **Rear Marker / Full Beam** (`lights.tail_light` / `full_beam`) | Truck energizes dedicated `full_beam` (100%) or steps `head_light` to 100%. Loco powers marker/tail. |
+| **2** | `0x04` (4) | **Fog Lamp** (`lights.fog_lamp`) | **Fog / Marker Lamp** (`lights.fog_lamp`) | Independent forward fog illumination for trucks; auxiliary marker light for locomotives. |
+| **3** | `0x08` (8) | **Hazard Lights** (`lights.turn_light`) | **Ditch Lights** (`lights.ditch_light`) | **Truck**: Flashes left and right turn indicators synchronously.<br>**Loco**: Alternating dual ditch lights. |
+| **4** | `0x10` (16) | **Beacon Light** (`lights.beacon`) | **Beacon / Rotary Light** (`lights.beacon`) | Flashing roof strobe / rotating beacon pattern. |
+| **5** | `0x20` (32) | **Cab Light** (`lights.cab_light`) | **Cab Light** (`lights.cab_light`) | Interior cabin illumination. |
+| **6** | `0x40` (64) | **Work Light** (`lights.work_light`) | **Step / Ground Lights** (`lights.step_light`) | **Truck**: Working deck / rear floodlight.<br>**Loco**: Ground walkway step lights. |
+| **7** | `0x80` (128)| **Aux Light** (`lights.aux_light`) | **Aux Light** (`lights.aux_light`) | General auxiliary lighting output. |
+
+---
+
 ### 4.1 lights.head_light / tail_light
 
 - `hardware`: the LED pin. **Required** for the light to be configured.
 - `brightness_max`: maximum brightness in percent.
   **Type:** integer · **Default:** `60` · **Range:** 0–100.
+
+`head_light` acts as the head light in road vehicles (energized when Head Light Bit 0 or High Beam Bit 1 is active). `tail_light` automatically tracks the live duty of `head_light` at 30% brightness.
 
 Example:
 
@@ -262,18 +281,58 @@ Example:
 "head_light": {
     "hardware": "L1",
     "brightness_max": 60
+},
+"tail_light": {
+    "hardware": "L2",
+    "brightness_max": 60
 }
 ```
 
-### 4.2 lights.brake_light
+### 4.2 lights.full_beam
 
-- `hardware`: the LED pin. **Required** for the light to be configured.
+Dedicated high-beam LED output. Energized when High Beam (Bit 1 / Item 1) is selected on the light selector. If `full_beam` is not configured, high beam falls back to driving `head_light` at 100% brightness.
 
-> ⚠️ **`brightness_max` is ignored here.** The firmware forces the brake
-> light to 100% brightness. A `brightness_max` key is accepted but has no
-> effect.
+- `hardware`: the LED pin. **Required** for the full beam to be configured.
+- `brightness_max`: maximum brightness in percent.
+  **Type:** integer · **Default:** `100` · **Range:** 0–100.
 
 Example:
+
+```json
+"full_beam": {
+    "hardware": "L6",
+    "brightness_max": 100
+}
+```
+
+### 4.3 lights.fog_lamp
+
+Dedicated fog lamp output. Energized when Fog Lamp (Bit 2 / Item 2) is toggled on road vehicles.
+
+- `hardware`: the LED pin. **Required** for the fog lamp to be configured.
+- `brightness_max`: maximum brightness in percent.
+  **Type:** integer · **Default:** `60` · **Range:** 0–100.
+
+Example:
+
+```json
+"fog_lamp": {
+    "hardware": "L7",
+    "brightness_max": 100
+}
+```
+
+### 4.4 lights.brake_light
+
+Braking indicator output. Automatically energizes at 100% brightness when the brake pedal is pressed (> 20%) or during rapid deceleration braking.
+
+- `hardware`: **Type:** string — either a dedicated **pin token** (`L0` … `L8`) or a **light alias** (e.g. `"tail_light"`).
+- **Dual-Intensity Tail/Brake Mixing**: If `brake_light` shares a pin with `tail_light` (e.g. `"hardware": "tail_light"` or both assigned to the same pin), the pin runs at 30% duty for tail lighting when headlights are ON and automatically snaps to 100% duty when braking occurs.
+
+> ⚠️ **`brightness_max` is ignored here.** The firmware forces the brake
+> light to 100% brightness when active. A `brightness_max` key is accepted but has no effect.
+
+Example (independent brake pin):
 
 ```json
 "brake_light": {
@@ -281,7 +340,15 @@ Example:
 }
 ```
 
-### 4.3 lights.turn_light
+Example (shared dual-intensity tail/brake lamp):
+
+```json
+"brake_light": {
+    "hardware": "tail_light"
+}
+```
+
+### 4.5 lights.turn_light
 
 Direction indicators, with one LED per side.
 
@@ -314,43 +381,62 @@ Example:
 }
 ```
 
-### 4.4 lights.reversing_light
+### 4.6 lights.reversing_light
 
-Light driven while reversing.
+Independent reverse lamp output. Automatically energized when the vehicle shifts into Reverse (**Gear R**), or manually via **Bit 4** on the light selector.
 
-- `hardware`: **Type:** string — either a **pin token** (`L0` … `L8`) or a
-  **light alias** naming another configured light:
-  - `"head_light"` — reuse the head light's pin
-  - `"tail_light"` — reuse the tail light's pin
-  - `"brake_light"` — reuse the brake light's pin
+- `hardware`: **Type:** string — a dedicated **pin token** (`L0` … `L8`).
+- `brightness_max`: maximum brightness in percent. **Type:** integer · **Default:** `100` · **Range:** 0–100.
 
-  If the alias refers to a light that isn't configured, the reversing light
-  stays unconfigured.
-
-> ⚠️ **Brightness forced to 100.** Like the brake light, the reversing light
-> is always full brightness; `brightness_max` is not honored.
-
-Example (mirroring the brake light):
+Example (dedicated white reversing lamp):
 
 ```json
 "reversing_light": {
-    "hardware": "brake_light"
+    "hardware": "L8",
+    "brightness_max": 100
 }
 ```
 
-### 4.5 lights.ditch_light / step_light / cab_light
+### 4.7 lights.beacon
 
-Auxiliary locomotive lights, toggled from the app's **loco** light selector —
-items **F/G/H** (bits 5/6/7). The truck page's 5-item selector cannot set
-these bits, so on a truck config these lights simply never light from the app.
+Roof beacon or flashing strobe light, toggled via **Bit 4 (`0x10`)** on the light selector.
 
-#### lights.ditch_light
+- `hardware`: **Type:** string — pin token (`L0` … `L8`).
+- `brightness_max`: on-state brightness in percent. **Type:** integer · **Default:** `100` · **Range:** 0–100.
 
-**Two outputs that flash alternately** — counter-phased, left on while right
-is off and vice versa, like real locomotive ditch lights. Driven by an `EasyLEDGroup`
-step-sequencer pattern runner in the firmware (`alternate` pattern at `interval_ms`).
-The group sequencer also provides built-in pattern factories (`alternate`, `syncFlash`,
-`chase`, `doubleStrobe`) for future vehicle types.
+Example:
+
+```json
+"beacon": {
+    "hardware": "L8",
+    "brightness_max": 100
+}
+```
+
+### 4.8 lights.cab_light
+
+Interior cab illumination, toggled via **Bit 5 (`0x20`)** on the light selector.
+
+- `hardware`: **Type:** string — pin token (`L0` … `L8`).
+- `brightness_max`: on-state brightness in percent. **Type:** integer · **Default:** `40` · **Range:** 0–100.
+
+### 4.9 lights.work_light / step_light
+
+Working floodlight for road vehicles / trucks or ground walkway step lights for locomotives, toggled via **Bit 6 (`0x40`)** on the light selector.
+
+- `hardware`: **Type:** string — pin token (`L0` … `L8`).
+- `brightness_max`: on-state brightness in percent. **Type:** integer · **Default:** `80` (work), `30` (step) · **Range:** 0–100.
+
+### 4.10 lights.aux_light
+
+General auxiliary lighting output, toggled via **Bit 7 (`0x80`)** on the light selector.
+
+- `hardware`: **Type:** string — pin token (`L0` … `L8`).
+- `brightness_max`: on-state brightness in percent. **Type:** integer · **Default:** `60` · **Range:** 0–100.
+
+### 4.11 lights.ditch_light
+
+Locomotive dual ditch lights, toggled via **Bit 3 (`0x08`)** on locomotives. **Two outputs that flash alternately** — counter-phased, left on while right is off and vice versa.
 
 The following parameters are available in the `lights.ditch_light` section:
 
@@ -373,20 +459,6 @@ Example:
     "interval_ms": 8
 }
 ```
-
-
-#### lights.step_light / cab_light
-
-Plain on/off outputs (no automation). Each accepts `hardware` and
-`brightness_max` like the head light.
-
-The following parameters are available in the `lights.step_light` (or
-`cab_light`) section:
-
-- `hardware`: pin token the light is wired to. **Type:** string · Allowed
-  values: `L0` … `L8` (see [§8 Pin Reference](#8-pin-reference)).
-- `brightness_max`: on-state brightness (percent). **Type:** integer ·
-  **Default:** `30` (step), `40` (cab) · **Range:** 0–100.
 
 ---
 

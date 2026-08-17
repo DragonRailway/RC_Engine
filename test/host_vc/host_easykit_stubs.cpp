@@ -85,8 +85,8 @@ void EasyLED::write(float percent) {
 void EasyLED::setDuty(uint32_t duty) { _duty = duty; }
 void EasyLED::update() {}
 void EasyLED::stop() { write(0.0f); }
-void EasyLED::startBlink(uint32_t, uint32_t, float) {}
-void EasyLED::stopBlink() {}
+void EasyLED::startBlink(uint32_t onMs, uint32_t offMs, float duty) { write(duty); }
+void EasyLED::stopBlink() { write(0.0f); }
 bool EasyLED::fadeTo(uint32_t target, uint32_t, EasyLED::Curve, void (*)(void*), void*) { _duty = target; return true; }
 float EasyLED::getDutyPercent() const { return (float)_duty * 100.0f / 1023.0f; }
 

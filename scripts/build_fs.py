@@ -160,7 +160,8 @@ def board_chip(board, pio_ini):
     try:
         cp = configparser.ConfigParser()
         cp.read(pio_ini)
-        section = f"env:{board}"
+        base_board = board.split("-")[0]
+        section = f"env:{base_board}"
         if cp.has_section(section) and cp.has_option(section, "board"):
             b = cp.get(section, "board").replace("-", "")
             if "esp32s3" in b:

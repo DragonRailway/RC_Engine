@@ -429,6 +429,7 @@ int main() {
     HardwareConfig testHwAckermann;
     testHwAckermann.drivetrainType = HardwareConfig::ACKERMANN;
     testHwAckermann.steeringServo.hardwareId = PIN::S1;
+    testHwAckermann.steeringServo.configured = true;
     testHwAckermann.steeringServo.frequency = 50;
     testHwAckermann.steeringServo.endpoints.left = 1350;
     testHwAckermann.steeringServo.endpoints.center = 1500;
@@ -514,6 +515,99 @@ int main() {
     VehicleController::update();
     assert(gear_switch.rk.value == 1 && "Engine stop should return gear to Park (P=1)");
     std::cout << "  PASS: Transmission Start/Stop Interlock verified." << std::endl;
+
+    // ── Test 17: Dedicated Full Beam & Fog Lamp Outputs ──
+    std::cout << "[Host VC Test] Test 17: Dedicated Full Beam & Fog Lamp Outputs..." << std::endl;
+    HardwareConfig testHwLights;
+    testHwLights.battery.cellCount = 1;
+    testHwLights.battery.cutoffVoltage = 3.0f;
+    testHwLights.battery.vScale = 1.0f;
+    testHwLights.battery.vOffset = 0.0f;
+    testHwLights.lights.headLight.pin = 10;
+    testHwLights.lights.headLight.brightness = 100;
+    testHwLights.lights.headLight.configured = true;
+
+    testHwLights.lights.fullBeam.pin = 11;
+    testHwLights.lights.fullBeam.brightness = 100;
+    testHwLights.lights.fullBeam.configured = true;
+
+    testHwLights.lights.fogLamp.pin = 12;
+    testHwLights.lights.fogLamp.brightness = 80;
+    testHwLights.lights.fogLamp.configured = true;
+
+    testHwLights.lights.beacon.pin = 13;
+    testHwLights.lights.beacon.brightness = 100;
+    testHwLights.lights.beacon.configured = true;
+
+    testHwLights.lights.cabLight.pin = 14;
+    testHwLights.lights.cabLight.brightness = 40;
+    testHwLights.lights.cabLight.configured = true;
+
+    testHwLights.lights.workLight.pin = 15;
+    testHwLights.lights.workLight.brightness = 90;
+    testHwLights.lights.workLight.configured = true;
+
+    testHwLights.lights.auxLight.pin = 16;
+    testHwLights.lights.auxLight.brightness = 70;
+    testHwLights.lights.auxLight.configured = true;
+
+    testHwLights.lights.turnLight.leftPin = 17;
+    testHwLights.lights.turnLight.rightPin = 18;
+    testHwLights.lights.turnLight.brightness = 60;
+    testHwLights.lights.turnLight.configured = true;
+
+    HardwareInit::init(testHwLights);
+    VehicleController::init(&testHwLights, &engine, &profile);
+
+    start_button.rk.state = true;
+    for (int i = 0; i < 200; i++) {
+        host_virtual_millis += 10;
+        engine.update(0);
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        VehicleController::update();
+    }
+
+    // 17.1: Head Light (Bit 0) -> Headlight ON (40%), Full Beam OFF (0%)
+    truck_light.rk.value = 0x01; // Bit 0 Head Light
+    VehicleController::update();
+    assert(HardwareInit::getLightDutyPercent(10) > 0.0f && "Headlight should be active on Head Light");
+    assert(HardwareInit::getLightDutyPercent(11) == 0.0f && "Full beam should be 0 on Head Light");
+
+    // 17.2: High Beam (Bit 1) -> Dedicated Full Beam ON (100%)
+    truck_light.rk.value = 0x02; // Bit 1 High Beam
+    VehicleController::update();
+    assert(HardwareInit::getLightDutyPercent(11) > 0.0f && "Dedicated full beam pin should energize on High Beam");
+
+    // 17.3: Fog Lamp (Bit 2) -> Dedicated Fog Lamp ON (80%)
+    truck_light.rk.value = 0x04; // Bit 2 Fog Lamp
+    VehicleController::update();
+    assert(HardwareInit::getLightDutyPercent(12) >= 79 && "Dedicated fog lamp pin should energize on Fog Lamp");
+
+    // 17.4: Beacon Light (Bit 4) -> Beacon Pin 13
+    truck_light.rk.value = 0x10; // Bit 4 Beacon
+    VehicleController::update();
+    assert(HardwareInit::getLightDutyPercent(13) > 0.0f && "Beacon pin should energize on Bit 4");
+
+    // 17.5: Cab Light (Bit 5) -> Cab Pin 14
+    truck_light.rk.value = 0x20; // Bit 5 Cab
+    VehicleController::update();
+    assert(HardwareInit::getLightDutyPercent(14) >= 39 && "Cab light pin should energize on Bit 5");
+
+    // 17.6: Work Light (Bit 6) -> Work Pin 15
+    truck_light.rk.value = 0x40; // Bit 6 Work
+    VehicleController::update();
+    assert(HardwareInit::getLightDutyPercent(15) >= 89 && "Work light pin should energize on Bit 6");
+
+    // 17.7: Aux Light (Bit 7) -> Aux Pin 16
+    truck_light.rk.value = 0x80; // Bit 7 Aux
+    VehicleController::update();
+    assert(HardwareInit::getLightDutyPercent(16) >= 69 && "Aux light pin should energize on Bit 7");
+
+    // 17.8: Configured light mask
+    uint8_t mask = HardwareInit::getConfiguredLightMask(testHwLights.lights, false);
+    assert(mask == 0xFF && "All 8 bits should be reported as configured in mask");
+
+    std::cout << "  PASS: 8-Bit lighting grid and all independent channels verified." << std::endl;
 
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;

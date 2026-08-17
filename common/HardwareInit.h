@@ -82,11 +82,19 @@ public:
         auxMotor.end();
         auxLed.end();
         headLed.end();
+        fullLed.end();
+        fogLed.end();
+        beaconLed.end();
+        cabLed.end();
+        workLed.end();
+        stepLed.end();
         tailLed.end();
         brakeLed.end();
         turnLLed.end();
         turnRLed.end();
         reversingLed.end();
+        ditchLLed.end();
+        ditchRLed.end();
         s_leftCh.attached = false;
         s_rightCh.attached = false;
         Serial.println("[HardwareInit] Stopped all outputs");
@@ -349,6 +357,8 @@ public:
     // turn blink can never strand an LED on.
     static void stopLightAnimations() {
         headLed.stop();
+        fullLed.stop();
+        fogLed.stop();
         tailLed.stop();
         brakeLed.stop();
         turnLLed.stop();
@@ -425,6 +435,34 @@ public:
         auxLed.write((float)brightnessPct);
     }
 
+    // Beacon light strobe / flasher pattern runner
+    static void setBeacon(bool active, uint16_t intervalMs = 120) {
+        if (beaconPin == 0xFF || !beaconLed.isAttached()) return;
+        setLightBlink(beaconPin, active, intervalMs, intervalMs, 100);
+    }
+
+    // Compute configured 8-bit light mask for dynamic UI disabling
+    static uint8_t getConfiguredLightMask(const HardwareConfig::Lights& L, bool isLoco) {
+        uint8_t mask = 0;
+        if (L.headLight.configured) mask |= (1 << 0);
+        if (L.fullBeam.configured || L.headLight.configured) mask |= (1 << 1);
+        if (L.fogLamp.configured) mask |= (1 << 2);
+        if (!isLoco) {
+            if (L.turnLight.configured) mask |= (1 << 3); // Hazard
+        } else {
+            if (L.ditchLight.configured) mask |= (1 << 3); // Ditch
+        }
+        if (L.beacon.configured) mask |= (1 << 4);
+        if (L.cabLight.configured) mask |= (1 << 5);
+        if (!isLoco) {
+            if (L.workLight.configured) mask |= (1 << 6);
+        } else {
+            if (L.stepLight.configured) mask |= (1 << 6);
+        }
+        if (L.auxLight.configured || auxLedPin != 0xFF) mask |= (1 << 7);
+        return mask;
+    }
+
 
 private:
     static uint8_t s_drivetrainType;
@@ -434,15 +472,20 @@ private:
 
     // Light pins (tracked for setLight routing + hotReload teardown)
     static uint8_t headPin;
+    static uint8_t fullPin;
+    static uint8_t fogPin;
     static uint8_t tailPin;
     static uint8_t brakePin;
     static uint8_t turnLPin;
     static uint8_t turnRPin;
     static uint8_t reversingPin;
+    static uint8_t beaconPin;
+    static uint8_t cabPin;
+    static uint8_t workPin;
+    static uint8_t stepPin;
     static uint8_t ditchLPin;
     static uint8_t ditchRPin;
-    static uint8_t stepPin;
-    static uint8_t cabPin;
+    static uint8_t auxPin;
 
 
     // Aux motor channel state (mirrors the drive-motor state, but for the aux
@@ -480,6 +523,12 @@ private:
     static EasyMotor auxMotor;      // used when aux motor type == DRIVER (H-bridge)
     static EasyLED   auxLed;        // aux_light LED output
     static EasyLED   headLed;
+    static EasyLED   fullLed;
+    static EasyLED   fogLed;
+    static EasyLED   beaconLed;
+    static EasyLED   cabLed;
+    static EasyLED   workLed;
+    static EasyLED   stepLed;
     static EasyLED   tailLed;
     static EasyLED   brakeLed;
     static EasyLED   turnLLed;
@@ -487,8 +536,6 @@ private:
     static EasyLED   reversingLed;
     static EasyLED   ditchLLed;
     static EasyLED   ditchRLed;
-    static EasyLED   stepLed;
-    static EasyLED   cabLed;
     static EasyLEDGroup s_ditchGroup;
     static bool      s_ditchActive;
 
@@ -559,16 +606,20 @@ private:
 
     static EasyLED* findLight(uint8_t pin) {
         if (pin == headPin     && headLed.isAttached())     return &headLed;
+        if (pin == fullPin     && fullLed.isAttached())     return &fullLed;
+        if (pin == fogPin      && fogLed.isAttached())      return &fogLed;
         if (pin == tailPin     && tailLed.isAttached())     return &tailLed;
         if (pin == brakePin    && brakeLed.isAttached())    return &brakeLed;
         if (pin == turnLPin    && turnLLed.isAttached())    return &turnLLed;
         if (pin == turnRPin    && turnRLed.isAttached())    return &turnRLed;
         if (pin == reversingPin && reversingLed.isAttached()) return &reversingLed;
+        if (pin == beaconPin   && beaconLed.isAttached())   return &beaconLed;
+        if (pin == cabPin      && cabLed.isAttached())      return &cabLed;
+        if (pin == workPin     && workLed.isAttached())     return &workLed;
+        if (pin == stepPin     && stepLed.isAttached())     return &stepLed;
         if (pin == ditchLPin   && ditchLLed.isAttached())    return &ditchLLed;
         if (pin == ditchRPin   && ditchRLed.isAttached())    return &ditchRLed;
-        if (pin == stepPin     && stepLed.isAttached())     return &stepLed;
-        if (pin == cabPin      && cabLed.isAttached())      return &cabLed;
-        if (pin == auxLedPin   && auxLed.isAttached())      return &auxLed;
+        if ((pin == auxPin || pin == auxLedPin) && auxLed.isAttached()) return &auxLed;
         return nullptr;
     }
 
@@ -598,13 +649,9 @@ private:
     // auxMotor/auxServo for the skid-steer right side.
     static void initChannel(MotorChannel& ch, const HardwareConfig::DriveMotor& motor,
                             EasyMotor* driver, EasyServo* esc) {
-        ch.type = HardwareConfig::DriveMotor::NONE;
-        ch.driver = driver;
-        ch.esc = esc;
-        ch.attached = false;
-
         if (motor.type == HardwareConfig::DriveMotor::NONE) {
-            Serial.println("[HardwareInit] No motor configured");
+            ch.type = HardwareConfig::DriveMotor::NONE;
+            ch.attached = false;
             return;
         }
 
@@ -613,49 +660,51 @@ private:
         ch.dutyMin = motor.duty.min;
         ch.dutyMax = motor.duty.max;
         ch.frequency = motor.frequency;
+        ch.driver = driver;
+        ch.esc = esc;
 
         if (motor.type == HardwareConfig::DriveMotor::DRIVER) {
             const char* name = (motor.hardwareId == PinMapper::DRIVER_A) ? "DRIVER_A" : "DRIVER_B";
             DriverPins pins = PinMapper::getDriver(name);
 
             if (pins.dualPwm) {
-                // Dual-PWM driver (DRIVER_A): both pins are PWM
-                ch.driver->begin(EasyMotor::DriverType::DRIVER_2PWM,
-                                 pins.pwm1, pins.pwm2, pins.enable, false);
+                // Dual-PWM driver (DRIVER_A): both pins are PWM. Polarity
+                // handled by reversing the duty calculation in setMotor.
+                driver->begin(EasyMotor::DriverType::DRIVER_2PWM,
+                              pins.pwm1, pins.pwm2, pins.enable, false);
             } else {
                 // DIR + PWM driver (DRIVER_B): pin1 = speed PWM, pin2 = direction.
-                // EasyKit drives DIR HIGH for forward; this driver drives DIR LOW for
-                // forward, so invert to preserve the previous polarity.
-                ch.driver->begin(EasyMotor::DriverType::DRIVER_1PWM_1DIR,
-                                 pins.pwm1, pins.pwm2, pins.enable, true);
+                // Motor polarity is physically inverted relative to standard;
+                // invert the DIR pin here so positive speed = forward motion.
+                driver->begin(EasyMotor::DriverType::DRIVER_1PWM_1DIR,
+                              pins.pwm1, pins.pwm2, pins.enable, true);
             }
-            ch.driver->setFrequency(ch.frequency);
+            driver->setFrequency(motor.frequency);
             ch.attached = true;
-
-            Serial.printf("[HardwareInit] Driver: %s PWM1=%d PWM2=%d EN=%d Freq=%dHz\n",
-                          name, pins.pwm1, pins.pwm2, pins.enable, motor.frequency);
+            Serial.printf("[HardwareInit] Motor (driver): %s Freq=%dHz Duty=%d..%d%%\n",
+                          name, motor.frequency, motor.duty.min, motor.duty.max);
         }
-        else if (motor.type == HardwareConfig::DriveMotor::ESC && ch.esc) {
+        else if (motor.type == HardwareConfig::DriveMotor::ESC) {
             EasyKit::ServoConfig cfg;
             cfg.minUs = 1000;
             cfg.maxUs = 2000;
             cfg.centerUs = 1500;
-            // ESC runs on a servo-style PPM pulse; fall back to 50 Hz if the
-            // config frequency is not a sane servo refresh rate.
-            cfg.freq = (ch.frequency >= 40 && ch.frequency <= 900)
-                           ? (uint16_t)ch.frequency : 50;
-
-            if (ch.esc->attach(motor.hardwareId, cfg) == EasyKit::Result::OK) {
+            cfg.freq = (motor.frequency >= 40 && motor.frequency <= 900)
+                           ? (uint16_t)motor.frequency : 50;
+            if (esc->attach(motor.hardwareId, cfg) == EasyKit::Result::OK) {
                 ch.attached = true;
-                Serial.printf("[HardwareInit] ESC: Pin=%d Freq=%dHz\n", motor.hardwareId, cfg.freq);
+                Serial.printf("[HardwareInit] Motor (servo/ESC): Pin=%d Freq=%dHz Duty=%d..%d%%\n",
+                              motor.hardwareId, cfg.freq, motor.duty.min, motor.duty.max);
             } else {
-                Serial.printf("[HardwareInit] ESC attach FAILED on Pin=%d\n", motor.hardwareId);
+                ch.attached = false;
+                Serial.printf("[HardwareInit] Motor ESC attach FAILED on Pin=%d\n",
+                              motor.hardwareId);
             }
         }
     }
 
     static void initSteeringServo(const HardwareConfig::SteeringServo& servo) {
-        if (servo.hardwareId == 0) {
+        if (!servo.configured) {
             servoPin = 0xFF;
             Serial.println("[HardwareInit] No steering servo configured");
             return;
@@ -685,9 +734,10 @@ private:
     }
 
     static void initLights(const HardwareConfig::Lights& lights) {
-        headPin = 0xFF; tailPin = 0xFF; brakePin = 0xFF;
-        turnLPin = 0xFF; turnRPin = 0xFF; reversingPin = 0xFF;
-        ditchLPin = 0xFF; ditchRPin = 0xFF; stepPin = 0xFF; cabPin = 0xFF;
+        headPin = 0xFF; fullPin = 0xFF; fogPin = 0xFF;
+        tailPin = 0xFF; brakePin = 0xFF; turnLPin = 0xFF; turnRPin = 0xFF;
+        reversingPin = 0xFF; ditchLPin = 0xFF; ditchRPin = 0xFF;
+        stepPin = 0xFF; cabPin = 0xFF; beaconPin = 0xFF; workPin = 0xFF; auxPin = 0xFF;
 
         const EasyKit::LEDConfig cfg = {5000, EasyKit::LEDCResolution::Bits10, -1, false};
 
@@ -696,6 +746,20 @@ private:
             headLed.begin(headPin, cfg);
             Serial.printf("[HardwareInit] Headlight: Pin=%d Brightness=%d%%\n",
                           headPin, lights.headLight.brightness);
+        }
+
+        if (lights.fullBeam.configured) {
+            fullPin = lights.fullBeam.pin;
+            fullLed.begin(fullPin, cfg);
+            Serial.printf("[HardwareInit] Full beam: Pin=%d Brightness=%d%%\n",
+                          fullPin, lights.fullBeam.brightness);
+        }
+
+        if (lights.fogLamp.configured) {
+            fogPin = lights.fogLamp.pin;
+            fogLed.begin(fogPin, cfg);
+            Serial.printf("[HardwareInit] Fog lamp: Pin=%d Brightness=%d%%\n",
+                          fogPin, lights.fogLamp.brightness);
         }
 
         if (lights.tailLight.configured) {
@@ -711,6 +775,34 @@ private:
             Serial.printf("[HardwareInit] Brakelight: Pin=%d\n", brakePin);
         }
 
+        if (lights.beacon.configured) {
+            beaconPin = lights.beacon.pin;
+            beaconLed.begin(beaconPin, cfg);
+            Serial.printf("[HardwareInit] Beacon light: Pin=%d Brightness=%d%%\n",
+                          beaconPin, lights.beacon.brightness);
+        }
+
+        if (lights.cabLight.configured) {
+            cabPin = lights.cabLight.pin;
+            cabLed.begin(cabPin, cfg);
+            Serial.printf("[HardwareInit] Cab light: Pin=%d Brightness=%d%%\n",
+                          cabPin, lights.cabLight.brightness);
+        }
+
+        if (lights.workLight.configured) {
+            workPin = lights.workLight.pin;
+            workLed.begin(workPin, cfg);
+            Serial.printf("[HardwareInit] Work light: Pin=%d Brightness=%d%%\n",
+                          workPin, lights.workLight.brightness);
+        }
+
+        if (lights.stepLight.configured) {
+            stepPin = lights.stepLight.pin;
+            stepLed.begin(stepPin, cfg);
+            Serial.printf("[HardwareInit] Step light: Pin=%d Brightness=%d%%\n",
+                          stepPin, lights.stepLight.brightness);
+        }
+
         if (lights.ditchLight.configured) {
             ditchLPin = lights.ditchLight.leftPin;
             ditchRPin = lights.ditchLight.rightPin;
@@ -723,21 +815,6 @@ private:
             Serial.printf("[HardwareInit] Ditch lights: L=%d R=%d Interval=%dms Brightness=%d%%\n",
                           ditchLPin, ditchRPin, lights.ditchLight.intervalMs,
                           lights.ditchLight.brightness);
-        }
-
-
-        if (lights.stepLight.configured) {
-            stepPin = lights.stepLight.pin;
-            stepLed.begin(stepPin, cfg);
-            Serial.printf("[HardwareInit] Step light: Pin=%d Brightness=%d%%\n",
-                          stepPin, lights.stepLight.brightness);
-        }
-
-        if (lights.cabLight.configured) {
-            cabPin = lights.cabLight.pin;
-            cabLed.begin(cabPin, cfg);
-            Serial.printf("[HardwareInit] Cab light: Pin=%d Brightness=%d%%\n",
-                          cabPin, lights.cabLight.brightness);
         }
 
         if (lights.turnLight.configured) {
@@ -755,13 +832,21 @@ private:
             // May alias another light's pin (e.g. BRAKE_LIGHT) — only attach a
             // second LED object if this is a distinct physical output. setLight()
             // routes by pin value, so the shared pin drives the existing LED.
-            if (reversingPin != headPin && reversingPin != tailPin &&
-                reversingPin != brakePin && reversingPin != turnLPin &&
-                reversingPin != turnRPin) {
+            if (reversingPin != headPin && reversingPin != fullPin &&
+                reversingPin != fogPin &&
+                reversingPin != tailPin && reversingPin != brakePin &&
+                reversingPin != turnLPin && reversingPin != turnRPin) {
                 reversingLed.begin(reversingPin, cfg);
             }
             Serial.printf("[HardwareInit] Reversing light: Pin=%d%s\n", reversingPin,
                           reversingPin == brakePin ? " (shares brake output)" : "");
+        }
+
+        if (lights.auxLight.configured) {
+            auxPin = lights.auxLight.pin;
+            auxLed.begin(auxPin, cfg);
+            Serial.printf("[HardwareInit] Aux light: Pin=%d Brightness=%d%%\n",
+                          auxPin, lights.auxLight.brightness);
         }
     }
 
@@ -783,15 +868,20 @@ HardwareInit::MotorChannel HardwareInit::s_leftCh;
 HardwareInit::MotorChannel HardwareInit::s_rightCh;
 
 uint8_t HardwareInit::headPin = 0xFF;
+uint8_t HardwareInit::fullPin = 0xFF;
+uint8_t HardwareInit::fogPin = 0xFF;
 uint8_t HardwareInit::tailPin = 0xFF;
 uint8_t HardwareInit::brakePin = 0xFF;
 uint8_t HardwareInit::turnLPin = 0xFF;
 uint8_t HardwareInit::turnRPin = 0xFF;
 uint8_t HardwareInit::reversingPin = 0xFF;
+uint8_t HardwareInit::beaconPin = 0xFF;
+uint8_t HardwareInit::cabPin = 0xFF;
+uint8_t HardwareInit::workPin = 0xFF;
+uint8_t HardwareInit::stepPin = 0xFF;
 uint8_t HardwareInit::ditchLPin = 0xFF;
 uint8_t HardwareInit::ditchRPin = 0xFF;
-uint8_t HardwareInit::stepPin = 0xFF;
-uint8_t HardwareInit::cabPin = 0xFF;
+uint8_t HardwareInit::auxPin = 0xFF;
 
 
 uint8_t  HardwareInit::auxMotorType = HardwareConfig::DriveMotor::NONE;
@@ -821,6 +911,12 @@ EasyServo HardwareInit::auxServo;
 EasyMotor HardwareInit::auxMotor;
 EasyLED   HardwareInit::auxLed;
 EasyLED   HardwareInit::headLed;
+EasyLED   HardwareInit::fullLed;
+EasyLED   HardwareInit::fogLed;
+EasyLED   HardwareInit::beaconLed;
+EasyLED   HardwareInit::cabLed;
+EasyLED   HardwareInit::workLed;
+EasyLED   HardwareInit::stepLed;
 EasyLED   HardwareInit::tailLed;
 EasyLED   HardwareInit::brakeLed;
 EasyLED   HardwareInit::turnLLed;
@@ -828,8 +924,6 @@ EasyLED   HardwareInit::turnRLed;
 EasyLED   HardwareInit::reversingLed;
 EasyLED   HardwareInit::ditchLLed;
 EasyLED   HardwareInit::ditchRLed;
-EasyLED   HardwareInit::stepLed;
-EasyLED   HardwareInit::cabLed;
 EasyLEDGroup HardwareInit::s_ditchGroup;
 bool      HardwareInit::s_ditchActive = false;
 uint8_t   HardwareInit::s_drivetrainType = HardwareConfig::ACKERMANN;

@@ -41,25 +41,23 @@
             "hardware": "L1",
             "brightness_max": 60
         },
+        "full_beam": {
+            "hardware": "L6",
+            "brightness_max": 100
+        },
         "tail_light": {
             "hardware": "L2",
             "brightness_max": 60
         },
-        "reversing_light": {
-            "hardware": "brake_light"
-        },
         "brake_light": {
             "hardware": "L3"
         },
-        "ditch_light": {
-            "left": {
-                "hardware": "L7"
-            },
-            "right": {
-                "hardware": "L8"
-            },
-            "brightness_max": 100,
-            "interval_ms": 500
+        "reversing_light": {
+            "hardware": "L8"
+        },
+        "fog_lamp": {
+            "hardware": "L7",
+            "brightness_max": 100
         },
         "turn_light": {
 

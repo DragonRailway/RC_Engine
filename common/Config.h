@@ -53,9 +53,17 @@ struct HardwareConfig {
         };
 
         Light headLight;
+        Light fullBeam;
+        Light fogLamp;
         Light tailLight;
         Light brakeLight;
         Light reversingLight;
+        Light beacon;
+        Light cabLight;
+        Light workLight;
+        Light stepLight;
+        Light auxLight;
+
         // Auxiliary locomotive lights — app-toggleable (loco light selector
         // items F/G/H, bits 5/6/7).
         struct DitchLight {
@@ -65,8 +73,6 @@ struct HardwareConfig {
             uint16_t intervalMs = 8;  // alternation half-period: each side on for this long
             bool configured = false;
         } ditchLight;  // two outputs flashing alternately (left/right)
-        Light stepLight;    // step lights
-        Light cabLight;     // cab light
 
         struct TurnLight {
             uint8_t leftPin = 0;

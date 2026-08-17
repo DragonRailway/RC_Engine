@@ -34,8 +34,16 @@
       "additionalProperties": false,
       "properties": {
         "head_light": { "$ref": "#/definitions/light" },
+        "full_beam": { "$ref": "#/definitions/light" },
+        "high_beam": { "$ref": "#/definitions/light" },
+        "fog_lamp": { "$ref": "#/definitions/light" },
+        "fog_light": { "$ref": "#/definitions/light" },
         "tail_light": { "$ref": "#/definitions/light" },
         "brake_light": { "$ref": "#/definitions/light" },
+        "beacon": { "$ref": "#/definitions/light" },
+        "work_light": { "$ref": "#/definitions/light" },
+        "work_lamp": { "$ref": "#/definitions/light" },
+        "aux_light": { "$ref": "#/definitions/light" },
         "ditch_light": {
           "type": "object",
           "additionalProperties": false,

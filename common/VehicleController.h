@@ -40,10 +40,24 @@ public:
         }
     }
 
+    static void applyConfiguredLightMask(const HardwareConfig::Lights& L, bool auxHwConfigured) {
+        uint8_t truckMask = HardwareInit::getConfiguredLightMask(L, false);
+        uint8_t locoMask  = HardwareInit::getConfiguredLightMask(L, true);
+
+        truck_light.setItemMask(truckMask);
+        loco_light.setItemMask(locoMask);
+
+        Serial.printf("[Lights] Configured Mask: Truck=0x%02X, Loco=0x%02X\n", truckMask, locoMask);
+    }
+
     static void init(HardwareConfig* hw, RcEngineSound* engine, VehicleProfile* profile) {
         s_hw = hw;
         s_engine = engine;
         s_profile = profile;
+
+        if (s_hw) {
+            applyConfiguredLightMask(s_hw->lights, s_hw->auxLight.configured);
+        }
 
         // Master volume comes from the hardware config
         if (s_hw && s_profile) {
@@ -60,6 +74,7 @@ public:
         s_decelBrakeTime = 0;
         s_headlightMode = 0;
         s_lastHeadBright = 0;
+        s_lastFullBright = 0;
         s_fogLampPrev = false;
         s_autoTurnLeft = false;
         s_autoTurnRight = false;
@@ -535,16 +550,16 @@ public:
         s_prevThrottlePct = throttlePct;
 
         // ── Dedicated Headlight, High Beam & Fog Lamp Control ──
-        uint8_t headlightMode = 0; // 0=Off, 1=Low Beam (40%), 2=High Beam (100%)
+        uint8_t headlightMode = 0; // 0=Off, 1=Head Light (40%), 2=High Beam (100%)
         bool fogLamp = false;
         if (!isLoco) {
-            bool lowBeam  = (bits & 0x01); // Item 0: Low Beam
-            bool highBeam = (bits & 0x02); // Item 1: High Beam
-            fogLamp       = (bits & 0x04); // Item 2: Fog Lamp
+            bool headLight = (bits & 0x01); // Item 0: Head Light
+            bool highBeam  = (bits & 0x02); // Item 1: High Beam
+            fogLamp        = (bits & 0x04); // Item 2: Fog Lamp
 
             if (highBeam) {
                 headlightMode = 2;
-            } else if (lowBeam) {
+            } else if (headLight) {
                 headlightMode = 1;
             } else {
                 headlightMode = 0;
@@ -625,6 +640,7 @@ private:
     static uint32_t s_decelBrakeTime;
     static uint8_t  s_headlightMode;
     static uint8_t  s_lastHeadBright;   // last commanded headlight target (fade-on-change)
+    static uint8_t  s_lastFullBright;   // last commanded full beam target (fade-on-change)
     static bool     s_fogLampPrev;
     static bool     s_autoTurnLeft;
     static bool     s_autoTurnRight;
@@ -646,20 +662,34 @@ private:
     static void applyLightsWithAutomation(uint8_t bits, bool turnL, bool turnR, bool decelBrake, bool manualBrake, uint8_t headlightMode, bool autoReverseLight, bool fogLamp, bool isLoco) {
         if (!s_hw) return;
         const HardwareConfig::Lights& L = s_hw->lights;
-        bool manualTail = (bits & 0x02);
+        bool manualTail = isLoco ? (bits & 0x02) : false;
         bool brakeActive = manualBrake || decelBrake;
-        bool manualRev  = (bits & 0x10) || autoReverseLight; // Item E manual override OR gear-R automatic
+        bool manualRev  = autoReverseLight; // gear-R automatic
 
         uint8_t headBright = 0;
-        if (headlightMode == 1)      headBright = (uint8_t)(L.headLight.brightness * 0.40f);
-        else if (headlightMode == 2) headBright = L.headLight.brightness;
+        uint8_t fullBright = 0;
+        if (headlightMode == 1) {
+            headBright = (uint8_t)(L.headLight.brightness * 0.40f);
+            fullBright = 0;
+        } else if (headlightMode == 2) {
+            if (L.fullBeam.configured) {
+                headBright = (uint8_t)(L.headLight.brightness * 0.40f);
+                fullBright = L.fullBeam.brightness;
+            } else {
+                headBright = L.headLight.brightness;
+                fullBright = 0;
+            }
+        }
 
-        // Headlight steps transition via a fade, triggered only on a target
-        // change so the animation engine ramps (Off -> 40% -> 100%) instead of
-        // snapping. The fade engine owns the duty while running.
+        // Headlight & full beam steps transition via a fade, triggered only on a target
+        // change so the animation engine ramps instead of snapping.
         if (headBright != s_lastHeadBright) {
             s_lastHeadBright = headBright;
             HardwareInit::setLightFade(L.headLight.pin, headBright, s_hw->animation.fadeDurationMs);
+        }
+        if (L.fullBeam.configured && fullBright != s_lastFullBright) {
+            s_lastFullBright = fullBright;
+            HardwareInit::setLightFade(L.fullBeam.pin, fullBright, s_hw->animation.fadeDurationMs);
         }
 
         // Tail tracks the headlight's LIVE duty so it follows the fade naturally
@@ -687,16 +717,48 @@ private:
             HardwareInit::setLight(L.reversingLight.pin, revBright);
         }
 
-        // Fog Lamp (Truck) or Ditch / Aux Lights (Locomotive)
-        if (!isLoco) {
-            uint8_t fogDuty = fogLamp ? L.ditchLight.brightness : 0;
-            HardwareInit::setLight(L.ditchLight.leftPin,  fogDuty);
-            HardwareInit::setLight(L.ditchLight.rightPin, fogDuty);
-        } else {
-            bool ditchOn = (bits & 0x20);
+        // Bit 2: Fog Lamp
+        uint8_t fogDuty = (bits & 0x04) ? L.fogLamp.brightness : 0;
+        if (L.fogLamp.configured) {
+            HardwareInit::setLight(L.fogLamp.pin, fogDuty);
+        }
+
+        // Bit 3: Hazard Light (Truck) or Ditch Lights (Locomotive)
+        if (isLoco) {
+            bool ditchOn = (bits & 0x08);
             HardwareInit::setDitchLights(ditchOn, L.ditchLight.intervalMs);
-            HardwareInit::setLight(L.stepLight.pin,  (bits & 0x40) ? L.stepLight.brightness  : 0);
-            HardwareInit::setLight(L.cabLight.pin,   (bits & 0x80) ? L.cabLight.brightness   : 0);
+        }
+
+        // Bit 4: Beacon Light (Strobe / Flasher)
+        bool beaconOn = (bits & 0x10);
+        HardwareInit::setBeacon(beaconOn);
+
+        // Bit 5: Cab Light
+        uint8_t cabDuty = (bits & 0x20) ? L.cabLight.brightness : 0;
+        if (L.cabLight.configured) {
+            HardwareInit::setLight(L.cabLight.pin, cabDuty);
+        }
+
+        // Bit 6: Work Light (Truck) or Step Light (Locomotive)
+        if (!isLoco) {
+            uint8_t workDuty = (bits & 0x40) ? L.workLight.brightness : 0;
+            if (L.workLight.configured) {
+                HardwareInit::setLight(L.workLight.pin, workDuty);
+            }
+        } else {
+            uint8_t stepDuty = (bits & 0x40) ? L.stepLight.brightness : 0;
+            if (L.stepLight.configured) {
+                HardwareInit::setLight(L.stepLight.pin, stepDuty);
+            }
+        }
+
+        // Bit 7: Aux Light
+        uint8_t auxDuty = (bits & 0x80) ? L.auxLight.brightness : 0;
+        if (L.auxLight.configured) {
+            HardwareInit::setLight(L.auxLight.pin, auxDuty);
+        }
+        if (s_hw->auxLight.configured) {
+            HardwareInit::setAuxLight((bits & 0x80) ? s_hw->auxLight.brightness : 0);
         }
 
         // Turn signals / hazards run through the blink engine with the config
@@ -757,6 +819,7 @@ int16_t  VehicleController::s_prevThrottlePct = 0;
 uint32_t VehicleController::s_decelBrakeTime = 0;
 uint8_t  VehicleController::s_headlightMode = 0;
 uint8_t  VehicleController::s_lastHeadBright = 0;
+uint8_t  VehicleController::s_lastFullBright = 0;
 bool     VehicleController::s_fogLampPrev = false;
 bool     VehicleController::s_autoTurnLeft = false;
 bool     VehicleController::s_autoTurnRight = false;

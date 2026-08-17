@@ -90,6 +90,7 @@ static bool reloadConfigs() {
     profile.config.sound.master = hwConfig.sound.volume;
 
     HardwareInit::hotReload(hwConfig);
+    VehicleController::applyConfiguredLightMask(hwConfig.lights, hwConfig.auxLight.configured);
     engine.setConfig(profile.config);
     applyAuxSliderProfile();
 
@@ -185,6 +186,7 @@ void setup() {
     initRadioKit();
     UiLogger::onRadioKitStarted();
     applyAuxSliderProfile();
+    VehicleController::applyConfiguredLightMask(hwConfig.lights, hwConfig.auxLight.configured);
 
     // ── Vehicle-type-driven app surface ──
     // RadioKit.config.type is informational (sent to the app on connect); the

@@ -472,13 +472,18 @@ private:
 
         JsonObjectConst lights = doc["lights"];
         if (!lights.isNull()) {
-            static const char* lk[] = {"head_light", "tail_light", "brake_light",
-                                       "turn_light", "reversing_light",
-                                       "ditch_light", "step_light", "cab_light"};
-            checkKeys(lights, "lights", lk, 8);
-            for (const char* lightKey : {"head_light", "tail_light", "brake_light",
-                                         "reversing_light",
-                                         "step_light", "cab_light"}) {
+            static const char* lk[] = {"head_light", "full_beam", "high_beam",
+                                       "fog_lamp", "fog_light", "tail_light",
+                                       "brake_light", "turn_light", "reversing_light",
+                                       "beacon", "cab_light", "work_light", "work_lamp",
+                                       "step_light", "aux_light", "ditch_light"};
+            checkKeys(lights, "lights", lk, 16);
+            for (const char* lightKey : {"head_light", "full_beam", "high_beam",
+                                         "fog_lamp", "fog_light",
+                                         "tail_light", "brake_light",
+                                         "reversing_light", "beacon",
+                                         "cab_light", "work_light", "work_lamp",
+                                         "step_light", "aux_light"}) {
                 JsonObjectConst l = lights[lightKey];
                 if (l.isNull()) continue;
                 static const char* hk[] = {"hardware", "brightness_max"};
@@ -765,11 +770,15 @@ private:
         uint8_t pin = PinMapper::resolve(hw);
         if (pin != 0xFF) return pin;
         if ((strcasecmp(hw, "head_light") == 0 || strcasecmp(hw, "HEAD_LIGHT") == 0) && config.lights.headLight.configured) return config.lights.headLight.pin;
+        if ((strcasecmp(hw, "full_beam") == 0 || strcasecmp(hw, "FULL_BEAM") == 0 || strcasecmp(hw, "high_beam") == 0 || strcasecmp(hw, "HIGH_BEAM") == 0) && config.lights.fullBeam.configured) return config.lights.fullBeam.pin;
+        if ((strcasecmp(hw, "fog_lamp") == 0 || strcasecmp(hw, "FOG_LAMP") == 0 || strcasecmp(hw, "fog_light") == 0 || strcasecmp(hw, "FOG_LIGHT") == 0) && config.lights.fogLamp.configured) return config.lights.fogLamp.pin;
         if ((strcasecmp(hw, "tail_light") == 0 || strcasecmp(hw, "TAIL_LIGHT") == 0) && config.lights.tailLight.configured) return config.lights.tailLight.pin;
         if ((strcasecmp(hw, "brake_light") == 0 || strcasecmp(hw, "BRAKE_LIGHT") == 0) && config.lights.brakeLight.configured) return config.lights.brakeLight.pin;
         if ((strcasecmp(hw, "cab_light") == 0 || strcasecmp(hw, "CAB_LIGHT") == 0) && config.lights.cabLight.configured) return config.lights.cabLight.pin;
         if ((strcasecmp(hw, "step_light") == 0 || strcasecmp(hw, "STEP_LIGHT") == 0) && config.lights.stepLight.configured) return config.lights.stepLight.pin;
-        if ((strcasecmp(hw, "aux_light") == 0 || strcasecmp(hw, "AUX_LIGHT") == 0) && config.auxLight.configured) return config.auxLight.pin;
+        if ((strcasecmp(hw, "beacon") == 0 || strcasecmp(hw, "BEACON") == 0) && config.lights.beacon.configured) return config.lights.beacon.pin;
+        if ((strcasecmp(hw, "work_light") == 0 || strcasecmp(hw, "WORK_LIGHT") == 0 || strcasecmp(hw, "work_lamp") == 0 || strcasecmp(hw, "WORK_LAMP") == 0) && config.lights.workLight.configured) return config.lights.workLight.pin;
+        if ((strcasecmp(hw, "aux_light") == 0 || strcasecmp(hw, "AUX_LIGHT") == 0) && (config.lights.auxLight.configured || config.auxLight.configured)) return config.lights.auxLight.configured ? config.lights.auxLight.pin : config.auxLight.pin;
         if ((strcasecmp(hw, "turn_light") == 0 || strcasecmp(hw, "TURN_LIGHT") == 0) && config.lights.turnLight.configured) return config.lights.turnLight.leftPin != 0xFF ? config.lights.turnLight.leftPin : config.lights.turnLight.rightPin;
         return 0xFF;
     }
@@ -784,6 +793,24 @@ private:
             config.headLight.pin = PinMapper::resolve(hw);
             config.headLight.brightness = head["brightness_max"] | head["BRIGHTNESS_MAX"] | 60;
             config.headLight.configured = config.headLight.pin != 0xFF;
+        }
+
+        JsonVariantConst full = lights["full_beam"] | lights["FULL_BEAM"] | lights["high_beam"] | lights["HIGH_BEAM"];
+        if (!full.isNull()) {
+            const char* hw = full["hardware"] | full["HARDWARE"] | "";
+            warnUnresolvedHardware("full_beam", hw);
+            config.fullBeam.pin = PinMapper::resolve(hw);
+            config.fullBeam.brightness = full["brightness_max"] | full["BRIGHTNESS_MAX"] | 100;
+            config.fullBeam.configured = config.fullBeam.pin != 0xFF;
+        }
+
+        JsonVariantConst fog = lights["fog_lamp"] | lights["FOG_LAMP"] | lights["fog_light"] | lights["FOG_LIGHT"];
+        if (!fog.isNull()) {
+            const char* hw = fog["hardware"] | fog["HARDWARE"] | "";
+            warnUnresolvedHardware("fog_lamp", hw);
+            config.fogLamp.pin = PinMapper::resolve(hw);
+            config.fogLamp.brightness = fog["brightness_max"] | fog["BRIGHTNESS_MAX"] | 60;
+            config.fogLamp.configured = config.fogLamp.pin != 0xFF;
         }
 
         JsonVariantConst tail = lights["tail_light"] | lights["TAIL_LIGHT"];
@@ -871,6 +898,33 @@ private:
             }
             config.reversingLight.brightness = 100;
             config.reversingLight.configured = config.reversingLight.pin != 0xFF;
+        }
+
+        JsonVariantConst beacon = lights["beacon"] | lights["BEACON"];
+        if (!beacon.isNull()) {
+            const char* hw = beacon["hardware"] | beacon["HARDWARE"] | "";
+            warnUnresolvedHardware("beacon", hw);
+            config.beacon.pin = PinMapper::resolve(hw);
+            config.beacon.brightness = beacon["brightness_max"] | beacon["BRIGHTNESS_MAX"] | 100;
+            config.beacon.configured = config.beacon.pin != 0xFF;
+        }
+
+        JsonVariantConst work = lights["work_light"] | lights["WORK_LIGHT"] | lights["work_lamp"] | lights["WORK_LAMP"];
+        if (!work.isNull()) {
+            const char* hw = work["hardware"] | work["HARDWARE"] | "";
+            warnUnresolvedHardware("work_light", hw);
+            config.workLight.pin = PinMapper::resolve(hw);
+            config.workLight.brightness = work["brightness_max"] | work["BRIGHTNESS_MAX"] | 80;
+            config.workLight.configured = config.workLight.pin != 0xFF;
+        }
+
+        JsonVariantConst auxL = lights["aux_light"] | lights["AUX_LIGHT"];
+        if (!auxL.isNull()) {
+            const char* hw = auxL["hardware"] | auxL["HARDWARE"] | "";
+            warnUnresolvedHardware("aux_light", hw);
+            config.auxLight.pin = PinMapper::resolve(hw);
+            config.auxLight.brightness = auxL["brightness_max"] | auxL["BRIGHTNESS_MAX"] | 60;
+            config.auxLight.configured = config.auxLight.pin != 0xFF;
         }
     }
 
