@@ -110,6 +110,7 @@ static inline void initRadioKit() {
   horn_button.rk.label = "horn_button";
   horn_button.setLabelHidden(true);
   horn_button.rk.icon = "bell-ringing";
+  horn_button.rk.offIcon = "bell";
   gear_switch.rk.label = "gear_switch";
   gear_switch.setLabelHidden(true);
   gear_switch.rk.items[0] = {"D", nullptr, 0};
@@ -125,6 +126,8 @@ static inline void initRadioKit() {
   dir_switch.setPage(1);
   dir_switch.rk.label = "dir_switch";
   dir_switch.setLabelHidden(true);
+  dir_switch.rk.icon = "arrow-fat-right";
+  dir_switch.rk.offIcon = "arrow-fat-left";
   loco_light.setPage(1);
   loco_light.rk.label = "loco_light";
   loco_light.setLabelHidden(true);
