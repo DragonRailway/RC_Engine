@@ -11,7 +11,7 @@ ESP32-based RC vehicle controller (TRACKLINK_V3 board) with configurable hardwar
   - `configs/hardware_configs/hardware-<BOARD>.json` — one per board
   - `configs/vehicle_configs/<sound_set>/` — self-contained vehicle bundles (`vehicle.json` + `sounds/`)
   - `configs/vehicle_configs/common/<preset>/` — shared preset fallback sounds
-- **lib/SoundEngine/** - Sound engine library; **lib/ESP32_EasyKit** + **lib/rk-arduino** - vendored RadioKit stack
+- **lib/SoundEngine/** - Sound engine library; **lib/rk-arduino** - vendored RadioKit stack; **ESP32_EasyKit** - standalone sibling repo (`../ESP32_EasyKit`)
 - **references/** - Legacy C-header sources (raw_sounds, raw_vehicles, upstream libs)
 - **data/** - Gitignored scratch (never deployed; see FS deployment below)
 - **scripts/build_fs.py** - The ONLY supported LittleFS flash path
@@ -55,7 +55,7 @@ RC_brain/
 ├── configs/                  # Deployable config library (bundle model)
 │   ├── hardware_configs/     # hardware-<BOARD>.json per board
 │   └── vehicle_configs/      # <sound_set>/{vehicle.json, sounds/*.json} + common/<preset>/
-├── lib/                      # SoundEngine, ESP32_EasyKit, rk-arduino (vendored)
+├── lib/                      # SoundEngine, rk-arduino (vendored); ESP32_EasyKit via ../ESP32_EasyKit
 ├── references/               # Legacy raw C-header sources + upstream libs
 ├── data/                     # Gitignored scratch (never deployed)
 ├── scripts/                  # build_fs.py, validate_sounds.py, smoke/hot-reload/DSP tools

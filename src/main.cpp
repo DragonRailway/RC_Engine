@@ -1,9 +1,10 @@
 #include <Arduino.h>
 #include "boards.h"  // board selected at build time via platformio.ini env define
 #include "Config.h"
+#include "RADIOKIT.h"
+#include "UiLogger.h"
 #include "ConfigParser.h"
 #include "HardwareInit.h"
-#include "RADIOKIT.h"
 #include "VehicleController.h"
 #include <RcEngineSound.h>
 #include <VehicleProfile.h>
@@ -66,16 +67,19 @@ static uint32_t fileWriteTime(const char* path) {
 
 static bool reloadConfigs() {
     Serial.println("\n── Reloading Configs ──");
+    UiLogger::clear();
 
     HardwareConfig newHw;
     RcEngineSound::Config newVc;
 
     if (!ConfigParser::loadHardwareConfig(HW_CONFIG_PATH, newHw)) {
         Serial.printf("[Reload] %s invalid — keeping current config\n", HW_CONFIG_PATH);
+        UiLogger::logf("ERR: %s invalid", HW_CONFIG_PATH);
         return false;
     }
     if (!ConfigParser::loadVehicleConfig("/vehicle-config.json", newVc)) {
         Serial.println("[Reload] vehicle-config.json invalid — keeping current config");
+        UiLogger::logf("ERR: vehicle-config.json invalid");
         return false;
     }
 
@@ -92,6 +96,10 @@ static bool reloadConfigs() {
     if (nameChanged) {
         ConfigParser::loadSounds(profile.config, profile.sounds);
         engine.begin(profile.sounds);
+    }
+
+    if (!UiLogger::hasErrors()) {
+        UiLogger::clear();
     }
 
     Serial.println("[Reload] Configs reloaded OK");
@@ -126,6 +134,7 @@ void printConfig(const HardwareConfig& hw, const RcEngineSound::Config& vc) {
 
 void setup() {
     HardwareInit::latchPower();
+    UiLogger::init();
 
     // HWCDC RX buffer defaults to 256 bytes — too small for a single
     // RadioKit FS-upload frame (~KB scale), which caused dropped/corrupted
@@ -138,6 +147,7 @@ void setup() {
 
     if (!ConfigParser::begin()) {
         Serial.println("FATAL: LittleFS mount failed");
+        UiLogger::log("FATAL: LittleFS mount failed");
         while (1) delay(100);
     }
 
@@ -150,6 +160,7 @@ void setup() {
     if (!hwOk || !vcOk) {
         Serial.printf("\nFATAL ERROR: Failed to load %s or /vehicle-config.json!\n", HW_CONFIG_PATH);
         Serial.println("Execution halted. Please upload valid configuration files to LittleFS.");
+        UiLogger::logf("FATAL: Failed to load config!");
         while (1) delay(100);
     }
 
@@ -172,6 +183,7 @@ void setup() {
 
     Serial.println("\n── Starting RadioKit (BLE) ──");
     initRadioKit();
+    UiLogger::onRadioKitStarted();
     applyAuxSliderProfile();
 
     // ── Vehicle-type-driven app surface ──

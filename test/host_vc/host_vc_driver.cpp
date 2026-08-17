@@ -17,9 +17,9 @@ DummyLittleFS LittleFS;
 
 // Captured by the EasyMotor stub (shared for drive + aux motor channels)
 extern float host_last_motor_speed;
-// Ring of motor writes per update — writes[0]=left, writes[1]=right in skid mode
 extern float host_motor_writes[8];
 extern size_t host_motor_write_count;
+extern int host_last_servo_us;
 
 int main() {
     std::cout << "[Host VC Test] Initializing VehicleController Host Harness..." << std::endl;
@@ -267,8 +267,8 @@ int main() {
     host_gpio_pin_val[POWER::POWER_BUTTON] = LOW;
     host_virtual_millis = 0;
     HardwareInit::latchPower();
-    assert(!HardwareInit::isPowerLatched() && "Power should NOT latch ON for brief touch (<1000ms)");
-    assert(host_gpio_pin_val[POWER::POWER_ENABLE] == LOW && "POWER_ENABLE should remain LOW");
+    assert(HardwareInit::isPowerLatched() && "USB boot (POWER_BUTTON low) should latch ON immediately");
+    assert(host_gpio_pin_val[POWER::POWER_ENABLE] == HIGH && "POWER_ENABLE should be HIGH on USB boot");
 
     // Part B: Runtime 4000ms button hold shutdown
     host_gpio_pin_val[POWER::POWER_ENABLE] = HIGH;
@@ -423,6 +423,97 @@ int main() {
     assert(VehicleController::isChargingState() && "Charging state should be active");
 
     std::cout << "  PASS: Power button hold rapid blink feedback and charging indicator verified." << std::endl;
+
+    // ── Test 14: Steer-by-Wire Continuous Servo Tracking ──
+    std::cout << "[Host VC Test] Test 14: Steer-by-Wire Continuous Servo Tracking..." << std::endl;
+    HardwareConfig testHwAckermann;
+    testHwAckermann.drivetrainType = HardwareConfig::ACKERMANN;
+    testHwAckermann.steeringServo.hardwareId = PIN::S1;
+    testHwAckermann.steeringServo.frequency = 50;
+    testHwAckermann.steeringServo.endpoints.left = 1350;
+    testHwAckermann.steeringServo.endpoints.center = 1500;
+    testHwAckermann.steeringServo.endpoints.right = 1650;
+    HardwareInit::init(testHwAckermann);
+    VehicleController::init(&testHwAckermann, &engine, &profile);
+
+    // Case 1: Engine is OFF -> Steering servo MUST still track steering_wheel
+    start_button.rk.state = false;
+    steering_wheel.rk.value = 50;
+    VehicleController::update();
+    assert(host_last_servo_us == 1575 && "Steering servo should follow +50% steerVal even when engine is OFF");
+
+    steering_wheel.rk.value = -100;
+    VehicleController::update();
+    assert(host_last_servo_us == 1350 && "Steering servo should follow -100% steerVal when engine is OFF");
+
+    // Case 2: Engine is in PARK (P) -> Steering servo MUST still track steering_wheel
+    start_button.rk.state = true;
+    gear_switch.rk.value = 1; // P
+    steering_wheel.rk.value = 100;
+    VehicleController::update();
+    assert(host_last_servo_us == 1650 && "Steering servo should follow +100% steerVal in Park");
+    std::cout << "  PASS: Steer-by-wire continuous servo tracking verified (OFF & Park)." << std::endl;
+
+    // ── Test 15: Real-Vehicle Turn Indicator Auto-Cancellation State Machine ──
+    std::cout << "[Host VC Test] Test 15: Real-Vehicle Turn Indicator Auto-Cancellation..." << std::endl;
+    steering_wheel.rk.value = 0;
+    left_indicator.rk.state = false;
+    right_indicator.rk.state = false;
+    VehicleController::update();
+
+    // 15.1: Mutual exclusion
+    left_indicator.rk.state = true;
+    VehicleController::update();
+    assert(left_indicator.rk.state == true && right_indicator.rk.state == false);
+
+    right_indicator.rk.state = true;
+    VehicleController::update();
+    assert(right_indicator.rk.state == true && left_indicator.rk.state == false && "Right turns off Left");
+
+    // 15.2: Left Turn Armed (< -20) -> Return to Center (> -8) cancels Left indicator
+    left_indicator.rk.state = true;
+    right_indicator.rk.state = false;
+    steering_wheel.rk.value = 0;
+    VehicleController::update(); // button edge registered
+    assert(left_indicator.rk.state == true);
+
+    steering_wheel.rk.value = -30; // Turn Left past -20% -> armed
+    VehicleController::update();
+    assert(left_indicator.rk.state == true && "Left indicator stays active during turn");
+
+    steering_wheel.rk.value = 0; // Return to center (0 > -8) -> auto cancels
+    VehicleController::update();
+    assert(left_indicator.rk.state == false && "Left indicator should auto-cancel on wheel return");
+
+    // 15.3: Opposite Steering Cancellation (Right indicator on -> steer Left < -15% cancels)
+    right_indicator.rk.state = true;
+    steering_wheel.rk.value = 0;
+    VehicleController::update();
+    assert(right_indicator.rk.state == true);
+
+    steering_wheel.rk.value = -25; // Steer opposite (Left < -15%) -> immediate cancel
+    VehicleController::update();
+    assert(right_indicator.rk.state == false && "Right indicator should cancel immediately on opposite steering");
+    std::cout << "  PASS: Turn indicator mutual exclusion and auto-cancellation verified." << std::endl;
+
+    // ── Test 16: Transmission Start/Stop Interlock ──
+    std::cout << "[Host VC Test] Test 16: Transmission Start/Stop Interlock..." << std::endl;
+    // Engine Stop -> shifts to Park (P=1)
+    start_button.rk.state = false;
+    gear_switch.rk.value = 0; // Was in Drive
+    VehicleController::update();
+    assert(gear_switch.rk.value == 1 && "Engine stop should auto-shift gear to Park (P=1)");
+
+    // Engine Start while in Park -> auto-shifts to Drive (D=0)
+    start_button.rk.state = true;
+    VehicleController::update();
+    assert(gear_switch.rk.value == 0 && "Engine start from Park should auto-shift gear to Drive (D=0)");
+
+    // Engine Stop again -> shifts to Park (P=1)
+    start_button.rk.state = false;
+    VehicleController::update();
+    assert(gear_switch.rk.value == 1 && "Engine stop should return gear to Park (P=1)");
+    std::cout << "  PASS: Transmission Start/Stop Interlock verified." << std::endl;
 
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;

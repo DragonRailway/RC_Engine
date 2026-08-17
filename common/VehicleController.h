@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include "RADIOKIT.h"
+#include "UiLogger.h"
 #include "Config.h"
 #include "HardwareInit.h"
 #include "boards.h"  // board selected at build time via platformio.ini env define
@@ -28,6 +29,17 @@ public:
     static bool    bucket_rattle_trigger;
     static bool    dump_bed_toggle;
 
+    static const char* engineStateStr(RcEngineSound::EngineState s) {
+        switch (s) {
+            case RcEngineSound::OFF: return "OFF";
+            case RcEngineSound::STARTING: return "STARTING";
+            case RcEngineSound::RUNNING: return "RUNNING";
+            case RcEngineSound::STOPPING: return "STOPPING";
+            case RcEngineSound::PARKING_BRAKE: return "PARKING_BRAKE";
+            default: return "UNKNOWN";
+        }
+    }
+
     static void init(HardwareConfig* hw, RcEngineSound* engine, VehicleProfile* profile) {
         s_hw = hw;
         s_engine = engine;
@@ -38,6 +50,7 @@ public:
             s_profile->config.sound.master = s_hw->sound.volume;
         }
 
+        s_engineStatePrev = RcEngineSound::OFF;
         s_brakePrev = false;
         s_hornPrev = false;
         s_bellPrev = false;
@@ -47,9 +60,18 @@ public:
         s_decelBrakeTime = 0;
         s_headlightMode = 0;
         s_lastHeadBright = 0;
-        s_lastBit0State = false;
+        s_fogLampPrev = false;
         s_autoTurnLeft = false;
         s_autoTurnRight = false;
+        s_leftTurnArmed = false;
+        s_rightTurnArmed = false;
+        s_leftTurnBaseline = 0;
+        s_leftTurnPeak = 0;
+        s_rightTurnBaseline = 0;
+        s_rightTurnPeak = 0;
+        s_leftIndPrev = false;
+        s_rightIndPrev = false;
+        s_engineStartTogglePrev = false;
         s_cutoffLightResetDone = false;
         s_jakeBrakePrev = false;
         s_indicatorPrev = false;
@@ -194,6 +216,9 @@ public:
         float batV = pinV * s_hw->battery.vScale + s_hw->battery.vOffset;
 
         if (batV < s_warningVoltage) {
+            if (!s_batteryWarning) {
+                UiLogger::logf("WARN: Low battery (%.2fV)", batV);
+            }
             s_batteryWarning = true;
         } else if (batV > (s_warningVoltage + 0.2f * s_cellCount)) {
             s_batteryWarning = false;
@@ -218,11 +243,12 @@ public:
             // uninterrupted. Skipped on later iterations to preserve the fade.
             if (!s_cutoffLightResetDone) {
                 s_cutoffLightResetDone = true;
+                UiLogger::logf("CRITICAL: Battery cutoff (%.2fV)", batV);
                 HardwareInit::stopLightAnimations();
             }
             // Minimal alarm state: zeroed bits (non-blinking) + out-of-fuel sound.
-            applyLightsWithAutomation(0, false, false, false, false, 0, false);
-            updateTelemetry(0, batV);
+            applyLightsWithAutomation(0, false, false, false, false, 0, false, false, isLoco);
+            updateTelemetry(0, 0, 0, 1, false, false, false, 0, batV);
             HardwareInit::powerOff();
             return;
         } else {
@@ -238,8 +264,27 @@ public:
         // Engine power toggles are type-driven and exclusive: start_button (TRUCK)
         // or engine_button (LOCOMOTIVE). Latched toggles: ON = run, OFF = stop.
         RcEngineSound::EngineState eState = s_engine->getState();
+        if (eState != s_engineStatePrev) {
+            Serial.printf("[EVENT] EngineState -> %s (RPM: %u)\n", engineStateStr(eState), s_engine->getRpm());
+            s_engineStatePrev = eState;
+        }
         uint8_t bits = isLoco ? loco_light.rk.value : truck_light.rk.value;
         bool engineStartToggle = isLoco ? engine_button.rk.state : start_button.rk.state;
+
+        // Auto Gear Shift Interlock on Engine Start / Stop (TRUCK)
+        if (!isLoco) {
+            if (engineStartToggle && !s_engineStartTogglePrev) {
+                // Engine Start edge: auto-shift to Drive (D=0)
+                gear_switch.rk.value = 0;
+            } else if (!engineStartToggle && s_engineStartTogglePrev) {
+                // Engine Stop edge: auto-shift to Park (P=1)
+                gear_switch.rk.value = 1;
+            } else if (!engineStartToggle && gear_switch.rk.value != 1) {
+                // While engine is OFF/stopped, force Park (P=1)
+                gear_switch.rk.value = 1;
+            }
+        }
+        s_engineStartTogglePrev = engineStartToggle;
 
         if (eState == RcEngineSound::OFF) {
             if (engineStartToggle) {  // Strict per spec: the Engine Power toggle is the sole start trigger
@@ -272,6 +317,7 @@ public:
                 // Shifting sound on gear change, only while the engine is RUNNING
                 // (SHIFTING is a one-shot voice, so one trigger plays the sample once).
                 if (eState == RcEngineSound::RUNNING) s_engine->triggerShifting(true);
+                Serial.printf("[EVENT] Gear -> %s\n", gear == 0 ? "D" : gear == 1 ? "P" : "R");
                 s_gearPrev = gear;
             }
         }
@@ -304,8 +350,8 @@ public:
         }
         int16_t motorSpeed = reverse ? -motorThrottle : motorThrottle;
 
-        if (eState == RcEngineSound::RUNNING) {
-            if (s_hw->drivetrainType == HardwareConfig::SKID_STEER) {
+        if (s_hw->drivetrainType == HardwareConfig::SKID_STEER) {
+            if (eState == RcEngineSound::RUNNING) {
                 int16_t sens = s_hw->steeringSensitivity;
                 int16_t leftSpeed = motorThrottle + (steerVal * sens / 100);
                 int16_t rightSpeed = motorThrottle - (steerVal * sens / 100);
@@ -317,9 +363,17 @@ public:
                 if (parkingBrake) { leftSpeed = 0; rightSpeed = 0; }
                 HardwareInit::setSkidMotors(leftSpeed, rightSpeed);
             } else {
-                HardwareInit::setMotor(motorSpeed);
-                HardwareInit::setServo(steerVal);
+                HardwareInit::setSkidMotors(0, 0);
             }
+        } else {
+            // Ackermann steering: motor drives only while RUNNING and not in Park
+            if (eState == RcEngineSound::RUNNING && !parkingBrake) {
+                HardwareInit::setMotor(motorSpeed);
+            } else {
+                HardwareInit::setMotor(0);
+            }
+            // Steer-by-wire: servo continuously tracks steering_wheel in all active states
+            HardwareInit::setServo(steerVal);
         }
 
         // ── Work Machine Aux Outputs ──
@@ -377,6 +431,7 @@ public:
         bool jakeCondition = (throttlePct == 0 && curRpm > (s_profile->config.engine.maxRpm * 60 / 100));
         if (jakeCondition != s_jakeBrakePrev) {
             s_engine->triggerJakeBrake(jakeCondition);
+            Serial.printf("[EVENT] JakeBrake -> %s (RPM: %u)\n", jakeCondition ? "ON" : "OFF", curRpm);
             s_jakeBrakePrev = jakeCondition;
         }
 
@@ -392,29 +447,84 @@ public:
         bool hornActive = !isLoco && horn_button.rk.state;
         if (hornActive != s_hornPrev) {
             s_engine->triggerHorn(hornActive);
+            Serial.printf("[EVENT] Horn -> %s\n", hornActive ? "ON" : "OFF");
             s_hornPrev = hornActive;
         }
 
         bool bellActive = isLoco && bell_button.rk.state;
         if (bellActive != s_bellPrev) {
             s_engine->triggerBell(bellActive);
+            Serial.printf("[EVENT] Bell -> %s\n", bellActive ? "ON" : "OFF");
             s_bellPrev = bellActive;
         }
 
-        // ── Steering Auto Turn Signals ──
-        if (steerVal > 35)       s_autoTurnRight = true;
-        else if (steerVal < 10)  s_autoTurnRight = false;
+        // ── Real Vehicle Turn Indicator Auto-Cancellation (Relative to baseline at press) ──
+        if (!isLoco) {
+            // Left indicator press edge -> capture baseline & peak
+            if (left_indicator.rk.state && !s_leftIndPrev) {
+                if (right_indicator.rk.state) right_indicator.rk.state = false;
+                s_rightTurnArmed = false;
+                s_leftTurnArmed = false;
+                s_leftTurnBaseline = steerVal;
+                s_leftTurnPeak = steerVal;
+            }
+            // Right indicator press edge -> capture baseline & peak
+            if (right_indicator.rk.state && !s_rightIndPrev) {
+                if (left_indicator.rk.state) left_indicator.rk.state = false;
+                s_leftTurnArmed = false;
+                s_rightTurnArmed = false;
+                s_rightTurnBaseline = steerVal;
+                s_rightTurnPeak = steerVal;
+            }
 
-        if (steerVal < -35)      s_autoTurnLeft = true;
-        else if (steerVal > -10) s_autoTurnLeft = false;
+            // Left turn indicator cancel logic (relative to s_leftTurnBaseline)
+            if (left_indicator.rk.state) {
+                int16_t delta = steerVal - s_leftTurnBaseline; // Turning left is negative delta; right is positive delta
+                if (delta > 15) {
+                    // Cancel immediately if driver steers opposite (right) by >15% from baseline
+                    left_indicator.rk.state = false;
+                    s_leftTurnArmed = false;
+                    Serial.println("[EVENT] Left indicator auto-cancelled (opposite steering)");
+                } else if (delta <= -20) {
+                    s_leftTurnArmed = true; // Armed when steering into left turn >=20% from baseline
+                    if (steerVal < s_leftTurnPeak) s_leftTurnPeak = steerVal;
+                } else if (s_leftTurnArmed && (steerVal >= s_leftTurnPeak + 15 || steerVal >= s_leftTurnBaseline - 5)) {
+                    // Cancel when wheel returns towards center/baseline with hysteresis
+                    left_indicator.rk.state = false;
+                    s_leftTurnArmed = false;
+                    Serial.println("[EVENT] Left indicator auto-cancelled (wheel returned to center)");
+                }
+            } else {
+                s_leftTurnArmed = false;
+            }
 
-        // Manual indicator buttons (left_indicator / right_indicator) merge with the
-        // steering auto signals: either source keeps the indicator active, and the
-        // manual button (or steering center) releases its own side. Buttons are truck
-        // widgets, so gate them on the vehicle type (auto signals are already inert on
-        // a loco since steerVal is pinned to 0).
-        bool turnSignalL = (!isLoco && left_indicator.rk.state) || s_autoTurnLeft;
-        bool turnSignalR = (!isLoco && right_indicator.rk.state) || s_autoTurnRight;
+            // Right turn indicator cancel logic (relative to s_rightTurnBaseline)
+            if (right_indicator.rk.state) {
+                int16_t delta = steerVal - s_rightTurnBaseline; // Turning right is positive delta; left is negative delta
+                if (delta < -15) {
+                    // Cancel immediately if driver steers opposite (left) by >15% from baseline
+                    right_indicator.rk.state = false;
+                    s_rightTurnArmed = false;
+                    Serial.println("[EVENT] Right indicator auto-cancelled (opposite steering)");
+                } else if (delta >= 20) {
+                    s_rightTurnArmed = true; // Armed when steering into right turn >=20% from baseline
+                    if (steerVal > s_rightTurnPeak) s_rightTurnPeak = steerVal;
+                } else if (s_rightTurnArmed && (steerVal <= s_rightTurnPeak - 15 || steerVal <= s_rightTurnBaseline + 5)) {
+                    // Cancel when wheel returns towards center/baseline with hysteresis
+                    right_indicator.rk.state = false;
+                    s_rightTurnArmed = false;
+                    Serial.println("[EVENT] Right indicator auto-cancelled (wheel returned to center)");
+                }
+            } else {
+                s_rightTurnArmed = false;
+            }
+
+            s_leftIndPrev = left_indicator.rk.state;
+            s_rightIndPrev = right_indicator.rk.state;
+        }
+
+        bool turnSignalL = !isLoco && left_indicator.rk.state;
+        bool turnSignalR = !isLoco && right_indicator.rk.state;
 
         // ── Dynamic Deceleration Brake Light ──
         int16_t drop = s_prevThrottlePct - throttlePct;
@@ -424,12 +534,36 @@ public:
         bool decelBrakeActive = (millis() < s_decelBrakeTime);
         s_prevThrottlePct = throttlePct;
 
-        // ── Headlight 3-State Stepping (Bit 0 / Item A) ──
-        bool bit0State = (bits & 0x01);
-        if (bit0State && !s_lastBit0State) {
-            s_headlightMode = (s_headlightMode + 1) % 3; // 0=Off, 1=Low Beam (40%), 2=High Beam (100%)
+        // ── Dedicated Headlight, High Beam & Fog Lamp Control ──
+        uint8_t headlightMode = 0; // 0=Off, 1=Low Beam (40%), 2=High Beam (100%)
+        bool fogLamp = false;
+        if (!isLoco) {
+            bool lowBeam  = (bits & 0x01); // Item 0: Low Beam
+            bool highBeam = (bits & 0x02); // Item 1: High Beam
+            fogLamp       = (bits & 0x04); // Item 2: Fog Lamp
+
+            if (highBeam) {
+                headlightMode = 2;
+            } else if (lowBeam) {
+                headlightMode = 1;
+            } else {
+                headlightMode = 0;
+            }
+
+            if (headlightMode != s_headlightMode) {
+                s_headlightMode = headlightMode;
+                Serial.printf("[EVENT] Headlight -> %s\n",
+                              s_headlightMode == 0 ? "OFF" : s_headlightMode == 1 ? "LOW" : "HIGH");
+            }
+            if (fogLamp != s_fogLampPrev) {
+                s_fogLampPrev = fogLamp;
+                Serial.printf("[EVENT] FogLamp -> %s\n", fogLamp ? "ON" : "OFF");
+            }
+        } else {
+            // Locomotive headlight mapping from loco_light bits
+            if (bits & 0x01) headlightMode = 2;
+            s_headlightMode = headlightMode;
         }
-        s_lastBit0State = bit0State;
 
         // ── Apply Lights with Automation ──
         // Hazard (Bit 3 / Item D) drives both indicators; the blink engine
@@ -441,8 +575,10 @@ public:
                                  hazardActive || turnSignalR,
                                  decelBrakeActive,
                                  brakePressed,
-                                 s_headlightMode,
-                                 !isLoco && reverse);   // gear R auto-lights the reversing lamp
+                                 headlightMode,
+                                 !isLoco && reverse,
+                                 fogLamp,
+                                 isLoco);   // gear R auto-lights the reversing lamp
 
         // ── Indicator Click Sound ──
         bool indicatorActive = hazardActive || turnSignalL || turnSignalR;
@@ -451,11 +587,11 @@ public:
             s_indicatorPrev = indicatorActive;
         }
 
-        // ── Telemetry ──
+        // ── Telemetry & Serial Debug Stream ──
         uint32_t now = millis();
-        if (now - s_lastTelemetry >= 500) {
+        if (now - s_lastTelemetry >= 250) {
             s_lastTelemetry = now;
-            updateTelemetry(motorSpeed, batV);
+            updateTelemetry(motorSpeed, steerVal, throttlePct, gear, brakePressed, turnSignalL, turnSignalR, bits, batV);
         }
     }
 
@@ -464,6 +600,7 @@ private:
     static RcEngineSound*  s_engine;
     static VehicleProfile* s_profile;
 
+    static RcEngineSound::EngineState s_engineStatePrev;
     static bool     s_brakePrev;
     static bool     s_hornPrev;
     static bool     s_bellPrev;
@@ -488,26 +625,34 @@ private:
     static uint32_t s_decelBrakeTime;
     static uint8_t  s_headlightMode;
     static uint8_t  s_lastHeadBright;   // last commanded headlight target (fade-on-change)
-    static bool     s_lastBit0State;
+    static bool     s_fogLampPrev;
     static bool     s_autoTurnLeft;
     static bool     s_autoTurnRight;
+    static bool     s_leftTurnArmed;
+    static bool     s_rightTurnArmed;
+    static int16_t  s_leftTurnBaseline;
+    static int16_t  s_leftTurnPeak;
+    static int16_t  s_rightTurnBaseline;
+    static int16_t  s_rightTurnPeak;
+    static bool     s_leftIndPrev;
+    static bool     s_rightIndPrev;
+    static bool     s_engineStartTogglePrev;
     static bool     s_cutoffLightResetDone;
     static bool     s_jakeBrakePrev;
     static bool     s_indicatorPrev;
     static uint8_t  s_gearPrev;
     static bool     s_parkingBrakePrev;
 
-    static void applyLightsWithAutomation(uint8_t bits, bool turnL, bool turnR, bool decelBrake, bool manualBrake, uint8_t headlightMode, bool autoReverseLight) {
+    static void applyLightsWithAutomation(uint8_t bits, bool turnL, bool turnR, bool decelBrake, bool manualBrake, uint8_t headlightMode, bool autoReverseLight, bool fogLamp, bool isLoco) {
         if (!s_hw) return;
         const HardwareConfig::Lights& L = s_hw->lights;
-        bool manualHead = (bits & 0x01);
         bool manualTail = (bits & 0x02);
-        bool brakeActive = (bits & 0x04) || manualBrake || decelBrake;
+        bool brakeActive = manualBrake || decelBrake;
         bool manualRev  = (bits & 0x10) || autoReverseLight; // Item E manual override OR gear-R automatic
 
         uint8_t headBright = 0;
         if (headlightMode == 1)      headBright = (uint8_t)(L.headLight.brightness * 0.40f);
-        else if (headlightMode == 2 || manualHead) headBright = L.headLight.brightness;
+        else if (headlightMode == 2) headBright = L.headLight.brightness;
 
         // Headlight steps transition via a fade, triggered only on a target
         // change so the animation engine ramps (Off -> 40% -> 100%) instead of
@@ -523,19 +668,36 @@ private:
         uint8_t tailBright = manualTail ? L.tailLight.brightness
                                        : (uint8_t)(headLive * 0.30f);
 
+        uint8_t brakeBright = brakeActive ? L.brakeLight.brightness : 0;
+        uint8_t revBright   = manualRev ? L.reversingLight.brightness : 0;
+
+        // Merge shared/aliased pins to prevent any flickering between independent writes
+        if (L.reversingLight.pin != 0xFF && L.reversingLight.pin == L.brakeLight.pin) {
+            brakeBright = max(brakeBright, revBright);
+            revBright = 0;
+        }
+        if (L.tailLight.pin != 0xFF && L.tailLight.pin == L.brakeLight.pin) {
+            brakeBright = max(brakeBright, tailBright);
+            tailBright = 0;
+        }
+
         HardwareInit::setLight(L.tailLight.pin,      tailBright);
-        HardwareInit::setLight(L.brakeLight.pin,     brakeActive ? L.brakeLight.brightness : 0);
-        HardwareInit::setLight(L.reversingLight.pin, manualRev ? L.reversingLight.brightness : 0);
+        HardwareInit::setLight(L.brakeLight.pin,     brakeBright);
+        if (L.reversingLight.pin != 0xFF && L.reversingLight.pin != L.brakeLight.pin) {
+            HardwareInit::setLight(L.reversingLight.pin, revBright);
+        }
 
-        // Aux lights (ditch/step/cab): loco light selector items F/G/H (bits
-        // 5/6/7). Only the loco page's 8-item selector can set these bits, so
-        // truck configs never light them from the app.
-        // Ditch lights run the EasyLEDGroup alternate pattern.
-        bool ditchOn = (bits & 0x20);
-        HardwareInit::setDitchLights(ditchOn, L.ditchLight.intervalMs);
-        HardwareInit::setLight(L.stepLight.pin,  (bits & 0x40) ? L.stepLight.brightness  : 0);
-        HardwareInit::setLight(L.cabLight.pin,   (bits & 0x80) ? L.cabLight.brightness   : 0);
-
+        // Fog Lamp (Truck) or Ditch / Aux Lights (Locomotive)
+        if (!isLoco) {
+            uint8_t fogDuty = fogLamp ? L.ditchLight.brightness : 0;
+            HardwareInit::setLight(L.ditchLight.leftPin,  fogDuty);
+            HardwareInit::setLight(L.ditchLight.rightPin, fogDuty);
+        } else {
+            bool ditchOn = (bits & 0x20);
+            HardwareInit::setDitchLights(ditchOn, L.ditchLight.intervalMs);
+            HardwareInit::setLight(L.stepLight.pin,  (bits & 0x40) ? L.stepLight.brightness  : 0);
+            HardwareInit::setLight(L.cabLight.pin,   (bits & 0x80) ? L.cabLight.brightness   : 0);
+        }
 
         // Turn signals / hazards run through the blink engine with the config
         // interval/duty. The blink engine owns the duty while active — no
@@ -544,7 +706,7 @@ private:
         HardwareInit::setLightBlink(L.turnLight.rightPin, turnR, L.turnLight.intervalOn, L.turnLight.intervalOff, L.turnLight.brightness);
     }
 
-    static void updateTelemetry(int16_t motorSpeed, float batV) {
+    static void updateTelemetry(int16_t motorSpeed, int16_t steerVal, int16_t throttlePct, uint8_t gear, bool brakePressed, bool turnL, bool turnR, uint8_t bits, float batV) {
         // Percent uses the config'd per-cell voltages (defaults 3.3V / 4.2V).
         const float cutoffPerCell = s_hw ? s_hw->battery.cutoffVoltage : 3.3f;
         const float fullPerCell   = s_hw ? s_hw->battery.fullVoltage   : 4.2f;
@@ -555,6 +717,15 @@ private:
 
         snprintf(s_speedBuf, sizeof(s_speedBuf), "%d", abs(motorSpeed));
         telemetry_Speed.rk.content = s_speedBuf;
+
+        // Structured Serial Telemetry for USB Monitoring & Host Automation
+        const char* gearStr = (gear == 0) ? "D" : (gear == 2) ? "R" : "P";
+        const char* eStateStr = s_engine ? engineStateStr(s_engine->getState()) : "OFF";
+        uint16_t rpm = s_engine ? s_engine->getRpm() : 0;
+        Serial.printf("[STATUS] Eng:%s RPM:%u Thr:%d%% Mot:%d%% Steer:%d Gear:%s Brk:%d Head:%d L:%d R:%d Bat:%.2fV (%s%%)\n",
+                      eStateStr, rpm, throttlePct, motorSpeed, steerVal, gearStr,
+                      brakePressed ? 1 : 0, s_headlightMode, turnL ? 1 : 0, turnR ? 1 : 0,
+                      batV, s_battBuf);
     }
 };
 
@@ -563,6 +734,7 @@ HardwareConfig* VehicleController::s_hw = nullptr;
 RcEngineSound*  VehicleController::s_engine = nullptr;
 VehicleProfile* VehicleController::s_profile = nullptr;
 
+RcEngineSound::EngineState VehicleController::s_engineStatePrev = RcEngineSound::OFF;
 bool     VehicleController::s_brakePrev = false;
 bool     VehicleController::s_hornPrev = false;
 bool     VehicleController::s_bellPrev = false;
@@ -585,9 +757,18 @@ int16_t  VehicleController::s_prevThrottlePct = 0;
 uint32_t VehicleController::s_decelBrakeTime = 0;
 uint8_t  VehicleController::s_headlightMode = 0;
 uint8_t  VehicleController::s_lastHeadBright = 0;
-bool     VehicleController::s_lastBit0State = false;
+bool     VehicleController::s_fogLampPrev = false;
 bool     VehicleController::s_autoTurnLeft = false;
 bool     VehicleController::s_autoTurnRight = false;
+bool     VehicleController::s_leftTurnArmed = false;
+bool     VehicleController::s_rightTurnArmed = false;
+int16_t  VehicleController::s_leftTurnBaseline = 0;
+int16_t  VehicleController::s_leftTurnPeak = 0;
+int16_t  VehicleController::s_rightTurnBaseline = 0;
+int16_t  VehicleController::s_rightTurnPeak = 0;
+bool     VehicleController::s_leftIndPrev = false;
+bool     VehicleController::s_rightIndPrev = false;
+bool     VehicleController::s_engineStartTogglePrev = false;
 bool     VehicleController::s_cutoffLightResetDone = false;
 bool     VehicleController::s_jakeBrakePrev = false;
 bool     VehicleController::s_indicatorPrev = false;

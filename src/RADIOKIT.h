@@ -4,9 +4,15 @@
 #ifndef RADIOKIT_GENERATED_H
 #define RADIOKIT_GENERATED_H
 
+#ifndef RK_ENABLE_OTA
 #define RK_ENABLE_OTA
+#endif
+#ifndef RK_ENABLE_FS
 #define RK_ENABLE_FS
+#endif
+#ifndef RK_ENABLE_BLE
 #define RK_ENABLE_BLE
+#endif
 
 #include <RadioKitLib.h>
 
@@ -42,6 +48,8 @@ RK_PushButton horn_button(163, 15, 12, 0, 0);  // button: pos=(163,15) size=?x12
 
 RK_MultipleButton gear_switch(72, 50, 40, 18, 0);  // multiple: pos=(72,50) size=18x40 label="gear_switch"
 
+RK_SerialMonitor serial_monitor_1(97, 15, 30, 58);  // serialMonitor: pos=(97,15) size=58x30 label="serial_monitor_1"
+
 // ─── Page 1: Loco ───
 RK_Slider throttle_slider(74, 98, 95, 22, 0);  // slider: pos=(74,98) size=22x95 label="throttle_slider"
 
@@ -52,6 +60,8 @@ RK_MultipleSelect loco_light(29, 98, 83, 29, 0);  // multiple: pos=(29,98) size=
 RK_PushButton bell_button(29, 161, 20, 0, 0);  // button: pos=(29,161) size=?x20 label="bell_button"
 
 RK_ToggleButton engine_button(29, 38, 20, 0, 0);  // button: pos=(29,38) size=?x20 label="engine_button"
+
+RK_SerialMonitor serial_monitor_2(71, 38, 25, 57);  // serialMonitor: pos=(71,38) size=57x25 label="serial_monitor_2"
 
 // ─── Telemetry Widgets ───
 RK_Telemetry telemetry_Battery("Battery");
@@ -79,9 +89,12 @@ static inline void initRadioKit() {
   brake_pedal.rk.centering = RK_SPRING_MIN;
   truck_light.rk.label = "truck_light";
   truck_light.setLabelHidden(true);
-  truck_light.rk.items[0] = {"A", nullptr, 0};
-  truck_light.rk.items[1] = {"B", nullptr, 1};
-  truck_light.rk.items[2] = {"C", nullptr, 2};
+  truck_light.rk.items[0].label = "Low";
+  truck_light.rk.items[0].pos = 0;
+  truck_light.rk.items[1].label = "High";
+  truck_light.rk.items[1].pos = 1;
+  truck_light.rk.items[2].label = "Fog";
+  truck_light.rk.items[2].pos = 2;
   truck_light.rk.itemCount = 3;
   start_button.rk.label = "start_button";
   start_button.setLabelHidden(true);
@@ -102,10 +115,15 @@ static inline void initRadioKit() {
   horn_button.rk.icon = "bell";
   gear_switch.rk.label = "gear_switch";
   gear_switch.setLabelHidden(true);
-  gear_switch.rk.items[0] = {"D", nullptr, 0};
-  gear_switch.rk.items[1] = {"P", nullptr, 1};
-  gear_switch.rk.items[2] = {"R", nullptr, 2};
+  gear_switch.rk.items[0].label = "D";
+  gear_switch.rk.items[0].pos = 0;
+  gear_switch.rk.items[1].label = "P";
+  gear_switch.rk.items[1].pos = 1;
+  gear_switch.rk.items[2].label = "R";
+  gear_switch.rk.items[2].pos = 2;
   gear_switch.rk.itemCount = 3;
+  serial_monitor_1.rk.label = "serial_monitor_1";
+  serial_monitor_1.setLabelHidden(true);
   throttle_slider.setPage(1);
   throttle_slider.rk.label = "throttle_slider";
   throttle_slider.setLabelHidden(true);
@@ -118,9 +136,12 @@ static inline void initRadioKit() {
   loco_light.setPage(1);
   loco_light.rk.label = "loco_light";
   loco_light.setLabelHidden(true);
-  loco_light.rk.items[0] = {"A", nullptr, 0};
-  loco_light.rk.items[1] = {"B", nullptr, 1};
-  loco_light.rk.items[2] = {"C", nullptr, 2};
+  loco_light.rk.items[0].label = "A";
+  loco_light.rk.items[0].pos = 0;
+  loco_light.rk.items[1].label = "B";
+  loco_light.rk.items[1].pos = 1;
+  loco_light.rk.items[2].label = "C";
+  loco_light.rk.items[2].pos = 2;
   loco_light.rk.itemCount = 3;
   bell_button.setPage(1);
   bell_button.rk.label = "bell_button";
@@ -132,6 +153,9 @@ static inline void initRadioKit() {
   engine_button.setLabelHidden(true);
   engine_button.rk.onText = "ON";
   engine_button.rk.offText = "OFF";
+  serial_monitor_2.setPage(1);
+  serial_monitor_2.rk.label = "serial_monitor_2";
+  serial_monitor_2.setLabelHidden(true);
   telemetry_Battery.rk.icon = "battery";
   telemetry_Battery.rk.unit = "%";
   telemetry_Battery.rk.content = "--";

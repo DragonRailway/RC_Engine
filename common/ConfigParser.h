@@ -5,8 +5,19 @@
 #include <ArduinoJson.h>
 #include "Config.h"
 #include "PinMapper.h"
+#include "UiLogger.h"
 #include <RcEngineSound.h>
 #include <SoundTypes.h>
+
+#define LOG_CFG_WARN(fmt, ...) do { \
+    Serial.printf("[ConfigParser] WARN: " fmt "\n", ##__VA_ARGS__); \
+    UiLogger::logf("WARN: " fmt, ##__VA_ARGS__); \
+} while(0)
+
+#define LOG_CFG_ERR(fmt, ...) do { \
+    Serial.printf("[ConfigParser] ERR: " fmt "\n", ##__VA_ARGS__); \
+    UiLogger::logf("ERR: " fmt, ##__VA_ARGS__); \
+} while(0)
 
 class ConfigParser {
 public:
@@ -22,7 +33,7 @@ public:
     static bool loadHardwareConfig(const char* path, HardwareConfig& config) {
         File file = LittleFS.open(path, "r");
         if (!file) {
-            Serial.printf("[ConfigParser] Cannot open: %s\n", path);
+            LOG_CFG_ERR("Cannot open: %s", path);
             return false;
         }
 
@@ -31,11 +42,9 @@ public:
         file.close();
 
         if (error) {
-            Serial.printf("[ConfigParser] JSON error in %s: %s\n", path, error.c_str());
+            LOG_CFG_ERR("JSON error in %s: %s", path, error.c_str());
             return false;
         }
-
-        config = HardwareConfig();
 
         config = HardwareConfig();
 
@@ -64,7 +73,7 @@ public:
                     config.drivetrainType = HardwareConfig::ACKERMANN;
                 } else {
                     if (type[0] != '\0') {
-                        Serial.printf("[ConfigParser] WARN: drivetrain: unknown type '%s' — inferring from config keys\n", type);
+                        LOG_CFG_WARN("drivetrain: unknown type '%s' — inferring from config keys", type);
                     }
                     config.drivetrainType = (!dtObj["left_motor"].isNull() || !dtObj["LEFT_MOTOR"].isNull())
                                                 ? HardwareConfig::SKID_STEER : HardwareConfig::ACKERMANN;
@@ -75,10 +84,10 @@ public:
                     parseDriveMotor(dtObj["right_motor"] | dtObj["RIGHT_MOTOR"], config.rightMotor);
                     config.steeringSensitivity = dtObj["steering_sensitivity"] | dtObj["STEERING_SENSITIVITY"] | config.steeringSensitivity;
                     if (!config.leftMotor.configured) {
-                        Serial.printf("[ConfigParser] WARN: skid-steer: left_motor missing — left track unconfigured\n");
+                        LOG_CFG_WARN("skid-steer: left_motor missing — left track unconfigured");
                     }
                     if (!config.rightMotor.configured) {
-                        Serial.printf("[ConfigParser] WARN: skid-steer: right_motor missing — right track unconfigured\n");
+                        LOG_CFG_WARN("skid-steer: right_motor missing — right track unconfigured");
                     }
                 } else {
                     JsonObjectConst driveObj = dtObj["drive_motor"] | dtObj["DRIVE_MOTOR"];
@@ -86,12 +95,12 @@ public:
                     JsonObjectConst steerObj = dtObj["steering_servo"] | dtObj["STEERING_SERVO"];
                     if (!steerObj.isNull()) parseSteeringServo(steerObj, config.steeringServo);
                     if (!config.driveMotor.configured) {
-                        Serial.printf("[ConfigParser] WARN: drivetrain: drive_motor missing or unconfigured — vehicle cannot drive!\n");
+                        LOG_CFG_WARN("drivetrain: drive_motor missing or unconfigured — vehicle cannot drive!");
                     }
                 }
             }
         } else {
-            Serial.printf("[ConfigParser] WARN: drivetrain section missing — drive motor is unconfigured!\n");
+            LOG_CFG_WARN("drivetrain section missing — drive motor is unconfigured!");
         }
 
         if (!docObj["steering_servo"].isNull() || !docObj["STEERING_SERVO"].isNull()) {
@@ -111,8 +120,7 @@ public:
         // (same degrade-with-warning pattern as trailer_dcc).
         if (config.drivetrainType == HardwareConfig::SKID_STEER &&
             config.auxMotor.purpose != HardwareConfig::AuxMotor::NONE) {
-            Serial.printf("[ConfigParser] WARN: aux_motor: ignored in skid-steer mode "
-                          "(the right track owns the second motor output)\n");
+            LOG_CFG_WARN("aux_motor: ignored in skid-steer mode (the right track owns the second motor output)");
             config.auxMotor.purpose = HardwareConfig::AuxMotor::NONE;
             config.auxMotor.motor.type = HardwareConfig::DriveMotor::NONE;
             config.auxMotor.configured = false;
@@ -190,7 +198,7 @@ public:
     static bool loadVehicleConfig(const char* path, RcEngineSound::Config& config) {
         File file = LittleFS.open(path, "r");
         if (!file) {
-            Serial.printf("[ConfigParser] Cannot open: %s\n", path);
+            LOG_CFG_ERR("Cannot open: %s", path);
             return false;
         }
 
@@ -199,7 +207,7 @@ public:
         file.close();
 
         if (error) {
-            Serial.printf("[ConfigParser] JSON error in %s: %s\n", path, error.c_str());
+            LOG_CFG_ERR("JSON error in %s: %s", path, error.c_str());
             return false;
         }
 
@@ -221,7 +229,7 @@ public:
             // No silent TRUCK fallback: an unrecognized type string is
             // visible in the boot log so config typos are caught.
             config.type = RcEngineSound::VEHICLE_UNKNOWN;
-            Serial.printf("[ConfigParser] WARNING: unknown vehicle type '%s' — defaulting to truck\n", vehicleTypeStr);
+            LOG_CFG_WARN("unknown vehicle type '%s' — defaulting to truck", vehicleTypeStr);
         }
 
         parseEngine(doc, config);
@@ -376,8 +384,8 @@ private:
         }
 
         if (declaredCount != sampleCount) {
-            Serial.printf("[ConfigParser] WARN: %s declares sampleCount=%u but has %u samples — using actual\n",
-                          path, declaredCount, sampleCount);
+            LOG_CFG_WARN("%s declares sampleCount=%u but has %u samples — using actual",
+                         path, declaredCount, sampleCount);
         }
 
         SoundSlot slot;
@@ -408,25 +416,23 @@ private:
         for (JsonPairConst kv : obj) {
             const char* key = kv.key().c_str();
             if (!keyAllowed(key, allowed, n)) {
-                Serial.printf("[ConfigParser] WARN: %s: unknown key '%s' (ignored)\n",
-                              section, key);
+                LOG_CFG_WARN("%s: unknown key '%s' (ignored)", section, key);
             }
         }
     }
 
     static void warnUnresolvedHardware(const char* where, const char* hw) {
         if (hw[0] != '\0' && PinMapper::resolve(hw) == 0xFF) {
-            Serial.printf("[ConfigParser] WARN: %s: hardware '%s' not recognized — output not configured\n",
-                          where, hw);
+            LOG_CFG_WARN("%s: hardware '%s' not recognized — output not configured", where, hw);
         }
     }
 
     static void checkUnknownHardwareKeys(JsonObjectConst doc) {
         static const char* top[] = {"sound", "drivetrain", "steering_servo",
                                     "lights", "animation",
-                                    "battery", "drive_motor",
-                                    "aux_motor", "aux_light"};
-        checkKeys(doc, "hardware", top, 9);
+                                    "battery", "power", "charging",
+                                    "drive_motor", "aux_motor", "aux_light"};
+        checkKeys(doc, "hardware", top, 11);
 
         JsonObjectConst sound = doc["sound"];
         if (!sound.isNull()) {
@@ -538,23 +544,35 @@ private:
             checkKeys(bat, "battery", bk, 7);
         }
 
+        JsonObjectConst pwr = doc["power"];
+        if (!pwr.isNull()) {
+            static const char* pk[] = {"hardware", "boot_latch_s", "button_hold_s",
+                                       "disconnect_timeout_s", "warning_window_s",
+                                       "cutoff_delay_s"};
+            checkKeys(pwr, "power", pk, 6);
+        }
+
+        JsonObjectConst chg = doc["charging"];
+        if (!chg.isNull()) {
+            static const char* ck[] = {"hardware", "mode"};
+            checkKeys(chg, "charging", ck, 2);
+        }
     }
 
     static void validateHardwareConfig(const HardwareConfig& cfg) {
         auto checkMotor = [&](const HardwareConfig::DriveMotor& m, const char* name) {
             if (m.type == HardwareConfig::DriveMotor::NONE) return;
             if (m.duty.min > m.duty.max) {
-                Serial.printf("[ConfigParser] WARN: %s: duty.min (%d) > duty.max (%d)\n",
-                              name, m.duty.min, m.duty.max);
+                LOG_CFG_WARN("%s: duty.min (%d) > duty.max (%d)",
+                             name, m.duty.min, m.duty.max);
             }
             if (m.duty.min > 100 || m.duty.max > 100) {
-                Serial.printf("[ConfigParser] WARN: %s: duty out of range "
-                              "(min=%d max=%d, expected 0-100)\n",
-                              name, m.duty.min, m.duty.max);
+                LOG_CFG_WARN("%s: duty out of range (min=%d max=%d, expected 0-100)",
+                             name, m.duty.min, m.duty.max);
             }
             if (m.frequency == 0 || m.frequency > 100000) {
-                Serial.printf("[ConfigParser] WARN: %s: frequency %d Hz out of sane range\n",
-                              name, m.frequency);
+                LOG_CFG_WARN("%s: frequency %d Hz out of sane range",
+                             name, m.frequency);
             }
         };
         checkMotor(cfg.driveMotor, "drive_motor");
@@ -564,31 +582,29 @@ private:
 
         if (cfg.drivetrainType == HardwareConfig::SKID_STEER) {
             if (cfg.leftMotor.type == HardwareConfig::DriveMotor::NONE) {
-                Serial.printf("[ConfigParser] WARN: skid-steer: left_motor missing — left track not configured\n");
+                LOG_CFG_WARN("skid-steer: left_motor missing — left track not configured");
             }
             if (cfg.rightMotor.type == HardwareConfig::DriveMotor::NONE) {
-                Serial.printf("[ConfigParser] WARN: skid-steer: right_motor missing — right track not configured\n");
+                LOG_CFG_WARN("skid-steer: right_motor missing — right track not configured");
             }
         }
 
         if (cfg.steeringServo.hardwareId != 0xFF) {
             if (cfg.steeringServo.frequency < 40 || cfg.steeringServo.frequency > 400) {
-                Serial.printf("[ConfigParser] WARN: steering_servo: frequency %d Hz outside 40-400\n",
-                              cfg.steeringServo.frequency);
+                LOG_CFG_WARN("steering_servo: frequency %d Hz outside 40-400",
+                             cfg.steeringServo.frequency);
             }
             const auto& ep = cfg.steeringServo.endpoints;
             if (ep.left < 500 || ep.left > 2500 || ep.right < 500 || ep.right > 2500 ||
                 ep.center < 500 || ep.center > 2500) {
-                Serial.printf("[ConfigParser] WARN: steering_servo: endpoints out of range "
-                              "(L=%d R=%d C=%d, expected ~500-2500 us)\n",
-                              ep.left, ep.right, ep.center);
+                LOG_CFG_WARN("steering_servo: endpoints out of range (L=%d R=%d C=%d, expected ~500-2500 us)",
+                             ep.left, ep.right, ep.center);
             }
         }
 
         auto checkLight = [&](bool configured, uint8_t brightness, const char* name) {
             if (configured && brightness > 100) {
-                Serial.printf("[ConfigParser] WARN: %s: brightness %d > 100\n",
-                              name, brightness);
+                LOG_CFG_WARN("%s: brightness %d > 100", name, brightness);
             }
         };
         checkLight(cfg.lights.headLight.configured, cfg.lights.headLight.brightness, "head_light");
@@ -596,23 +612,23 @@ private:
         checkLight(cfg.lights.turnLight.configured, cfg.lights.turnLight.brightness, "turn_light");
         checkLight(cfg.lights.ditchLight.configured, cfg.lights.ditchLight.brightness, "ditch_light");
         if (cfg.lights.ditchLight.configured && cfg.lights.ditchLight.intervalMs == 0) {
-            Serial.printf("[ConfigParser] WARN: ditch_light: interval_ms 0 — clamping to 1\n");
+            LOG_CFG_WARN("ditch_light: interval_ms 0 — clamping to 1");
         }
         checkLight(cfg.lights.stepLight.configured, cfg.lights.stepLight.brightness, "step_light");
         checkLight(cfg.lights.cabLight.configured, cfg.lights.cabLight.brightness, "cab_light");
         checkLight(cfg.auxLight.configured, cfg.auxLight.brightness, "aux_light");
 
         if (cfg.battery.cellCount > 4) {
-            Serial.printf("[ConfigParser] WARN: battery: cell_count %d out of range (0-4)\n",
-                          cfg.battery.cellCount);
+            LOG_CFG_WARN("battery: cell_count %d out of range (0-4)",
+                         cfg.battery.cellCount);
         }
         if (cfg.battery.cutoffVoltage > cfg.battery.fullVoltage) {
-            Serial.printf("[ConfigParser] WARN: battery: cutoff (%.1f) > full (%.1f)\n",
-                          cfg.battery.cutoffVoltage, cfg.battery.fullVoltage);
+            LOG_CFG_WARN("battery: cutoff (%.1f) > full (%.1f)",
+                         cfg.battery.cutoffVoltage, cfg.battery.fullVoltage);
         }
         if (cfg.battery.warningVoltage < cfg.battery.cutoffVoltage || cfg.battery.warningVoltage > cfg.battery.fullVoltage) {
-            Serial.printf("[ConfigParser] WARN: battery: warning (%.1f) out of range (cutoff %.1f - full %.1f)\n",
-                          cfg.battery.warningVoltage, cfg.battery.cutoffVoltage, cfg.battery.fullVoltage);
+            LOG_CFG_WARN("battery: warning (%.1f) out of range (cutoff %.1f - full %.1f)",
+                         cfg.battery.warningVoltage, cfg.battery.cutoffVoltage, cfg.battery.fullVoltage);
         }
 
     }
@@ -696,8 +712,8 @@ private:
 
     static void validateVehicleConfig(const RcEngineSound::Config& cfg) {
         if (cfg.transmission.numberOfGears < 1 || cfg.transmission.numberOfGears > 6) {
-            Serial.printf("[ConfigParser] WARN: transmission: number_of_gears %d out of range (1-6)\n",
-                          cfg.transmission.numberOfGears);
+            LOG_CFG_WARN("transmission: number_of_gears %d out of range (1-6)",
+                         cfg.transmission.numberOfGears);
         }
     }
 
@@ -719,7 +735,7 @@ private:
         else if (strcasecmp(dir, "UNI_REVERSE") == 0) config.direction = HardwareConfig::DriveMotor::UNI_REVERSE;
         else {
             if (strcasecmp(dir, "FORWARD") != 0) {
-                Serial.printf("[ConfigParser] WARN: drive motor: unknown direction '%s' — defaulting to forward\n", dir);
+                LOG_CFG_WARN("drive motor: unknown direction '%s' — defaulting to forward", dir);
             }
             config.direction = HardwareConfig::DriveMotor::FORWARD;
         }
@@ -851,7 +867,7 @@ private:
                 else if ((strcasecmp(hw, "brake_light") == 0 || strcasecmp(hw, "BRAKE_LIGHT") == 0) && config.brakeLight.configured) { config.reversingLight.pin = config.brakeLight.pin; alias = true; }
             }
             if (!alias && hw[0] != '\0' && config.reversingLight.pin == 0xFF) {
-                Serial.printf("[ConfigParser] WARN: reversing_light: hardware '%s' not recognized — output not configured\n", hw);
+                LOG_CFG_WARN("reversing_light: hardware '%s' not recognized — output not configured", hw);
             }
             config.reversingLight.brightness = 100;
             config.reversingLight.configured = config.reversingLight.pin != 0xFF;
@@ -879,7 +895,7 @@ private:
         else if (strcasecmp(dir, "UNI_REVERSE") == 0) config.motor.direction = HardwareConfig::DriveMotor::UNI_REVERSE;
         else {
             if (strcasecmp(dir, "FORWARD") != 0) {
-                Serial.printf("[ConfigParser] WARN: aux_motor: unknown direction '%s' — defaulting to forward\n", dir);
+                LOG_CFG_WARN("aux_motor: unknown direction '%s' — defaulting to forward", dir);
             }
             config.motor.direction = HardwareConfig::DriveMotor::FORWARD;
         }
@@ -899,9 +915,9 @@ private:
             config.purpose = HardwareConfig::AuxMotor::TRAILER_DCC;
             // Deferred: warn and degrade — no channel is initialized.
             config.motor.type = HardwareConfig::DriveMotor::NONE;
-            Serial.printf("[ConfigParser] WARN: aux_motor: type 'trailer_dcc' not yet implemented — aux channel not configured\n");
+            LOG_CFG_WARN("aux_motor: type 'trailer_dcc' not yet implemented — aux channel not configured");
         } else {
-            Serial.printf("[ConfigParser] WARN: aux_motor: unknown type '%s' — defaulting to mixer\n", type);
+            LOG_CFG_WARN("aux_motor: unknown type '%s' — defaulting to mixer", type);
             config.purpose = HardwareConfig::AuxMotor::MIXER;
         }
         config.configured = (config.motor.hardwareId != 0xFF && config.purpose != HardwareConfig::AuxMotor::NONE);
@@ -1003,7 +1019,7 @@ private:
         else if (strcasecmp(transTypeStr, "MANUAL") == 0) cfg.transmission.type = RcEngineSound::TRANS_MANUAL;
         else {
             if (strcasecmp(transTypeStr, "NONE") != 0) {
-                Serial.printf("[ConfigParser] WARN: transmission: unknown type '%s' — defaulting to none\n", transTypeStr);
+                LOG_CFG_WARN("transmission: unknown type '%s' — defaulting to none", transTypeStr);
             }
             cfg.transmission.type = RcEngineSound::TRANS_NONE;
         }

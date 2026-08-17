@@ -128,6 +128,16 @@ public:
         pinMode(POWER::POWER_BUTTON, INPUT);
         s_powerLatched = false;
 
+        // If the power button is not pressed at boot, the board was powered
+        // via USB (firmware upload / serial monitor) — latch immediately
+        // without requiring the physical hold gesture.
+        if (digitalRead(POWER::POWER_BUTTON) == LOW) {
+            digitalWrite(POWER::POWER_ENABLE, HIGH);
+            s_powerLatched = true;
+            Serial.println("[HardwareInit] Power latched ON (USB boot — no button hold required)");
+            return;
+        }
+
         uint32_t thresholdMs = (uint32_t)bootLatchS * 1000U;
         uint32_t startMs = millis();
         while (digitalRead(POWER::POWER_BUTTON) == HIGH) {
@@ -271,8 +281,11 @@ public:
     }
 
     // position: -100 (left) .. +100 (right), 0 = center
+    static int16_t s_lastServoPos;
     static void setServo(int16_t position) {
         if (servoPin == 0xFF || !steeringServo.attached()) return;
+        if (position == s_lastServoPos) return;
+        s_lastServoPos = position;
 
         int32_t us = servoCenter;
         if (position > 0)      us = servoCenter + (int32_t)position * (servoRight - servoCenter) / 100;
@@ -653,16 +666,19 @@ private:
         servoLeft = servo.endpoints.left;
         servoRight = servo.endpoints.right;
         servoCenter = servo.endpoints.center;
+        s_lastServoPos = -999;
 
+        // Attach with full range (500..2500us) so writeMicroseconds is never truncated or double-scaled
         EasyKit::ServoConfig cfg;
-        cfg.minUs = servoLeft;
-        cfg.maxUs = servoRight;
+        cfg.minUs = 500;
+        cfg.maxUs = 2500;
         cfg.centerUs = servoCenter;
-        cfg.freq = servoFrequency;
+        cfg.freq = (servoFrequency >= 40 && servoFrequency <= 400) ? servoFrequency : 50;
 
         if (steeringServo.attach(servoPin, cfg) == EasyKit::Result::OK) {
-            Serial.printf("[HardwareInit] Servo: Pin=%d Freq=%dHz Center=%dus\n",
-                          servoPin, servo.frequency, servo.endpoints.center);
+            Serial.printf("[HardwareInit] Servo: Pin=%d Freq=%dHz Center=%dus (L=%d, R=%d)\n",
+                          servoPin, cfg.freq, servoCenter, servoLeft, servoRight);
+            steeringServo.writeMicroseconds(servoCenter);
         } else {
             Serial.printf("[HardwareInit] Servo attach FAILED on Pin=%d\n", servoPin);
         }
@@ -817,4 +833,5 @@ EasyLED   HardwareInit::cabLed;
 EasyLEDGroup HardwareInit::s_ditchGroup;
 bool      HardwareInit::s_ditchActive = false;
 uint8_t   HardwareInit::s_drivetrainType = HardwareConfig::ACKERMANN;
+int16_t   HardwareInit::s_lastServoPos = -999;
 

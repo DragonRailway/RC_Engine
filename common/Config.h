@@ -28,8 +28,8 @@ struct HardwareConfig {
         uint8_t hardwareId = 0;
         uint16_t frequency = 50;
         struct Endpoints {
-            uint16_t left = 1350;
-            uint16_t right = 1650;
+            uint16_t left = 1400;
+            uint16_t right = 1600;
             uint16_t center = 1500;
         } endpoints;
         bool    configured = false;

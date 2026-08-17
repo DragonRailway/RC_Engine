@@ -2,16 +2,16 @@
 
 ## Purpose
 
-Defines the vendored ESP32_EasyKit PWM layer as the sole driver for all PWM outputs (motors via MCPWM, servos/ESCs via MCPWM PPM, lights via LEDC), replacing raw ledc calls and the legacy ESP32_PWM_Fusion dependency, while keeping the HardwareInit public API stable and supporting runtime hot-reload.
+Defines the ESP32_EasyKit PWM layer (standalone sibling repo `../ESP32_EasyKit`) as the sole driver for all PWM outputs (motors via MCPWM, servos/ESCs via MCPWM PPM, lights via LEDC), replacing raw ledc calls and the legacy ESP32_PWM_Fusion dependency, while keeping the HardwareInit public API stable and supporting runtime hot-reload. Library-internal behavior (pulse timing, attach semantics) is specified in the library's own OpenSpec repository.
 
 ## Requirements
 
 ### Requirement: EasyKit Dependency Naming
-The project SHALL reference the PWM library dependency as `ESP32_EasyKit`, not `ESP32_PWM_Fusion`, in `platformio.ini`, pointing at the vendored library at `lib/ESP32_EasyKit` (no machine-local symlink).
+The project SHALL reference the PWM library dependency as `ESP32_EasyKit`, not `ESP32_PWM_Fusion`, in `platformio.ini`, pointing at the standalone sibling repo at `../ESP32_EasyKit` (no machine-local symlink into the build).
 
-#### Scenario: Build with vendored dependency
-- **WHEN** running `pio run -e TRACKLINK_V3` on a machine without the author's `~/Arduino/libraries` checkout
-- **THEN** the build resolves the vendored `lib/ESP32_EasyKit` library and compiles successfully
+#### Scenario: Build with external dependency
+- **WHEN** running `pio run -e TRACKLINK_V3` on a machine with the sibling repo checked out next to the project
+- **THEN** the build resolves `../ESP32_EasyKit` and compiles successfully
 
 #### Scenario: No stale Fusion references
 - **WHEN** searching the repo for `ESP32_PWM_Fusion` in build, config, and reference files
@@ -50,16 +50,6 @@ The firmware SHALL stay within the ESP32-S3's 8 LEDC channels and SHALL use the 
 - **WHEN** motor, steering servo, and all six light channels are configured
 - **THEN** LEDC channel usage does not exceed 8 channels and MCPWM operator usage does not exceed 12 operators
 
-### Requirement: EasyServo Pulse Timing Correctness
-`EasyServo` SHALL generate servo pulse widths in microseconds accurately: a `writeMicroseconds(1500)` call SHALL produce a 1500 µs high pulse at the configured refresh rate.
-
-#### Scenario: Microsecond pulse accuracy
-- **WHEN** a servo is attached at 50 Hz and commanded to 1500 µs
-- **THEN** the MCPWM output produces a 1500 µs pulse every 20 ms
-
-#### Scenario: Frequency reconfiguration
-- **WHEN** `setFrequency()` is called on an attached `EasyServo`
-- **THEN** the underlying MCPWM timer period is reconfigured to match the new frequency
 
 ### Requirement: Hot-Reload Teardown
 `HardwareInit::stopAll()` SHALL fully release EasyKit hardware (MCPWM timers/operators and LEDC channels) so a subsequent `init()` with a new configuration can re-attach without resource exhaustion.
