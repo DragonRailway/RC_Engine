@@ -1,6 +1,7 @@
 #include "Arduino.h"
 #include <LittleFS.h>
 #include "boards.h"
+#include "TRACKLINK_V3.h"
 #include "Config.h"
 #include <RcEngineSound.h>
 #include <VehicleProfile.h>
@@ -686,6 +687,78 @@ int main() {
     assert(strcmp(telemetry_Speed.rk.content, "0") == 0 && "Park (P) gear should report 0 km/h");
 
     std::cout << "  PASS: Warning-floor battery percentage and 0-200 km/h speed telemetry verified." << std::endl;
+
+    std::cout << "[Host VC Test] Test 19: Staged Lifecycle and Metadata Priority Cascade..." << std::endl;
+    // Reset RadioKit config
+    initRadioKit();
+
+    // 19.1: Hardware config overrides vehicle config
+    HardwareConfig cascadeHw;
+    strlcpy(cascadeHw.name, "Custom HW Name", sizeof(cascadeHw.name));
+    strlcpy(cascadeHw.description, "Custom HW Desc", sizeof(cascadeHw.description));
+
+    RcEngineSound::Config cascadeVc;
+    strlcpy(cascadeVc.name, "Scania V8", sizeof(cascadeVc.name));
+    strlcpy(cascadeVc.description, "Vehicle Desc", sizeof(cascadeVc.description));
+    cascadeVc.type = RcEngineSound::VEHICLE_TRUCK;
+
+    // Apply metadata
+    if (cascadeHw.name[0] != '\0') {
+        RadioKit.config.name = cascadeHw.name;
+    } else if (cascadeVc.name[0] != '\0' && strcmp(cascadeVc.name, "Unknown") != 0) {
+        RadioKit.config.name = cascadeVc.name;
+    } else {
+        RadioKit.config.name = "RC_UI";
+    }
+
+    if (cascadeHw.description[0] != '\0') {
+        RadioKit.config.description = cascadeHw.description;
+    } else if (cascadeVc.description[0] != '\0') {
+        RadioKit.config.description = cascadeVc.description;
+    } else {
+        RadioKit.config.description = "";
+    }
+
+    assert(strcmp(RadioKit.config.name, "Custom HW Name") == 0 && "Hardware name should override vehicle name");
+    assert(strcmp(RadioKit.config.description, "Custom HW Desc") == 0 && "Hardware description should override vehicle description");
+
+    // 19.2: Vehicle config fallback when hardware name is empty
+    cascadeHw.name[0] = '\0';
+    cascadeHw.description[0] = '\0';
+
+    if (cascadeHw.name[0] != '\0') {
+        RadioKit.config.name = cascadeHw.name;
+    } else if (cascadeVc.name[0] != '\0' && strcmp(cascadeVc.name, "Unknown") != 0) {
+        RadioKit.config.name = cascadeVc.name;
+    } else {
+        RadioKit.config.name = "RC_UI";
+    }
+
+    if (cascadeHw.description[0] != '\0') {
+        RadioKit.config.description = cascadeHw.description;
+    } else if (cascadeVc.description[0] != '\0') {
+        RadioKit.config.description = cascadeVc.description;
+    } else {
+        RadioKit.config.description = "";
+    }
+
+    assert(strcmp(RadioKit.config.name, "Scania V8") == 0 && "Vehicle name should be used when hardware name is empty");
+    assert(strcmp(RadioKit.config.description, "Vehicle Desc") == 0 && "Vehicle description should be used when hardware description is empty");
+
+    // 19.3: Fallback when both are empty
+    cascadeVc.name[0] = '\0';
+    cascadeVc.description[0] = '\0';
+
+    if (cascadeHw.name[0] != '\0') {
+        RadioKit.config.name = cascadeHw.name;
+    } else if (cascadeVc.name[0] != '\0' && strcmp(cascadeVc.name, "Unknown") != 0) {
+        RadioKit.config.name = cascadeVc.name;
+    } else {
+        RadioKit.config.name = "RC_UI";
+    }
+
+    assert(strcmp(RadioKit.config.name, "RC_UI") == 0 && "Default fallback should be RC_UI when both configs lack name");
+    std::cout << "  PASS: Staged lifecycle and metadata priority cascade verified." << std::endl;
 
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;

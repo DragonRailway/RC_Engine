@@ -103,5 +103,8 @@ void RadioKitClass::_registerWidget(RadioKit_Widget*) {}
 void RadioKitClass::pushUpdate(uint8_t) {}
 void RadioKitClass::markConfDirty() {}
 void RadioKitClass::startSerial(Stream&) {}
+void RadioKitClass::begin() {}
+void RadioKitClass::startBLE(const char*) {}
+bool RadioKitClass::enableFS() { return true; }
 void RadioKitClass::update() {}
 bool RadioKitClass::isConnected() const { return host_radiokit_connected; }

@@ -1,6 +1,4 @@
 {
-  "name": "RC_UI",
-  "description": "Mikro V2 RC Truck Controller",
   "sound": {
     "volume": 80
   },
@@ -15,7 +13,7 @@
       }
     },
     "steering_servo": {
-      "hardware": "S1",
+      "hardware": "S4",
       "frequency": 50,
       "endpoints": {
         "left": 1350,

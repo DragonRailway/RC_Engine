@@ -65,26 +65,49 @@ static uint32_t fileWriteTime(const char* path) {
     return t;
 }
 
+#if defined(RK_ENABLE_BLE)
+#include <NimBLEDevice.h>
+#endif
+
 // ── Device Metadata Cascade ──
 // Priority:
 // 1) Hardware config (board-specific name / description)
 // 2) Vehicle config (bundle vehicle.name / vehicle.description)
-// 3) RADIOKIT.h fallback (defaults from initRadioKit)
+// 3) Fallback defaults ("RC_UI" / "")
 static void applyDeviceMetadata(const HardwareConfig& hw, const RcEngineSound::Config& vc) {
     if (hw.name[0] != '\0') {
         RadioKit.config.name = hw.name;
     } else if (vc.name[0] != '\0' && strcmp(vc.name, "Unknown") != 0) {
         RadioKit.config.name = vc.name;
+    } else {
+        RadioKit.config.name = "RC_UI";
     }
 
     if (hw.description[0] != '\0') {
         RadioKit.config.description = hw.description;
     } else if (vc.description[0] != '\0') {
         RadioKit.config.description = vc.description;
+    } else {
+        RadioKit.config.description = "";
     }
 
-    Serial.printf("[Device] Name: '%s', Description: '%s'\n",
-                  RadioKit.config.name, RadioKit.config.description);
+    if (vc.type == RcEngineSound::VEHICLE_LOCOMOTIVE) {
+        RadioKit.config.type = "Locomotive";
+        RadioKit.setActivePage(1);   // page 1 "Loco"
+    } else {
+        RadioKit.config.type = "Truck";
+        RadioKit.setActivePage(0);   // page 0 "Truck"
+    }
+
+#if defined(RK_ENABLE_BLE)
+    NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
+    if (pAdv) {
+        pAdv->setName(RadioKit.config.name);
+    }
+#endif
+
+    Serial.printf("[Device] Name: '%s', Description: '%s', Type: '%s'\n",
+                  RadioKit.config.name, RadioKit.config.description, RadioKit.config.type);
 }
 
 static bool reloadConfigs() {
@@ -209,25 +232,17 @@ void setup() {
     AudioOutput::start();
 
     Serial.println("\n── Starting RadioKit (BLE) ──");
-    applyDeviceMetadata(hwConfig, profile.config);
     initRadioKit();
+    applyDeviceMetadata(hwConfig, profile.config);
+
+    RadioKit.begin();
+    RadioKit.startSerial(Serial);
+    RadioKit.startBLE();
+    RadioKit.enableFS();
+
     UiLogger::onRadioKitStarted();
     applyAuxSliderProfile();
     VehicleController::applyConfiguredLightMask(hwConfig.lights, hwConfig.auxLight.configured);
-
-    // ── Vehicle-type-driven app surface ──
-    // RadioKit.config.type is informational (sent to the app on connect); the
-    // generated header hardcodes "Locomotive", so override it from the vehicle
-    // config so the app labels the device correctly. Also force the active page
-    // to match the model so the app lands on the right page (a nudge, not a
-    // lock — app-initiated page switches still work afterwards).
-    if (profile.config.type == RcEngineSound::VEHICLE_LOCOMOTIVE) {
-        RadioKit.config.type = "Locomotive";
-        RadioKit.setActivePage(1);   // page 1 "Loco"
-    } else {
-        RadioKit.config.type = "Truck";
-        RadioKit.setActivePage(0);   // page 0 "Truck"
-    }
 
     Serial.println("\n── System Ready ──");
     Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());

@@ -1,0 +1,5 @@
+schema: spec-driven
+version: 1.0.0
+change:
+  name: decouple-radiokit-init
+  status: draft

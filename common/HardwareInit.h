@@ -138,6 +138,9 @@ public:
         pinMode(POWER::POWER_ENABLE, OUTPUT);
         digitalWrite(POWER::POWER_ENABLE, LOW);
         pinMode(POWER::POWER_BUTTON, INPUT);
+        if (POWER::CHARGE_SENS != 0xFF) {
+            pinMode(POWER::CHARGE_SENS, INPUT);
+        }
         s_powerLatched = false;
 
         // If the power button is not pressed at boot, the board was powered

@@ -29,12 +29,26 @@ The firmware SHALL declare the widgets from the saved RC_UI design: page 0 "Truc
 - **THEN** `slider`, `dir_switch`, `lights_toggle`, and `horn` are registered on page 1
 
 ### Requirement: RadioKit lifecycle
-The firmware SHALL call `initRadioKit()` during setup (configuring initial defaults and starting BLE and Serial transports plus the filesystem feature) and SHALL call `RadioKit.update()` on every loop iteration. The firmware SHALL resolve `RadioKit.config.name` and `RadioKit.config.description` using a 3-tier cascade:
-1. Top-level `name` and `description` from the board's hardware config JSON (if present and non-empty).
-2. `name` and `description` from the vehicle config JSON (`vehicle.name` and `vehicle.description`, if present and non-empty).
-3. The fallback defaults defined in `RADIOKIT.h` (`initRadioKit()`).
+The firmware SHALL initialize RadioKit widgets and pages via `initRadioKit()`, resolve `RadioKit.config.name`, `RadioKit.config.description`, and `RadioKit.config.type` via `applyDeviceMetadata()`, and explicitly commit configuration and start transports in `src/main.cpp` using the following staged sequence:
+1. `initRadioKit()`: Configure widget definitions, page names, and orientations without starting transports or clobbering dynamic metadata.
+2. `applyDeviceMetadata()`: Resolve `RadioKit.config.name` and `RadioKit.config.description` using the 3-tier cascade:
+   - Hardware config top-level `name` and `description` (if present and non-empty).
+   - Vehicle config `name` and `description` (`vehicle.name` and `vehicle.description`, if present and non-empty).
+   - Fallback defaults (`"RC_UI"` and `""`).
+   Set `RadioKit.config.type` to `"Locomotive"` for LOCOMOTIVE and `"Truck"` for truck-family types, setting active page accordingly.
+3. `RadioKit.begin()`: Commit the resolved dynamic configuration.
+4. `RadioKit.startSerial(Serial)` & `RadioKit.startBLE()`: Start transports broadcasting the resolved name.
+5. `RadioKit.enableFS()`: Mount LittleFS for the RadioKit filesystem protocol.
 
-After initialization, the firmware SHALL set the RadioKit device type string from the vehicle config type (`"Truck"` for TRUCK, `"Locomotive"` for LOCOMOTIVE, and the truck string for EXCAVATOR/UNKNOWN) rather than a hardcoded value, and SHALL force the active page to match the vehicle type (page 0 "Truck" for truck-family types, page 1 "Loco" for LOCOMOTIVE) so the app lands on the correct page on connect. On config hot-reload, the firmware SHALL re-evaluate the metadata cascade and update `RadioKit.config.name`, `RadioKit.config.description`, and runtime BLE advertising name accordingly.
+On config hot-reload (`reloadConfigs()`), the firmware SHALL re-evaluate the metadata cascade and update `RadioKit.config.name`, `RadioKit.config.description`, `RadioKit.config.type`, and the active BLE advertising name.
+
+#### Scenario: Clean boot with vehicle name
+- **WHEN** the firmware boots with a hardware config that omits `name` and a vehicle config named `"Scania V8"`
+- **THEN** `RadioKit.startBLE()` broadcasts the advertised device name as `"Scania V8"` and no subsequent override occurs
+
+#### Scenario: Hardware config overrides vehicle name
+- **WHEN** the hardware config defines `"name": "Custom Rig"`
+- **THEN** `RadioKit.startBLE()` broadcasts `"Custom Rig"`
 
 #### Scenario: App connects over BLE
 - **WHEN** the RadioKit app connects to the device over BLE

@@ -63,8 +63,6 @@ RK_Telemetry telemetry_Speed("Speed");
 
 // ─── Config Init ───
 static inline void initRadioKit() {
-  RadioKit.config.name        = "RC_UI";
-  RadioKit.config.type        = "Locomotive";
   RadioKit.config.theme       = "dragon";
   RadioKit.config.baudrate    = 1000000;
 
@@ -161,13 +159,6 @@ static inline void initRadioKit() {
   RadioKit.setNumPages(RK_NUM_PAGES);
   RadioKit.setPageNames(rk_pageNames);
   RadioKit.setPageOrientations(rk_pageOrientations);
-
-  RadioKit.begin();
-
-  RadioKit.startSerial(Serial);
-  RadioKit.startBLE();
-
-  RadioKit.enableFS();
 }
 
 #endif // RADIOKIT_GENERATED_H
