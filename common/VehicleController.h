@@ -86,6 +86,10 @@ public:
         s_rightTurnPeak = 0;
         s_leftIndPrev = false;
         s_rightIndPrev = false;
+        s_leftIndActive = false;
+        s_rightIndActive = false;
+        s_leftIndSuppressed = false;
+        s_rightIndSuppressed = false;
         s_engineStartTogglePrev = false;
         s_cutoffLightResetDone = false;
         s_jakeBrakePrev = false;
@@ -194,6 +198,9 @@ public:
         } else if (RadioKit.isConnected()) {
             s_disconnectStart = 0;
             s_inWarningPhase = false;
+            if (!HardwareInit::isPowerLatched()) {
+                HardwareInit::latchPower();
+            }
         } else {
             // Disconnected state
             uint32_t timeoutMs = (uint32_t)s_hw->power.disconnectTimeoutS * 1000U;
@@ -272,8 +279,14 @@ public:
         }
 
         // ── Throttle input ──
-        int16_t throttleInput = isLoco ? throttle_slider.rk.value : gas_pedal.rk.value;
-        int16_t throttlePct = throttleInput > 0 ? throttleInput : 0;   // 0..100
+        int16_t throttlePct = 0;
+        if (isLoco) {
+            throttlePct = constrain(throttle_slider.rk.value, 0, 100);
+        } else {
+            // gas_pedal operates from -100 (idle/released) to +100 (full throttle)
+            int16_t rawPedal = constrain(gas_pedal.rk.value, -100, 100);
+            throttlePct = (rawPedal + 100) / 2;
+        }
 
         // ── Engine Start / Power State Machine ──
         // Engine power toggles are type-driven and exclusive: start_button (TRUCK)
@@ -351,10 +364,12 @@ public:
         // letting stale RadioKit values bleed into the loco drive path.
         int16_t steerVal = isLoco ? 0 : steering_wheel.rk.value;
 
-        // Proportional brake blend: brake_pedal above a 20% deadband scales motor
-        // output linearly to zero at full brake (Ackermann + skid-steer). The sound
-        // engine RPM and light automation keep using the raw throttlePct.
-        int16_t brakePct = isLoco ? 0 : brake_pedal.rk.value;
+        // Proportional brake blend: brake_pedal normalized from [-100, 100] to [0, 100]%
+        int16_t brakePct = 0;
+        if (!isLoco) {
+            int16_t rawBrake = constrain(brake_pedal.rk.value, -100, 100);
+            brakePct = (rawBrake + 100) / 2;
+        }
         int16_t motorThrottle = throttlePct;
         if (parkingBrake) {
             motorThrottle = 0;   // Park locks the motor regardless of throttle or brake
@@ -451,7 +466,7 @@ public:
         }
 
         // ── Brake pedal ──
-        bool brakePressed = brake_pedal.rk.value > 20;
+        bool brakePressed = brakePct > 20;
         if (brakePressed != s_brakePrev) {
             s_engine->triggerBrake(brakePressed);
             s_brakePrev = brakePressed;
@@ -475,71 +490,100 @@ public:
 
         // ── Real Vehicle Turn Indicator Auto-Cancellation (Relative to baseline at press) ──
         if (!isLoco) {
-            // Left indicator press edge -> capture baseline & peak
-            if (left_indicator.rk.state && !s_leftIndPrev) {
-                if (right_indicator.rk.state) right_indicator.rk.state = false;
-                s_rightTurnArmed = false;
-                s_leftTurnArmed = false;
-                s_leftTurnBaseline = steerVal;
-                s_leftTurnPeak = steerVal;
-            }
-            // Right indicator press edge -> capture baseline & peak
-            if (right_indicator.rk.state && !s_rightIndPrev) {
-                if (left_indicator.rk.state) left_indicator.rk.state = false;
+            bool rawLeft = left_indicator.rk.state;
+            bool rawRight = right_indicator.rk.state;
+
+            // Clear suppression once the app releases/resets the toggle to false
+            if (!rawLeft) s_leftIndSuppressed = false;
+            if (!rawRight) s_rightIndSuppressed = false;
+
+            // Effective state accounts for firmware suppression
+            bool effLeft = rawLeft && !s_leftIndSuppressed;
+            bool effRight = rawRight && !s_rightIndSuppressed;
+
+            // Activation edges
+            bool leftEdge = effLeft && !s_leftIndActive;
+            bool rightEdge = effRight && !s_rightIndActive;
+
+            if (rightEdge) {
+                if (s_leftIndActive || rawLeft) s_leftIndSuppressed = true;
+                s_leftIndActive = false;
                 s_leftTurnArmed = false;
                 s_rightTurnArmed = false;
                 s_rightTurnBaseline = steerVal;
                 s_rightTurnPeak = steerVal;
+                s_rightIndActive = true;
+                Serial.printf("[EVENT] Right indicator ON (Baseline: %d)\n", s_rightTurnBaseline);
+            } else if (leftEdge) {
+                if (s_rightIndActive || rawRight) s_rightIndSuppressed = true;
+                s_rightIndActive = false;
+                s_rightTurnArmed = false;
+                s_leftTurnArmed = false;
+                s_leftTurnBaseline = steerVal;
+                s_leftTurnPeak = steerVal;
+                s_leftIndActive = true;
+                Serial.printf("[EVENT] Left indicator ON (Baseline: %d)\n", s_leftTurnBaseline);
+            } else {
+                if (!effLeft) {
+                    s_leftIndActive = false;
+                    s_leftTurnArmed = false;
+                }
+                if (!effRight) {
+                    s_rightIndActive = false;
+                    s_rightTurnArmed = false;
+                }
             }
 
-            // Left turn indicator cancel logic (relative to s_leftTurnBaseline)
-            if (left_indicator.rk.state) {
-                int16_t delta = steerVal - s_leftTurnBaseline; // Turning left is negative delta; right is positive delta
-                if (delta > 15) {
-                    // Cancel immediately if driver steers opposite (right) by >15% from baseline
-                    left_indicator.rk.state = false;
+            // Left turn indicator cancel logic
+            if (s_leftIndActive) {
+                int16_t delta = steerVal - s_leftTurnBaseline;
+                if (delta > 15 && steerVal > 10) {
+                    // Cancel immediately if driver steers opposite (right) by >15% and past center
+                    s_leftIndActive = false;
+                    s_leftIndSuppressed = true;
                     s_leftTurnArmed = false;
                     Serial.println("[EVENT] Left indicator auto-cancelled (opposite steering)");
                 } else if (delta <= -20) {
                     s_leftTurnArmed = true; // Armed when steering into left turn >=20% from baseline
                     if (steerVal < s_leftTurnPeak) s_leftTurnPeak = steerVal;
-                } else if (s_leftTurnArmed && (steerVal >= s_leftTurnPeak + 15 || steerVal >= s_leftTurnBaseline - 5)) {
+                } else if (s_leftTurnArmed && (steerVal >= s_leftTurnPeak + 15 || steerVal >= -5)) {
                     // Cancel when wheel returns towards center/baseline with hysteresis
-                    left_indicator.rk.state = false;
+                    s_leftIndActive = false;
+                    s_leftIndSuppressed = true;
                     s_leftTurnArmed = false;
                     Serial.println("[EVENT] Left indicator auto-cancelled (wheel returned to center)");
                 }
-            } else {
-                s_leftTurnArmed = false;
             }
 
-            // Right turn indicator cancel logic (relative to s_rightTurnBaseline)
-            if (right_indicator.rk.state) {
-                int16_t delta = steerVal - s_rightTurnBaseline; // Turning right is positive delta; left is negative delta
-                if (delta < -15) {
-                    // Cancel immediately if driver steers opposite (left) by >15% from baseline
-                    right_indicator.rk.state = false;
+            // Right turn indicator cancel logic
+            if (s_rightIndActive) {
+                int16_t delta = steerVal - s_rightTurnBaseline;
+                if (delta < -15 && steerVal < -10) {
+                    // Cancel immediately if driver steers opposite (left) by >15% and past center
+                    s_rightIndActive = false;
+                    s_rightIndSuppressed = true;
                     s_rightTurnArmed = false;
                     Serial.println("[EVENT] Right indicator auto-cancelled (opposite steering)");
                 } else if (delta >= 20) {
                     s_rightTurnArmed = true; // Armed when steering into right turn >=20% from baseline
                     if (steerVal > s_rightTurnPeak) s_rightTurnPeak = steerVal;
-                } else if (s_rightTurnArmed && (steerVal <= s_rightTurnPeak - 15 || steerVal <= s_rightTurnBaseline + 5)) {
+                } else if (s_rightTurnArmed && (steerVal <= s_rightTurnPeak - 15 || steerVal <= 5)) {
                     // Cancel when wheel returns towards center/baseline with hysteresis
-                    right_indicator.rk.state = false;
+                    s_rightIndActive = false;
+                    s_rightIndSuppressed = true;
                     s_rightTurnArmed = false;
                     Serial.println("[EVENT] Right indicator auto-cancelled (wheel returned to center)");
                 }
-            } else {
-                s_rightTurnArmed = false;
             }
 
-            s_leftIndPrev = left_indicator.rk.state;
-            s_rightIndPrev = right_indicator.rk.state;
+            left_indicator.rk.state = s_leftIndActive;
+            right_indicator.rk.state = s_rightIndActive;
+            s_leftIndPrev = rawLeft;
+            s_rightIndPrev = rawRight;
         }
 
-        bool turnSignalL = !isLoco && left_indicator.rk.state;
-        bool turnSignalR = !isLoco && right_indicator.rk.state;
+        bool turnSignalL = !isLoco && s_leftIndActive;
+        bool turnSignalR = !isLoco && s_rightIndActive;
 
         // ── Dynamic Deceleration Brake Light ──
         int16_t drop = s_prevThrottlePct - throttlePct;
@@ -668,6 +712,10 @@ private:
     static int16_t  s_rightTurnPeak;
     static bool     s_leftIndPrev;
     static bool     s_rightIndPrev;
+    static bool     s_leftIndActive;
+    static bool     s_rightIndActive;
+    static bool     s_leftIndSuppressed;
+    static bool     s_rightIndSuppressed;
     static bool     s_engineStartTogglePrev;
     static bool     s_cutoffLightResetDone;
     static bool     s_jakeBrakePrev;
@@ -853,6 +901,10 @@ int16_t  VehicleController::s_rightTurnBaseline = 0;
 int16_t  VehicleController::s_rightTurnPeak = 0;
 bool     VehicleController::s_leftIndPrev = false;
 bool     VehicleController::s_rightIndPrev = false;
+bool     VehicleController::s_leftIndActive = false;
+bool     VehicleController::s_rightIndActive = false;
+bool     VehicleController::s_leftIndSuppressed = false;
+bool     VehicleController::s_rightIndSuppressed = false;
 bool     VehicleController::s_engineStartTogglePrev = false;
 bool     VehicleController::s_cutoffLightResetDone = false;
 bool     VehicleController::s_jakeBrakePrev = false;

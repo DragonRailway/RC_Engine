@@ -76,11 +76,11 @@ int main() {
     std::cout << "[Host VC Test] Test 2: Drive Gear & Proportional Brake Blending..." << std::endl;
     gear_switch.rk.value = 0; // D (Drive)
     gas_pedal.rk.value = 100;
-    brake_pedal.rk.value = 0;
+    brake_pedal.rk.value = -100; // 0% brake
     VehicleController::update();
 
-    // Apply 60% Brake Pedal (>20% deadband).
-    brake_pedal.rk.value = 60;
+    // Apply 60% Brake Pedal (>20% deadband: 60% normalized is 20 raw).
+    brake_pedal.rk.value = 20; // (20 + 100)/2 = 60%
     VehicleController::update();
 
     // Apply 100% Full Brake Pedal.
@@ -89,7 +89,7 @@ int main() {
     std::cout << "  PASS: Proportional Brake Blending verified." << std::endl;
 
     std::cout << "[Host VC Test] Test 3: Reverse Gear Direction & Telemetry..." << std::endl;
-    brake_pedal.rk.value = 0;
+    brake_pedal.rk.value = -100;
     gas_pedal.rk.value = 80;
     gear_switch.rk.value = 2; // R (Reverse)
     VehicleController::update();
@@ -166,7 +166,7 @@ int main() {
 
     gear_switch.rk.value = 0; // D (Drive)
     gas_pedal.rk.value = 100;
-    brake_pedal.rk.value = 0;
+    brake_pedal.rk.value = -100;
     steering_wheel.rk.value = 0;
 
     host_motor_write_count = 0;
@@ -473,8 +473,12 @@ int main() {
     assert(right_indicator.rk.state == true && left_indicator.rk.state == false && "Right turns off Left");
 
     // 15.2: Left Turn Armed (< -20) -> Return to Center (> -8) cancels Left indicator
-    left_indicator.rk.state = true;
+    // First clear suppression by resetting toggle to false (as happens when tapping in app)
+    left_indicator.rk.state = false;
     right_indicator.rk.state = false;
+    VehicleController::update();
+
+    left_indicator.rk.state = true;
     steering_wheel.rk.value = 0;
     VehicleController::update(); // button edge registered
     assert(left_indicator.rk.state == true);
@@ -488,6 +492,8 @@ int main() {
     assert(left_indicator.rk.state == false && "Left indicator should auto-cancel on wheel return");
 
     // 15.3: Opposite Steering Cancellation (Right indicator on -> steer Left < -15% cancels)
+    right_indicator.rk.state = false;
+    VehicleController::update();
     right_indicator.rk.state = true;
     steering_wheel.rk.value = 0;
     VehicleController::update();
@@ -662,7 +668,8 @@ int main() {
     // Start engine in Drive
     start_button.rk.state = true;
     gear_switch.rk.value = 0; // Drive (D)
-    gas_pedal.rk.value = 50;  // 50% throttle -> 100 km/h
+    brake_pedal.rk.value = -100;
+    gas_pedal.rk.value = 0;   // 50% throttle -> 100 km/h
     for (int i = 0; i < 200; i++) {
         host_virtual_millis += 10;
         engine.update(0);
@@ -759,6 +766,55 @@ int main() {
 
     assert(strcmp(RadioKit.config.name, "RC_UI") == 0 && "Default fallback should be RC_UI when both configs lack name");
     std::cout << "  PASS: Staged lifecycle and metadata priority cascade verified." << std::endl;
+
+    // ── Test 20: Turn Signal Edge Latching & Suppression ──
+    std::cout << "[Host VC Test] Test 20: Turn Signal App-Suppression & Edge Latching..." << std::endl;
+    HardwareConfig testHw20;
+    testHw20.lights.turnLight.leftPin = 17;
+    testHw20.lights.turnLight.rightPin = 18;
+    testHw20.lights.turnLight.configured = true;
+    HardwareInit::init(testHw20);
+    VehicleController::init(&testHw20, &engine, &profile);
+
+    // 20.1: Turn left indicator ON at steering 0
+    steering_wheel.rk.value = 0;
+    left_indicator.rk.state = true;
+    VehicleController::update();
+    assert(left_indicator.rk.state == true && "Left indicator should be ON");
+
+    // 20.2: Steer left >= 20% into turn (arms cancellation)
+    steering_wheel.rk.value = -30;
+    VehicleController::update();
+    assert(left_indicator.rk.state == true && "Left indicator should remain ON while steering into turn");
+
+    // 20.3: Return wheel towards center -> auto-cancels
+    steering_wheel.rk.value = 0;
+    VehicleController::update();
+    assert(left_indicator.rk.state == false && "Left indicator should auto-cancel when returning to center");
+
+    // 20.4: App continues sending state=true (simulating repeated BLE packets)
+    // It must remain suppressed and NOT re-trigger!
+    left_indicator.rk.state = true;
+    VehicleController::update();
+    assert(left_indicator.rk.state == false && "Left indicator should remain suppressed while app still sends true");
+
+    // 20.5: User taps button to OFF (state=false) -> clears suppression
+    left_indicator.rk.state = false;
+    VehicleController::update();
+    assert(left_indicator.rk.state == false && "Suppression cleared on false");
+
+    // 20.6: User taps button again (state=true) -> turns ON freshly
+    left_indicator.rk.state = true;
+    VehicleController::update();
+    assert(left_indicator.rk.state == true && "Left indicator turns ON freshly after suppression release");
+
+    // 20.7: Activating right indicator mutually suppresses left indicator
+    right_indicator.rk.state = true;
+    VehicleController::update();
+    assert(left_indicator.rk.state == false && "Left indicator should be turned OFF when right is activated");
+    assert(right_indicator.rk.state == true && "Right indicator should be ON");
+
+    std::cout << "  PASS: Turn signal app-suppression and edge-latching verified." << std::endl;
 
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;

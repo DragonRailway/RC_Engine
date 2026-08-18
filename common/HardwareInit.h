@@ -315,7 +315,13 @@ public:
     static void setLight(uint8_t pin, uint8_t brightnessPct) {
         if (pin == 0xFF || pin == 0) return;
         EasyLED* led = findLight(pin);
-        if (led) led->write((float)brightnessPct);
+        if (led) {
+            led->write((float)brightnessPct);
+        } else {
+            // Direct GPIO digital fallback for non-LEDC or pooled channels
+            pinMode(pin, OUTPUT);
+            digitalWrite(pin, brightnessPct > 0 ? HIGH : LOW);
+        }
     }
 
     // Edge-triggered blink control: a false->true edge starts the blink engine

@@ -4,13 +4,23 @@
 Defines vehicle control loop requirements for throttle, steering, gear shifting, lighting automation, and telemetry.
 ## Requirements
 ### Requirement: Throttle and steering mapping
-The firmware SHALL select its input widgets by the configured vehicle type from `/vehicle-config.json` (single source of truth, one model per device), not by the active RadioKit page. For `TRUCK` type the firmware SHALL read `gas_pedal` and `steering_wheel` (plus `truck_light`, `start_button`, `horn_button`, `aux_slider`, `gear_switch`); for `LOCOMOTIVE` type it SHALL read `throttle_slider` (plus `loco_light`, `engine_button`, `bell_button`, `dir_switch`). Drive motor output follows the mapped inputs provided engine power state is RUNNING and battery voltage is above cutoff threshold. For Ackermann steering setups, the steering servo SHALL follow `steering_wheel` continuously in all active states (including engine OFF, STARTING, and in Park), except when battery voltage drops below cutoff threshold.
+The firmware SHALL select its input widgets by the configured vehicle type from `/vehicle-config.json` (single source of truth, one model per device), not by the active RadioKit page. For `TRUCK` type the firmware SHALL read `gas_pedal` and `steering_wheel` (plus `truck_light`, `start_button`, `horn_button`, `aux_slider`, `gear_switch`); for `LOCOMOTIVE` type it SHALL read `throttle_slider` (plus `loco_light`, `engine_button`, `bell_button`, `dir_switch`).
+
+The firmware SHALL map `gas_pedal` (`[-100, +100]`) to `[0, 100]%` throttle via `(val + 100) / 2` when in truck mode, and read `throttle_slider` (`[0, 100]`) directly when in locomotive mode. Drive motor output follows the mapped inputs provided engine power state is RUNNING and battery voltage is above cutoff threshold. For Ackermann steering setups, the steering servo SHALL follow `steering_wheel` continuously in all active states (including engine OFF, STARTING, and in Park), except when battery voltage drops below cutoff threshold.
 
 The vehicle type SHALL be represented by a single canonical enum (`VEHICLE_TRUCK`, `VEHICLE_LOCOMOTIVE`, `VEHICLE_EXCAVATOR`, `VEHICLE_UNKNOWN`) shared by the config parser and the control loop. An unrecognized `type` string in the vehicle config SHALL map to `VEHICLE_UNKNOWN` and log a boot warning, and SHALL behave as TRUCK for widget selection.
 
 #### Scenario: Full throttle from gas pedal (truck)
-- **WHEN** vehicle type is `TRUCK`, `gas_pedal` reaches its maximum value and engine state is RUNNING and battery is healthy
+- **WHEN** vehicle type is `TRUCK`, `gas_pedal` reaches +100 and engine state is RUNNING and battery is healthy
 - **THEN** the drive motor runs at the configured maximum duty (or ESC max pulse) in the configured direction
+
+#### Scenario: Half throttle from gas pedal (truck)
+- **WHEN** vehicle type is `TRUCK`, `gas_pedal` is at 0 (50% travel between -100 and +100)
+- **THEN** the drive motor throttle percent is computed as 50%
+
+#### Scenario: Gas pedal released
+- **WHEN** the truck `gas_pedal` returns to its spring-min value (-100)
+- **THEN** the drive motor receives no throttle (0%) and the vehicle decelerates toward idle
 
 #### Scenario: Full throttle from loco slider
 - **WHEN** vehicle type is `LOCOMOTIVE` and `throttle_slider` reaches its maximum value and engine state is RUNNING and battery is healthy
@@ -23,10 +33,6 @@ The vehicle type SHALL be represented by a single canonical enum (`VEHICLE_TRUCK
 #### Scenario: Excavator type is a recognized stub
 - **WHEN** the vehicle config `type` is `EXCAVATOR`
 - **THEN** the type resolves to `VEHICLE_EXCAVATOR`, a boot log notes the control surface is deferred, and the truck widget set is used until the excavator surface is implemented
-
-#### Scenario: Gas pedal released
-- **WHEN** the truck `gas_pedal` returns to its spring-min value (-100)
-- **THEN** the drive motor receives no throttle and the vehicle decelerates toward idle
 
 #### Scenario: Steering right while engine is stopped or parked
 - **WHEN** `steering_wheel` is turned to the right while engine state is OFF or in Park (P)
@@ -41,7 +47,9 @@ The vehicle type SHALL be represented by a single canonical enum (`VEHICLE_TRUCK
 - **THEN** truck-page widgets (`gas_pedal`, `steering_wheel`, `gear_switch`, `start_button`, `aux_slider`, `horn_button`) have no effect on outputs
 
 ### Requirement: Direction and braking
-The firmware SHALL apply the truck `gear_switch` (single-select radio: D=0, P=1, R=2) to select truck drive mode and `brake_pedal` to brake the vehicle, and SHALL apply the Loco page `dir_switch` for locomotive forward/reverse. In Drive the motor follows the gas pedal forward; in Park the motor SHALL be locked to zero regardless of throttle and the parking-brake sound SHALL play; in Reverse the motor SHALL run reversed, the reversing beep SHALL play, and the reversing light SHALL be illuminated automatically. A gear change SHALL play the shifting sound only while the engine is RUNNING. When `brake_pedal` is pressed beyond a 20% deadband, the drive motor output SHALL be reduced linearly and proportionally to the pedal position (zero motor output at full brake), applied to both Ackermann and skid-steer drivetrains, while the sound engine RPM simulation continues to follow the raw throttle input.
+The firmware SHALL apply the truck `gear_switch` (single-select radio: D=0, P=1, R=2) to select truck drive mode and `brake_pedal` to brake the vehicle, and SHALL apply the Loco page `dir_switch` for locomotive forward/reverse.
+
+`brake_pedal` (`[-100, +100]`) SHALL be normalized to `[0, 100]%` via `(val + 100) / 2`. In Drive the motor follows the gas pedal forward; in Park the motor SHALL be locked to zero regardless of throttle and the parking-brake sound SHALL play; in Reverse the motor SHALL run reversed, the reversing beep SHALL play, and the reversing light SHALL be illuminated automatically. A gear change SHALL play the shifting sound only while the engine is RUNNING. When normalized `brake_pedal` is pressed beyond a 20% deadband, the drive motor output SHALL be reduced linearly and proportionally to the pedal position (zero motor output at full brake), applied to both Ackermann and skid-steer drivetrains, while the sound engine RPM simulation continues to follow the raw throttle input.
 
 The firmware SHALL interlock engine start/stop with gear selection: stopping the engine SHALL automatically shift `gear_switch` to Park (`P` / value 1) and sync the widget state to the app. Starting the engine while in Park (`P`) SHALL automatically shift `gear_switch` to Drive (`D` / value 0) and sync the widget state to the app.
 
@@ -57,33 +65,17 @@ The firmware SHALL interlock engine start/stop with gear selection: stopping the
 - **WHEN** the truck gear is in R (index 2) and throttle is applied
 - **THEN** the motor runs reversed, the reversing beep plays, and the reversing light is illuminated automatically
 
+#### Scenario: Brake pedal released
+- **WHEN** `brake_pedal` is at its resting spring position (-100)
+- **THEN** normalized brake percentage is 0% and does not impede motor throttle
+
 #### Scenario: Engine stop auto-shifts to Park
-- **WHEN** the engine is stopped (start_button transitioned to OFF or engine stop triggered)
-- **THEN** `gear_switch` automatically shifts to Park (P / index 1), motor output is locked, and UI state is synced
+- **WHEN** the engine is stopped (latched power button toggles OFF or engine stops)
+- **THEN** `gear_switch` automatically switches to Park (`P` / index 1)
 
 #### Scenario: Engine start auto-shifts to Drive
-- **WHEN** the engine is started (start_button transitioned to ON) while `gear_switch` is in Park (P / index 1)
-- **THEN** `gear_switch` automatically shifts to Drive (D / index 0), motor output is unlocked, and UI state is synced
-
-#### Scenario: Gear change shift sound
-- **WHEN** the truck gear changes between D/P/R while the engine is RUNNING
-- **THEN** the shifting sound plays; no shift sound plays while the engine is OFF or STARTING
-
-#### Scenario: Direction switch to reverse (locomotive)
-- **WHEN** vehicle type is `LOCOMOTIVE` and `dir_switch` is set to its ON position
-- **THEN** the drive motor operates in the reverse direction per hardware config
-
-#### Scenario: Brake pedal applied
-- **WHEN** `brake_pedal` is pressed beyond a minimum threshold
-- **THEN** the drive motor output is reduced/braked proportionally to the pedal position
-
-#### Scenario: Brake overrides throttle
-- **WHEN** throttle is applied while `brake_pedal` is pressed
-- **THEN** the motor output equals the throttle scaled by the remaining brake headroom (full brake → zero motor output)
-
-#### Scenario: Brake does not stall the engine simulation
-- **WHEN** `brake_pedal` is pressed while throttle is released
-- **THEN** motor output is zero and the sound engine RPM continues to follow the raw throttle (idle) with the brake sound effect active
+- **WHEN** the engine transitions from stopped/Park to STARTING
+- **THEN** `gear_switch` automatically switches to Drive (`D` / index 0)
 
 ### Requirement: Light control
 The firmware SHALL map the `truck_light` (Truck page) and `loco_light` (Loco page) multi-select bitmasks, as well as automatic steering indicators, dynamic deceleration brake lights, and low-battery hazard overrides, to the configured light outputs (head, tail, brake, turn, reversing).
