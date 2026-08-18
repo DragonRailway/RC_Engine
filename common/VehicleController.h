@@ -174,7 +174,7 @@ public:
 
         // ── 3-State Board Power & Disconnect Auto Power-Off ──
         bool isCharging = HardwareInit::isCharging();
-        if (isCharging) {
+        if (isCharging && !RadioKit.isConnected()) {
             s_disconnectStart = 0;
             s_inWarningPhase = false;
             HardwareInit::setAllMotors(0);
@@ -557,10 +557,16 @@ public:
             bool highBeam  = (bits & 0x02); // Item 1: High Beam
             fogLamp        = (bits & 0x04); // Item 2: Fog Lamp
 
-            if (highBeam) {
-                headlightMode = 2;
-            } else if (headLight) {
-                headlightMode = 1;
+            // High beam is coupled to headlight:
+            // 1. High beam can only be ON if headlight is ON.
+            // 2. If headlight is switched OFF, high beam is also forced OFF and cleared in UI.
+            if (!headLight && (truck_light.rk.value & 0x02)) {
+                truck_light.rk.value &= ~0x02;
+                highBeam = false;
+            }
+
+            if (headLight) {
+                headlightMode = highBeam ? 2 : 1;
             } else {
                 headlightMode = 0;
             }
@@ -576,7 +582,17 @@ public:
             }
         } else {
             // Locomotive headlight mapping from loco_light bits
-            if (bits & 0x01) headlightMode = 2;
+            bool headLight = (bits & 0x01);
+            bool highBeam  = (bits & 0x02);
+            if (!headLight && (loco_light.rk.value & 0x02)) {
+                loco_light.rk.value &= ~0x02;
+                highBeam = false;
+            }
+            if (headLight) {
+                headlightMode = highBeam ? 2 : 1;
+            } else {
+                headlightMode = 0;
+            }
             s_headlightMode = headlightMode;
         }
 
@@ -756,8 +772,7 @@ private:
         uint8_t auxDuty = (bits & 0x80) ? L.auxLight.brightness : 0;
         if (L.auxLight.configured) {
             HardwareInit::setLight(L.auxLight.pin, auxDuty);
-        }
-        if (s_hw->auxLight.configured) {
+        } else if (s_hw->auxLight.configured) {
             HardwareInit::setAuxLight((bits & 0x80) ? s_hw->auxLight.brightness : 0);
         }
 
@@ -769,23 +784,30 @@ private:
     }
 
     static void updateTelemetry(int16_t motorSpeed, int16_t steerVal, int16_t throttlePct, uint8_t gear, bool brakePressed, bool turnL, bool turnR, uint8_t bits, float batV) {
-        // Percent uses the config'd per-cell voltages (defaults 3.3V / 4.2V).
-        const float cutoffPerCell = s_hw ? s_hw->battery.cutoffVoltage : 3.3f;
-        const float fullPerCell   = s_hw ? s_hw->battery.fullVoltage   : 4.2f;
-        int pct = (int)((batV - cutoffPerCell * s_cellCount) / ((fullPerCell - cutoffPerCell) * s_cellCount) * 100.0f);
+        // Battery percentage uses warning voltage as 0% floor and full voltage as 100%
+        const float warnPerCell = s_hw ? s_hw->battery.warningVoltage : 3.5f;
+        const float fullPerCell = s_hw ? s_hw->battery.fullVoltage    : 4.2f;
+        const float minV = warnPerCell * s_cellCount;
+        const float maxV = fullPerCell * s_cellCount;
+        int pct = 0;
+        if (maxV > minV && batV > minV) {
+            pct = (int)(((batV - minV) / (maxV - minV)) * 100.0f);
+        }
         pct = constrain(pct, 0, 100);
         snprintf(s_battBuf, sizeof(s_battBuf), "%d", pct);
         telemetry_Battery.rk.content = s_battBuf;
 
-        snprintf(s_speedBuf, sizeof(s_speedBuf), "%d", abs(motorSpeed));
+        // Speed scaled to 0-200 km/h based on instantaneous motor speed
+        int speedKmph = abs(motorSpeed) * 2;
+        snprintf(s_speedBuf, sizeof(s_speedBuf), "%d", speedKmph);
         telemetry_Speed.rk.content = s_speedBuf;
 
         // Structured Serial Telemetry for USB Monitoring & Host Automation
         const char* gearStr = (gear == 0) ? "D" : (gear == 2) ? "R" : "P";
         const char* eStateStr = s_engine ? engineStateStr(s_engine->getState()) : "OFF";
         uint16_t rpm = s_engine ? s_engine->getRpm() : 0;
-        Serial.printf("[STATUS] Eng:%s RPM:%u Thr:%d%% Mot:%d%% Steer:%d Gear:%s Brk:%d Head:%d L:%d R:%d Bat:%.2fV (%s%%)\n",
-                      eStateStr, rpm, throttlePct, motorSpeed, steerVal, gearStr,
+        Serial.printf("[STATUS] Eng:%s RPM:%u Thr:%d%% Mot:%d%% Spd:%dkm/h Steer:%d Gear:%s Brk:%d Head:%d L:%d R:%d Bat:%.2fV (%s%%)\n",
+                      eStateStr, rpm, throttlePct, motorSpeed, speedKmph, steerVal, gearStr,
                       brakePressed ? 1 : 0, s_headlightMode, turnL ? 1 : 0, turnR ? 1 : 0,
                       batV, s_battBuf);
     }

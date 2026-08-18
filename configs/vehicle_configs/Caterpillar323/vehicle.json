@@ -1,9 +1,9 @@
 {
   "vehicle": {
     "name": "Caterpillar 323",
+    "description": "Caterpillar 323 Hydraulic Excavator",
     "type": "excavator",
-    "sound_set": "Caterpillar323",
-    "preset": "excavator"
+    "sound_set": "Caterpillar323"
   },
   "engine": {
     "acceleration": 3,

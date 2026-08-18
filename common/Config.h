@@ -3,6 +3,9 @@
 #include <Arduino.h>
 
 struct HardwareConfig {
+    char name[32] = "";
+    char description[128] = "";
+
     enum DrivetrainType { ACKERMANN, SKID_STEER } drivetrainType = ACKERMANN;
 
     struct Sound {

@@ -55,7 +55,7 @@ build_output.txt
 .*/
 
 # openspec
-archive/
+/archive/
 
 # Third-party reference repos (kept local, not committed)
 references/

@@ -1,9 +1,9 @@
 {
   "vehicle": {
     "name": "Scania V8",
+    "description": "Scania V8 Heavy Haul Semi Truck",
     "type": "truck",
-    "sound_set": "ScaniaV8",
-    "preset": "heavy_truck"
+    "sound_set": "ScaniaV8"
   },
   "engine": {
     "acceleration": 2,

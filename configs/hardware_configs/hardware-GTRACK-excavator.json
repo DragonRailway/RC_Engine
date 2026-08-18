@@ -1,4 +1,6 @@
 {
+    "name": "GTrack Excavator",
+    "description": "GTrack Excavator Controller",
     "sound": {
         "volume": 80
     },

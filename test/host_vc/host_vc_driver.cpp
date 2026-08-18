@@ -573,10 +573,22 @@ int main() {
     assert(HardwareInit::getLightDutyPercent(10) > 0.0f && "Headlight should be active on Head Light");
     assert(HardwareInit::getLightDutyPercent(11) == 0.0f && "Full beam should be 0 on Head Light");
 
-    // 17.2: High Beam (Bit 1) -> Dedicated Full Beam ON (100%)
-    truck_light.rk.value = 0x02; // Bit 1 High Beam
+    // 17.2a: High Beam standalone (Bit 1 only) while Headlight is OFF -> MUST NOT turn on and should clear UI bit
+    truck_light.rk.value = 0x02; // Bit 1 only (Headlight OFF)
     VehicleController::update();
-    assert(HardwareInit::getLightDutyPercent(11) > 0.0f && "Dedicated full beam pin should energize on High Beam");
+    assert((truck_light.rk.value & 0x02) == 0 && "High beam bit should be cleared when Headlight is OFF");
+    assert(HardwareInit::getLightDutyPercent(11) == 0.0f && "Full beam should remain 0 when Headlight is OFF");
+
+    // 17.2b: Head Light + High Beam (Bit 0 + Bit 1) -> Dedicated Full Beam ON (100%)
+    truck_light.rk.value = 0x03; // Bit 0 + Bit 1
+    VehicleController::update();
+    assert(HardwareInit::getLightDutyPercent(11) > 0.0f && "Dedicated full beam pin should energize when Headlight is ON");
+
+    // 17.2c: Turning off Head Light -> High Beam must also turn OFF
+    truck_light.rk.value = 0x02; // Turn off bit 0
+    VehicleController::update();
+    assert((truck_light.rk.value & 0x02) == 0 && "High beam bit should turn OFF when Headlight is turned OFF");
+    assert(HardwareInit::getLightDutyPercent(11) == 0.0f && "Full beam should turn off when Headlight turns off");
 
     // 17.3: Fog Lamp (Bit 2) -> Dedicated Fog Lamp ON (80%)
     truck_light.rk.value = 0x04; // Bit 2 Fog Lamp
@@ -608,6 +620,72 @@ int main() {
     assert(mask == 0xFF && "All 8 bits should be reported as configured in mask");
 
     std::cout << "  PASS: 8-Bit lighting grid and all independent channels verified." << std::endl;
+
+    // ── Test 18: Battery Warning-Floor Percentage & 0-200 km/h Speed Telemetry ──
+    std::cout << "[Host VC Test] Test 18: Battery Warning-Floor Percentage & Speed Telemetry..." << std::endl;
+    HardwareConfig testHwTelem;
+    testHwTelem.battery.cellCount = 2;
+    testHwTelem.battery.warningVoltage = 3.5f; // 2 * 3.5 = 7.0V warning
+    testHwTelem.battery.fullVoltage = 4.2f;    // 2 * 4.2 = 8.4V full
+    testHwTelem.battery.cutoffVoltage = 3.3f;  // 2 * 3.3 = 6.6V cutoff
+    testHwTelem.battery.vScale = 1.0f;
+    testHwTelem.battery.vOffset = 0.0f;
+    HardwareInit::init(testHwTelem);
+    VehicleController::init(&testHwTelem, &engine, &profile);
+
+    // 18.1: Full voltage (8.4V) -> 100%
+    host_analog_read_mv = 8400;
+    host_virtual_millis += 300;
+    VehicleController::update();
+    assert(strcmp(telemetry_Battery.rk.content, "100") == 0 && "Full voltage (8.4V) should report 100%");
+
+    // 18.2: Mid voltage (7.7V) -> 50%
+    host_analog_read_mv = 7700;
+    host_virtual_millis += 300;
+    VehicleController::update();
+    assert(strcmp(telemetry_Battery.rk.content, "50") == 0 && "Mid voltage (7.7V) should report 50%");
+
+    // 18.3: Warning voltage (7.0V) -> 0%
+    host_analog_read_mv = 7000;
+    host_virtual_millis += 300;
+    VehicleController::update();
+    assert(strcmp(telemetry_Battery.rk.content, "0") == 0 && "Warning voltage (7.0V) should report 0%");
+
+    // 18.4: Sub-warning voltage (6.8V) -> 0% (clamped)
+    host_analog_read_mv = 6800;
+    host_virtual_millis += 300;
+    VehicleController::update();
+    assert(strcmp(telemetry_Battery.rk.content, "0") == 0 && "Sub-warning voltage (6.8V) should be clamped to 0%");
+
+    // 18.5: Speed Telemetry in km/h (0..200 km/h)
+    // Start engine in Drive
+    start_button.rk.state = true;
+    gear_switch.rk.value = 0; // Drive (D)
+    gas_pedal.rk.value = 50;  // 50% throttle -> 100 km/h
+    for (int i = 0; i < 200; i++) {
+        host_virtual_millis += 10;
+        engine.update(0);
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        VehicleController::update();
+    }
+    assert(strcmp(telemetry_Speed.rk.content, "100") == 0 && "50% motor speed should report 100 km/h");
+
+    gas_pedal.rk.value = 100; // 100% throttle -> 200 km/h
+    for (int i = 0; i < 200; i++) {
+        host_virtual_millis += 10;
+        engine.update(0);
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        VehicleController::update();
+    }
+    assert(strcmp(telemetry_Speed.rk.content, "200") == 0 && "100% motor speed should report 200 km/h");
+
+    // Park (P) -> speed 0 km/h
+    gear_switch.rk.value = 1; // Park (P)
+    host_virtual_millis += 300;
+    VehicleController::update();
+    assert(strcmp(telemetry_Speed.rk.content, "0") == 0 && "Park (P) gear should report 0 km/h");
+
+    std::cout << "  PASS: Warning-floor battery percentage and 0-200 km/h speed telemetry verified." << std::endl;
 
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;

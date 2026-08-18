@@ -65,6 +65,29 @@ static uint32_t fileWriteTime(const char* path) {
     return t;
 }
 
+// ── Device Metadata Cascade ──
+// Priority:
+// 1) Hardware config (board-specific name / description)
+// 2) Vehicle config (bundle vehicle.name / vehicle.description)
+// 3) RADIOKIT.h fallback (defaults from initRadioKit)
+static void applyDeviceMetadata(const HardwareConfig& hw, const RcEngineSound::Config& vc) {
+    if (hw.name[0] != '\0') {
+        RadioKit.config.name = hw.name;
+    } else if (vc.name[0] != '\0' && strcmp(vc.name, "Unknown") != 0) {
+        RadioKit.config.name = vc.name;
+    }
+
+    if (hw.description[0] != '\0') {
+        RadioKit.config.description = hw.description;
+    } else if (vc.description[0] != '\0') {
+        RadioKit.config.description = vc.description;
+    }
+
+    RadioKitBLEInstance.updateAdvertisingName(RadioKit.config.name);
+    Serial.printf("[Device] Name: '%s', Description: '%s'\n",
+                  RadioKit.config.name, RadioKit.config.description);
+}
+
 static bool reloadConfigs() {
     Serial.println("\n── Reloading Configs ──");
     UiLogger::clear();
@@ -93,6 +116,7 @@ static bool reloadConfigs() {
     VehicleController::applyConfiguredLightMask(hwConfig.lights, hwConfig.auxLight.configured);
     engine.setConfig(profile.config);
     applyAuxSliderProfile();
+    applyDeviceMetadata(hwConfig, profile.config);
 
     if (nameChanged) {
         ConfigParser::loadSounds(profile.config, profile.sounds);
@@ -109,6 +133,8 @@ static bool reloadConfigs() {
 
 void printConfig(const HardwareConfig& hw, const RcEngineSound::Config& vc) {
     Serial.println("\n── Hardware Config ──");
+    if (hw.name[0] != '\0') Serial.printf("  Name: %s\n", hw.name);
+    if (hw.description[0] != '\0') Serial.printf("  Description: %s\n", hw.description);
     Serial.printf("  Sound Volume: %d%%\n", hw.sound.volume);
     Serial.printf("  Drive Motor: type=%d hwId=%d freq=%dHz dir=%d\n",
                   hw.driveMotor.type, hw.driveMotor.hardwareId,
@@ -124,6 +150,7 @@ void printConfig(const HardwareConfig& hw, const RcEngineSound::Config& vc) {
 
     Serial.println("\n── Vehicle Config ──");
     Serial.printf("  Name: %s (Type: %d)\n", vc.name, static_cast<int>(vc.type));
+    if (vc.description[0] != '\0') Serial.printf("  Description: %s\n", vc.description);
     Serial.printf("  Engine: acc=%d dec=%d idle=%d clutch=%d\n",
                   vc.engine.acc, vc.engine.dec, vc.engine.idleEndPoint, vc.engine.revSwitchPoint);
     Serial.printf("  Transmission: type=%d gears=%d\n",
@@ -184,6 +211,7 @@ void setup() {
 
     Serial.println("\n── Starting RadioKit (BLE) ──");
     initRadioKit();
+    applyDeviceMetadata(hwConfig, profile.config);
     UiLogger::onRadioKitStarted();
     applyAuxSliderProfile();
     VehicleController::applyConfiguredLightMask(hwConfig.lights, hwConfig.auxLight.configured);

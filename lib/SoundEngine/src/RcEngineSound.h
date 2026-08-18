@@ -65,8 +65,8 @@ public:
 
     struct Config {
         char name[32] = "Unknown";
+        char description[128] = "";
         char soundSet[32] = "default";
-        char preset[32] = "generic";
         VehicleType type = VEHICLE_TRUCK;
 
         struct Engine {

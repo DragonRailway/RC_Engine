@@ -51,6 +51,15 @@ public:
         JsonObjectConst docObj = doc.as<JsonObjectConst>();
         checkUnknownHardwareKeys(docObj);
 
+        const char* nameStr = docObj["name"] | docObj["NAME"] | "";
+        if (nameStr[0] != '\0') {
+            strlcpy(config.name, nameStr, sizeof(config.name));
+        }
+        const char* descStr = docObj["description"] | docObj["DESCRIPTION"] | "";
+        if (descStr[0] != '\0') {
+            strlcpy(config.description, descStr, sizeof(config.description));
+        }
+
         if (!docObj["sound"].isNull() || !docObj["SOUND"].isNull()) {
             JsonObjectConst soundObj = docObj["sound"] | docObj["SOUND"];
             config.sound.volume = soundObj["volume"] | soundObj["VOLUME"] | config.sound.volume;
@@ -215,9 +224,8 @@ public:
 
         JsonObjectConst vehObj = doc["vehicle"] | doc["VEHICLE"];
         strlcpy(config.name, vehObj["name"] | vehObj["NAME"] | "Unknown", sizeof(config.name));
+        strlcpy(config.description, vehObj["description"] | vehObj["DESCRIPTION"] | "", sizeof(config.description));
         strlcpy(config.soundSet, vehObj["sound_set"] | vehObj["SOUND_SET"] | config.name, sizeof(config.soundSet));
-        strlcpy(config.preset, vehObj["preset"] | vehObj["PRESET"] | "generic", sizeof(config.preset));
-
         const char* vehicleTypeStr = vehObj["type"] | vehObj["TYPE"] | "TRUCK";
         if (strcasecmp(vehicleTypeStr, "LOCOMOTIVE") == 0) {
             config.type = RcEngineSound::VEHICLE_LOCOMOTIVE;
@@ -242,8 +250,8 @@ public:
         checkUnknownVehicleKeys(doc.as<JsonObjectConst>());
         validateVehicleConfig(config);
 
-        Serial.printf("[ConfigParser] Loaded vehicle config: %s (sound_set=%s, preset=%s)\n",
-                      config.name, config.soundSet, config.preset);
+        Serial.printf("[ConfigParser] Loaded vehicle config: %s (sound_set=%s, type=%s)\n",
+                      config.name, config.soundSet, vehicleTypeStr);
         return true;
     }
 
@@ -252,7 +260,13 @@ public:
 
         String soundSet = cfg.soundSet[0] != '\0' ? cfg.soundSet : cfg.name;
         soundSet.replace(" ", "");
-        String preset = cfg.preset[0] != '\0' ? cfg.preset : "generic";
+
+        const char* typeStr = "truck";
+        if (cfg.type == RcEngineSound::VEHICLE_LOCOMOTIVE) {
+            typeStr = "locomotive";
+        } else if (cfg.type == RcEngineSound::VEHICLE_EXCAVATOR) {
+            typeStr = "excavator";
+        }
 
         for (int i = 0; i < SOUND_COUNT; i++) {
             const char* slot = soundTypeNames[i];
@@ -267,10 +281,14 @@ public:
                 soundData.slots[i] = loadSoundSlot(p1_flat.c_str());
             }
 
-            // Tier 2: /sounds/presets/<preset>/<slot>.json
+            // Tier 2: /sounds/common/<typeStr>/<slot>.json or /sounds/presets/<typeStr>/<slot>.json
             if (!soundData.slots[i].samples) {
-                String p2 = "/sounds/presets/" + preset + "/" + String(slot) + ".json";
+                String p2 = "/sounds/common/" + String(typeStr) + "/" + String(slot) + ".json";
                 soundData.slots[i] = loadSoundSlot(p2.c_str());
+            }
+            if (!soundData.slots[i].samples) {
+                String p2_alt = "/sounds/presets/" + String(typeStr) + "/" + String(slot) + ".json";
+                soundData.slots[i] = loadSoundSlot(p2_alt.c_str());
             }
 
             // Tier 3: /sounds/generic/<slot>.json
@@ -294,8 +312,8 @@ public:
         for (int i = 0; i < SOUND_COUNT; i++) {
             if (soundData.slots[i].samples) loaded++;
         }
-        Serial.printf("[ConfigParser] Loaded %d sounds for %s (sound_set=%s, preset=%s)\n",
-                      loaded, cfg.name, soundSet.c_str(), preset.c_str());
+        Serial.printf("[ConfigParser] Loaded %d sounds for %s (sound_set=%s, type=%s)\n",
+                      loaded, cfg.name, soundSet.c_str(), typeStr);
         return loaded > 0;
     }
 
@@ -428,11 +446,11 @@ private:
     }
 
     static void checkUnknownHardwareKeys(JsonObjectConst doc) {
-        static const char* top[] = {"sound", "drivetrain", "steering_servo",
-                                    "lights", "animation",
+        static const char* top[] = {"name", "description", "sound", "drivetrain",
+                                    "steering_servo", "lights", "animation",
                                     "battery", "power", "charging",
                                     "drive_motor", "aux_motor", "aux_light"};
-        checkKeys(doc, "hardware", top, 11);
+        checkKeys(doc, "hardware", top, 13);
 
         JsonObjectConst sound = doc["sound"];
         if (!sound.isNull()) {
@@ -646,7 +664,7 @@ private:
 
         JsonObjectConst v = doc["vehicle"];
         if (!v.isNull()) {
-            static const char* k[] = {"name", "type", "sound_set", "preset"};
+            static const char* k[] = {"name", "description", "type", "sound_set"};
             checkKeys(v, "vehicle", k, 4);
         }
 

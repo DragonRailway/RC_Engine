@@ -110,6 +110,8 @@ public:
         auxServo.update();
         auxLed.update();
         headLed.update();
+        fullLed.update();
+        fogLed.update();
         tailLed.update();
         brakeLed.update();
         turnLLed.update();
@@ -117,6 +119,8 @@ public:
         reversingLed.update();
         ditchLLed.update();
         ditchRLed.update();
+        beaconLed.update();
+        workLed.update();
         stepLed.update();
         cabLed.update();
         s_ditchGroup.update();

@@ -214,7 +214,8 @@ def assemble(board, vehicle, pio_home, fs_size, dry_run=False, no_flash=False,
     try:
         with open(vc_src) as f:
             vc = json.load(f)
-        preset = (vc.get("vehicle") or {}).get("preset")
+        veh = vc.get("vehicle") or {}
+        vtype = (veh.get("type") or "truck").lower()
     except (json.JSONDecodeError, OSError) as e:
         die(f"cannot parse {vc_src.relative_to(REPO)}: {e}")
 
@@ -233,18 +234,14 @@ def assemble(board, vehicle, pio_home, fs_size, dry_run=False, no_flash=False,
     for slot in sorted(sounds_src.glob("*.json")):
         shutil.copy2(slot, staging / "sounds" / "vehicles" / vehicle / slot.name)
 
-    # Tier-2 preset fallbacks: only slots the vehicle bundle does NOT provide.
-    # NOTE: never create the preset dir unless it gets at least one file — an
-    # empty directory still costs a littlefs metadata pair, which can push a
-    # near-full bundle (e.g. ScaniaV8) past the partition size.
+    # Tier-2 type-based common fallbacks: only slots the vehicle bundle does NOT provide.
     vehicle_slots = {s.name for s in sounds_src.glob("*.json")}
-    if preset:
-        preset_dir = COMMON_DIR / preset
-        fallbacks = [s for s in sorted(preset_dir.glob("*.json")) if s.name not in vehicle_slots] if preset_dir.is_dir() else []
-        if fallbacks:
-            (staging / "sounds" / "presets" / preset).mkdir(parents=True)
-            for slot in fallbacks:
-                shutil.copy2(slot, staging / "sounds" / "presets" / preset / slot.name)
+    common_type_dir = COMMON_DIR / vtype
+    fallbacks = [s for s in sorted(common_type_dir.glob("*.json")) if s.name not in vehicle_slots] if common_type_dir.is_dir() else []
+    if fallbacks:
+        (staging / "sounds" / "common" / vtype).mkdir(parents=True)
+        for slot in fallbacks:
+            shutil.copy2(slot, staging / "sounds" / "common" / vtype / slot.name)
 
     total = sum(f.stat().st_size for f in staging.rglob("*") if f.is_file())
     print(f"Assembled {board}/{vehicle}: {total} bytes "

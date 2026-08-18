@@ -42,7 +42,7 @@
     {
       "label": "Speed",
       "icon": "gauge",
-      "unit": ""
+      "unit": "km/h"
     }
   ],
   "features": {

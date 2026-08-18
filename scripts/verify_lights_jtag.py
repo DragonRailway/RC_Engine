@@ -146,10 +146,10 @@ def main():
     print(f"  Event Verified: {event_found} ('[EVENT] Headlight -> LOW')")
     print(f"  Telemetry: {latest_status}")
 
-    # ── Test 2: High Beam (Dedicated Full Beam ON 100%) ──
-    print("\n[Step 2] Activating High Beam (truck_light = 0x02)...")
+    # ── Test 2: High Beam (Coupled with Head Light, truck_light = 0x03) ──
+    print("\n[Step 2] Activating Head Light + High Beam (truck_light = 0x03)...")
     t2 = time.time()
-    set_widget(WID_TRUCK_LIGHT, [2])
+    set_widget(WID_TRUCK_LIGHT, [3])
     time.sleep(0.8)
     lines = mon.get_recent(t2)
     event_found = any("[EVENT] Headlight -> HIGH" in l for l in lines)
@@ -158,7 +158,7 @@ def main():
     print(f"  Event Verified: {event_found} ('[EVENT] Headlight -> HIGH')")
     print(f"  Telemetry: {latest_status}")
 
-    # ── Test 3: Fog Lamp (Dedicated Fog Lamp ON 100%) ──
+    # ── Test 3: Dedicated Fog Lamp (truck_light = 0x04) ──
     print("\n[Step 3] Activating Dedicated Fog Lamp (truck_light = 0x04)...")
     t3 = time.time()
     set_widget(WID_TRUCK_LIGHT, [4])
@@ -180,10 +180,10 @@ def main():
     latest_status = status_lines[-1] if status_lines else "None"
     print(f"  Telemetry: {latest_status}")
 
-    # ── Test 5: High Beam + Fog Lamp (truck_light = 0x06) ──
-    print("\n[Step 5] Activating High Beam + Fog Lamp (truck_light = 0x06)...")
+    # ── Test 5: Head Light + High Beam + Fog Lamp (truck_light = 0x07) ──
+    print("\n[Step 5] Activating Head Light + High Beam + Fog Lamp (truck_light = 0x07)...")
     t5 = time.time()
-    set_widget(WID_TRUCK_LIGHT, [6])
+    set_widget(WID_TRUCK_LIGHT, [7])
     time.sleep(0.8)
     lines = mon.get_recent(t5)
     status_lines = [l for l in lines if "[STATUS]" in l]
