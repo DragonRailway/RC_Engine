@@ -83,7 +83,6 @@ static void applyDeviceMetadata(const HardwareConfig& hw, const RcEngineSound::C
         RadioKit.config.description = vc.description;
     }
 
-    RadioKitBLEInstance.updateAdvertisingName(RadioKit.config.name);
     Serial.printf("[Device] Name: '%s', Description: '%s'\n",
                   RadioKit.config.name, RadioKit.config.description);
 }
@@ -210,8 +209,8 @@ void setup() {
     AudioOutput::start();
 
     Serial.println("\n── Starting RadioKit (BLE) ──");
-    initRadioKit();
     applyDeviceMetadata(hwConfig, profile.config);
+    initRadioKit();
     UiLogger::onRadioKitStarted();
     applyAuxSliderProfile();
     VehicleController::applyConfiguredLightMask(hwConfig.lights, hwConfig.auxLight.configured);
