@@ -896,8 +896,8 @@ private:
             config.turnLight.leftPin = PinMapper::resolve(hwL);
             config.turnLight.rightPin = PinMapper::resolve(hwR);
             config.turnLight.brightness = turn["brightness_max"] | turn["BRIGHTNESS_MAX"] | 60;
-            config.turnLight.intervalOn = turn["interval_on"] | turn["INTERVAL_ON"] | 500;
-            config.turnLight.intervalOff = turn["interval_off"] | turn["INTERVAL_OFF"] | 500;
+            config.turnLight.intervalOn = turn["interval_on"] | turn["INTERVAL_ON"] | 300;
+            config.turnLight.intervalOff = turn["interval_off"] | turn["INTERVAL_OFF"] | 300;
             config.turnLight.configured = config.turnLight.leftPin != 0xFF || config.turnLight.rightPin != 0xFF;
         }
 

@@ -139,6 +139,7 @@ public:
 
         s_warningVoltage = s_cellCount * s_hw->battery.warningVoltage;
         s_cutoffVoltage = s_cellCount * s_hw->battery.cutoffVoltage;
+        s_filteredBatV = 0.0f;
         s_lowVoltageStart = 0;
         s_batteryWarning = false;
         s_batteryCutoff = false;
@@ -234,8 +235,15 @@ public:
 
         // ── Battery Protection & Low Voltage Cutoff ──
         float pinV = analogReadMilliVolts(POWER::VOLTAGE_SENS) / 1000.0f;
+        float rawBatV = pinV * s_hw->battery.vScale + s_hw->battery.vOffset;
 
-        float batV = pinV * s_hw->battery.vScale + s_hw->battery.vOffset;
+        // Exponential moving average filter (EMA) to reject motor PWM / inrush noise
+        if (s_filteredBatV <= 0.1f) {
+            s_filteredBatV = rawBatV;
+        } else {
+            s_filteredBatV = 0.90f * s_filteredBatV + 0.10f * rawBatV;
+        }
+        float batV = s_filteredBatV;
 
         if (batV < s_warningVoltage) {
             if (!s_batteryWarning) {
@@ -664,7 +672,7 @@ public:
 
         // ── Telemetry & Serial Debug Stream ──
         uint32_t now = millis();
-        if (now - s_lastTelemetry >= 250) {
+        if (now - s_lastTelemetry >= 1000) {
             s_lastTelemetry = now;
             updateTelemetry(motorSpeed, steerVal, throttlePct, gear, brakePressed, turnSignalL, turnSignalR, bits, batV);
         }
@@ -689,6 +697,7 @@ private:
     static uint8_t  s_cellCount;
     static float    s_warningVoltage;
     static float    s_cutoffVoltage;
+    static float    s_filteredBatV;
     static uint32_t s_lowVoltageStart;
     static bool     s_batteryWarning;
     static bool     s_batteryCutoff;
@@ -839,7 +848,7 @@ private:
         const float maxV = fullPerCell * s_cellCount;
         int pct = 0;
         if (maxV > minV && batV > minV) {
-            pct = (int)(((batV - minV) / (maxV - minV)) * 100.0f);
+            pct = (int)(((batV - minV) / (maxV - minV)) * 100.0f + 0.5f);
         }
         pct = constrain(pct, 0, 100);
         snprintf(s_battBuf, sizeof(s_battBuf), "%d", pct);
@@ -879,6 +888,7 @@ char     VehicleController::s_speedBuf[8] = "--";
 uint8_t  VehicleController::s_cellCount = 2;
 float    VehicleController::s_warningVoltage = 7.0f;
 float    VehicleController::s_cutoffVoltage = 6.6f;
+float    VehicleController::s_filteredBatV = 0.0f;
 uint32_t VehicleController::s_lowVoltageStart = 0;
 bool     VehicleController::s_batteryWarning = false;
 bool     VehicleController::s_batteryCutoff = false;

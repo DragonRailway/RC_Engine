@@ -6,8 +6,8 @@
     "sound_set": "ScaniaV8"
   },
   "engine": {
-    "acceleration": 2,
-    "deceleration": 1,
+    "acceleration": 6,
+    "deceleration": 4,
     "idle_rpm": 10,
     "clutch_rpm": 100,
     "rev_switch_point": 50,

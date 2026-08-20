@@ -306,10 +306,10 @@ void RcEngineSound::update(int16_t throttle) {
         int32_t gearSize = cfg.engine.maxRpm / cfg.transmission.numberOfGears;
         if (gearSize > 0) {
             if (throttle > virtualSpeed) {
-                virtualSpeed += max((int32_t)1, (int32_t)(cfg.engine.acc * 2));
+                virtualSpeed += max((int32_t)4, (int32_t)(cfg.engine.acc * 4));
                 if (virtualSpeed > cfg.engine.maxRpm) virtualSpeed = cfg.engine.maxRpm;
             } else if (throttle < virtualSpeed) {
-                virtualSpeed -= max((int32_t)1, (int32_t)(cfg.engine.dec * 2));
+                virtualSpeed -= max((int32_t)4, (int32_t)(cfg.engine.dec * 4));
                 if (virtualSpeed < 0) virtualSpeed = 0;
             }
             selectedGear = (uint8_t)(virtualSpeed / gearSize);
@@ -485,8 +485,12 @@ void RcEngineSound::update(int16_t throttle) {
     if (state == RUNNING && !engineMuted) {
         voices[IDLE].active = (sounds.slots[IDLE].samples && sounds.slots[IDLE].sampleCount > 0);
         voices[REV].active = (sounds.slots[REV].samples && sounds.slots[REV].sampleCount > 0);
-        if (currentRpmFixed > cfg.engine.revSwitchPoint) {
-            idleProportion = map(currentRpmFixed, cfg.engine.idleEndPoint, cfg.engine.revSwitchPoint, 0, 100);
+        if (currentRpmFixed <= cfg.engine.idleEndPoint) {
+            idleProportion = 100;
+        } else if (currentRpmFixed >= cfg.engine.revSwitchPoint) {
+            idleProportion = 0;
+        } else {
+            idleProportion = map(currentRpmFixed, cfg.engine.idleEndPoint, cfg.engine.revSwitchPoint, 100, 0);
             idleProportion = constrain(idleProportion, 0, 100);
         }
     } else {
@@ -526,10 +530,15 @@ void RcEngineSound::update(int16_t throttle) {
 
     // ── Knock trigger (based on idle loop position) ──
     if (state == RUNNING && !engineMuted && sounds.slots[KNOCK].samples && cfg.sound.knock > 0 && cfg.engine.knockInterval > 0) {
-        uint32_t knockIntervalSamples = sounds.slots[IDLE].sampleCount / cfg.engine.knockInterval;
+        uint32_t totalSamples = sounds.slots[IDLE].sampleCount;
+        uint32_t knockIntervalSamples = (totalSamples > 0) ? (totalSamples / cfg.engine.knockInterval) : 0;
         if (knockIntervalSamples > 0) {
             uint32_t idlePos = (uint32_t)voices[IDLE].position;
-            if (idlePos >= lastKnockTriggerSample + knockIntervalSamples) {
+            uint32_t elapsed = (idlePos >= lastKnockTriggerSample)
+                ? (idlePos - lastKnockTriggerSample)
+                : (totalSamples - lastKnockTriggerSample + idlePos);
+
+            if (elapsed >= knockIntervalSamples) {
                 lastKnockTriggerSample = idlePos;
                 curKnockCylinder++;
                 if (curKnockCylinder > cfg.engine.knockInterval) curKnockCylinder = 1;
@@ -614,18 +623,22 @@ uint8_t RcEngineSound::getNextSample() {
         v.step = step;
         advanceVoice(v);
 
-        // Write back position and active flag
-        portENTER_CRITICAL(&voiceMutex);
-        voices[i].position = v.position;
-        voices[i].active = v.active;
-        portEXIT_CRITICAL(&voiceMutex);
-
         if (v.pitchShifted) {
             engineMix += scaled;
         } else {
             effectMix += scaled;
         }
     }
+
+    // Batch write back position and active flags under a single critical section
+    portENTER_CRITICAL(&voiceMutex);
+    for (int i = 0; i < SOUND_COUNT; i++) {
+        if (snapshot[i].samples && snapshot[i].count > 0) {
+            voices[i].position = snapshot[i].position;
+            voices[i].active = snapshot[i].active;
+        }
+    }
+    portEXIT_CRITICAL(&voiceMutex);
 
     // ── Start sound ──
     if (state == STARTING && sounds.slots[START].samples && sounds.slots[START].sampleCount > 0) {

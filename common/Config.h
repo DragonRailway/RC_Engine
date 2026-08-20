@@ -44,7 +44,7 @@ struct HardwareConfig {
         float    easingSpeedDegS = 180.0f; // aux-servo move speed (0 = instant)
         float    easingKIn       = 0.2f;   // easing strength at move start
         float    easingKOut      = 0.8f;   // easing strength at move end
-        uint16_t fadeDurationMs  = 250;    // headlight fade transition time
+        uint16_t fadeDurationMs  = 0;      // headlight fade transition time (0 = instant)
         bool     configured = false;
     } animation;
 
@@ -81,8 +81,8 @@ struct HardwareConfig {
             uint8_t leftPin = 0;
             uint8_t rightPin = 0;
             uint8_t brightness = 60;
-            uint16_t intervalOn = 500;
-            uint16_t intervalOff = 500;
+            uint16_t intervalOn = 300;
+            uint16_t intervalOff = 300;
             bool configured = false;
         } turnLight;
 

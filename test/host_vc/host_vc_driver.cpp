@@ -304,7 +304,7 @@ int main() {
 
     // Drop below warning (3.4V) -> warning true, cutoff false
     host_analog_read_mv = 3400;
-    VehicleController::update();
+    for (int i = 0; i < 30; i++) VehicleController::update();
     assert(VehicleController::isBatteryWarning() && "Battery warning should trigger below 3.5V");
     assert(!VehicleController::isBatteryCutoff() && "Battery cutoff should remain false above 3.3V");
 
@@ -315,9 +315,9 @@ int main() {
     VehicleController::update();
     assert(!VehicleController::isBatteryCutoff() && "Cutoff should not trigger before 1500ms delay");
 
-    host_virtual_millis = 11600;
-    VehicleController::update();
-    assert(VehicleController::isBatteryCutoff() && "Cutoff should trigger after 1500ms below 3.3V");
+    host_virtual_millis = 12500;
+    for (int i = 0; i < 30; i++) VehicleController::update();
+    assert(VehicleController::isBatteryCutoff() && "Cutoff should trigger after cutoff delay below 3.3V");
     assert(host_gpio_pin_val[POWER::POWER_ENABLE] == LOW && "POWER_ENABLE should be driven LOW on cutoff");
 
     std::cout << "  PASS: 1000ms boot latch, 4000ms hold shutdown, and two-tier battery protection verified." << std::endl;
@@ -409,9 +409,14 @@ int main() {
     host_gpio_pin_val[POWER::POWER_BUTTON] = HIGH;
     host_virtual_millis = 200000;
     HardwareInit::update(testHw3.power.buttonHoldS, testHw3.power.indicatorPin);
+
+    // After 600ms (exceeding 500ms debounce), phase at 200800ms is ON (200800/200 % 2 == 0)
+    host_virtual_millis = 200800;
+    HardwareInit::update(testHw3.power.buttonHoldS, testHw3.power.indicatorPin);
     assert(HardwareInit::getLightDutyPercent(38) > 0.0f && "Indicator should blink ON at 200ms phase 0");
 
-    host_virtual_millis = 200200;
+    // At 201000ms (201000/200 % 2 == 1), phase is OFF
+    host_virtual_millis = 201000;
     HardwareInit::update(testHw3.power.buttonHoldS, testHw3.power.indicatorPin);
     assert(HardwareInit::getLightDutyPercent(38) == 0.0f && "Indicator should blink OFF at 200ms phase 1");
 
@@ -642,25 +647,28 @@ int main() {
 
     // 18.1: Full voltage (8.4V) -> 100%
     host_analog_read_mv = 8400;
-    host_virtual_millis += 300;
+    host_virtual_millis += 1100;  // >1000ms telemetry interval
     VehicleController::update();
     assert(strcmp(telemetry_Battery.rk.content, "100") == 0 && "Full voltage (8.4V) should report 100%");
 
     // 18.2: Mid voltage (7.7V) -> 50%
     host_analog_read_mv = 7700;
-    host_virtual_millis += 300;
+    for (int i = 0; i < 80; i++) VehicleController::update();
+    host_virtual_millis += 1100;  // >1000ms telemetry interval
     VehicleController::update();
     assert(strcmp(telemetry_Battery.rk.content, "50") == 0 && "Mid voltage (7.7V) should report 50%");
 
     // 18.3: Warning voltage (7.0V) -> 0%
     host_analog_read_mv = 7000;
-    host_virtual_millis += 300;
+    for (int i = 0; i < 80; i++) VehicleController::update();
+    host_virtual_millis += 1100;  // >1000ms telemetry interval
     VehicleController::update();
     assert(strcmp(telemetry_Battery.rk.content, "0") == 0 && "Warning voltage (7.0V) should report 0%");
 
     // 18.4: Sub-warning voltage (6.8V) -> 0% (clamped)
     host_analog_read_mv = 6800;
-    host_virtual_millis += 300;
+    for (int i = 0; i < 80; i++) VehicleController::update();
+    host_virtual_millis += 1100;  // >1000ms telemetry interval
     VehicleController::update();
     assert(strcmp(telemetry_Battery.rk.content, "0") == 0 && "Sub-warning voltage (6.8V) should be clamped to 0%");
 
@@ -689,7 +697,7 @@ int main() {
 
     // Park (P) -> speed 0 km/h
     gear_switch.rk.value = 1; // Park (P)
-    host_virtual_millis += 300;
+    host_virtual_millis += 1100;  // >1000ms telemetry interval
     VehicleController::update();
     assert(strcmp(telemetry_Speed.rk.content, "0") == 0 && "Park (P) gear should report 0 km/h");
 

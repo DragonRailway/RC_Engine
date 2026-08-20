@@ -50,15 +50,15 @@
       },
       "brightness_max": 60,
       "type": "blink",
-      "interval_on": 500,
-      "interval_off": 500
+      "interval_on": 300,
+      "interval_off": 300
     }
   },
   "animation": {
     "easing_speed_deg_s": 180,
     "easing_k_in": 0.2,
     "easing_k_out": 0.8,
-    "fade_duration_ms": 250
+    "fade_duration_ms": 0
   },
   "battery": {
     "cell_count": 1,

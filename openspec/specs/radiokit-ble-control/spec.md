@@ -2,10 +2,7 @@
 
 ## Purpose
 Defines requirements for RadioKit BLE stack integration, widget control surfaces, and remote API interactions.
-
 ## Requirements
-
-
 ### Requirement: RadioKit library integration
 The build SHALL include the RadioKit Arduino library v2.0.0 (local symlink to `/home/sun/Apps/RadioKit/rk-arduino`) as a `lib_dep` so `RadioKitLib.h` and its widget classes are available to `src/`.
 
@@ -83,7 +80,7 @@ On config hot-reload (`reloadConfigs()`), the firmware SHALL re-evaluate the met
 - **THEN** `RadioKit.update()` is invoked each iteration so widget state changes propagate
 
 ### Requirement: Telemetry widget registration
-The firmware SHALL register `telemetry_Battery` (unit "%") and `telemetry_Speed` (unit "km/h") output widgets, and continuously update their string buffers during operation at a 250ms interval.
+The firmware SHALL register `telemetry_Battery` (unit "%") and `telemetry_Speed` (unit "km/h") output widgets, and continuously update their string buffers during operation at a 100ms interval.
 
 #### Scenario: Telemetry visible in app
 - **WHEN** the app displays the device
@@ -92,3 +89,4 @@ The firmware SHALL register `telemetry_Battery` (unit "%") and `telemetry_Speed`
 #### Scenario: Real-time telemetry streaming
 - **WHEN** the vehicle controller runs its telemetry update cycle
 - **THEN** `telemetry_Battery` is formatted as integer percentage (0–100) and `telemetry_Speed` is formatted as km/h (0–200, mapped as `abs(motorSpeed) * 2`)
+

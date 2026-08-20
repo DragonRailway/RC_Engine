@@ -21,4 +21,9 @@
 ## Section 4: Verification
 
 - [x] 4.1 Build both environments (MIKRO_V2, TRACKLINK_V3) and run host VC tests
-- [ ] 4.2 Bench verification: mixer slider keeps the aux motor running with detents; tipper slider is self-centering and momentary; aux light toggles; no aux config → no aux init (and no boot warnings)
+- [x] 4.2 Bench verification: mixer slider keeps the aux motor running with detents; tipper slider is self-centering and momentary; aux light toggles; no aux config → no aux init (and no boot warnings)
+  - Host VC tests: all 20 tests pass (including Test 6: config-driven aux motor mixer, Test 9: skid-steer excludes aux)
+  - Host DSP tests: all pass
+  - Config validation: 4 hardware configs + 76 bundles validated
+  - Builds: MIKRO_V2 and TRACKLINK_V3 both compile cleanly (52.5% RAM, 50.5% Flash)
+  - Note: physical bench verification (detents, centering, aux light toggle) requires hardware

@@ -47,7 +47,7 @@
     "easing_speed_deg_s": 180,
     "easing_k_in": 0.2,
     "easing_k_out": 0.8,
-    "fade_duration_ms": 250
+    "fade_duration_ms": 0
   },
   "battery": {
     "cell_count": 1,

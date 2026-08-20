@@ -3,9 +3,7 @@
 ## Purpose
 
 Repository-level tooling for validating and debugging the audio pipeline: off-device sound data validation, panic detection in the end-to-end smoke test, host-side DSP testing of the real engine code, an on-device `AUDIO_DEBUG` instrumentation/capture mode, and golden-metric regression comparison.
-
 ## Requirements
-
 ### Requirement: Off-device sound data validation
 The repository SHALL provide `scripts/validate_sounds.py`, which validates every sound JSON under `configs/vehicle_configs/` (bundle layout: dir name equals the `sound_set` in the bundle's `vehicle.json`, every bundle has a `sounds/` subdirectory) — `sampleRate` consistency (22,050 Hz), positive `sampleCount`, loop-point bounds (`0 ≤ begin < end ≤ count` for every voice with loop points), and per-slot signal stats (RMS, peak, DC offset, silence, clipping) — and SHALL exit with a nonzero code when any file fails.
 
@@ -33,23 +31,15 @@ The repository SHALL provide `scripts/validate_sounds.py`, which validates every
 - **THEN** the smoke test reports FAIL and exits nonzero
 
 ### Requirement: Host-side DSP testing
-The repository SHALL provide a host test harness (`scripts/host_dsp_test.py` plus a stub-Arduino native build of `RcEngineSound`) that compiles and runs the real engine code on the host, drives deterministic scripts, and asserts on the generated sample stream: pitch via zero-crossing rate matches the commanded RPM/pitch factor, loop regions are respected, one-shot voices deactivate exactly once, knock cadence matches the configured pattern, and no NaN or int8 overflow occurs.
+The repository SHALL provide a host test harness (`scripts/host_dsp_test.py` plus a stub-Arduino native build of `RcEngineSound`) that compiles and runs the real engine code on the host, drives deterministic scripts, and asserts on the generated sample stream: pitch via zero-crossing rate matches the commanded RPM/pitch factor, loop regions are respected, one-shot voices deactivate exactly once, knock cadence matches the configured pattern continuously across idle sample buffer circular wraparounds, idle/rev cross-fading decays smoothly toward 0% idle at high RPM, and no NaN or int8 overflow occurs.
 
-#### Scenario: Pitch tracks RPM
-- **WHEN** a script commands a known throttle/RPM ramp while the engine is running
-- **THEN** the zero-crossing rate of the generated idle/rev stream scales with the commanded RPM within tolerance
+#### Scenario: Knock cadence across circular idle wraparound
+- **WHEN** the engine is running at idle or low RPM across multiple idle loop wraparound cycles
+- **THEN** the knock pulse triggers at regular intervals and does not silence after the first idle loop iteration
 
-#### Scenario: Loop region respected
-- **WHEN** a looped voice (e.g. horn) with defined loop points is active
-- **THEN** the generated samples never advance past the declared loop end
-
-#### Scenario: One-shot deactivates
-- **WHEN** a one-shot voice (e.g. start or shifting sound) finishes
-- **THEN** its voice deactivates and contributes silence on subsequent samples
-
-#### Scenario: No NaN or overflow
-- **WHEN** any test script runs to completion
-- **THEN** no generated sample is NaN and no int8 mixing accumulator overflows
+#### Scenario: Idle/Rev cross-fade proportion decay
+- **WHEN** RPM transitions from `idleEndPoint` to `revSwitchPoint`
+- **THEN** `idleProportion` decreases monotonically from 100% down to 0% and rev volume increases
 
 ### Requirement: On-device audio instrumentation and capture
 The firmware SHALL provide an `AUDIO_DEBUG` build mode that emits structured serial lines — per-buffer peak/RMS/clip/NaN stats, per-second voice activity (active/position/count), and audioTask timing (task-loop time, I2S write blocking time) — and SHALL support a serial-triggered self-test mode that plays known test signals (sine, impulse, sweep, silence) through the normal pipeline. `scripts/audio_capture.py` SHALL reassemble captured buffers into a WAV and assert waveform features: glitch spikes, RMS envelope shape, zero-crossing rate, and FFT signatures.
@@ -76,3 +66,4 @@ The repository SHALL store per-phase metric profiles (RMS envelope binned at 100
 #### Scenario: Stable run passes
 - **WHEN** a re-run's metrics stay within tolerance of the golden profile
 - **THEN** the comparison passes and exits zero
+

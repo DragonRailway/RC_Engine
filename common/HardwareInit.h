@@ -137,7 +137,7 @@ public:
         }
         pinMode(POWER::POWER_ENABLE, OUTPUT);
         digitalWrite(POWER::POWER_ENABLE, LOW);
-        pinMode(POWER::POWER_BUTTON, INPUT);
+        pinMode(POWER::POWER_BUTTON, INPUT_PULLDOWN);
         if (POWER::CHARGE_SENS != 0xFF) {
             pinMode(POWER::CHARGE_SENS, INPUT);
         }
@@ -174,19 +174,22 @@ public:
 
         uint32_t now = millis();
         uint32_t holdMs = (uint32_t)buttonHoldS * 1000U;
+        // Require active HIGH
         if (digitalRead(POWER::POWER_BUTTON) == HIGH) {
             if (!s_powerButtonHolding) {
                 s_powerButtonHolding = true;
                 s_powerButtonHoldStart = now;
             }
 
-            // Rapid blink feedback (200ms ON / 200ms OFF) while holding power button
-            uint8_t duty = ((now / 200) % 2 == 0) ? 100 : 0;
-            if (indicatorPin != 0xFF) {
-                setLight(indicatorPin, duty);
-            } else {
-                setLight(turnLPin, duty);
-                setLight(turnRPin, duty);
+            // Rapid blink feedback (200ms ON / 200ms OFF) only after confirmed 500ms hold
+            if (now - s_powerButtonHoldStart >= 500) {
+                uint8_t duty = ((now / 200) % 2 == 0) ? 100 : 0;
+                if (indicatorPin != 0xFF) {
+                    setLight(indicatorPin, duty);
+                } else {
+                    setLight(turnLPin, duty);
+                    setLight(turnRPin, duty);
+                }
             }
 
             if (now - s_powerButtonHoldStart >= holdMs) {
@@ -203,7 +206,7 @@ public:
             }
         } else {
             if (s_powerButtonHolding) {
-                if (now - s_powerButtonHoldStart < holdMs) {
+                if (now - s_powerButtonHoldStart >= 50 && now - s_powerButtonHoldStart < holdMs) {
                     s_buttonClicked = true;
                 }
                 s_powerButtonHolding = false;

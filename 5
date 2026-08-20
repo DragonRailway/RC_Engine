@@ -1,0 +1,444 @@
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0x15 (USB_UART_CHIP_RESET),boot:0x8 (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037f5fa
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2820,len:0x10cc
+load:0x403c8700,len:0xc2c
+load:0x403cb700,len:0x30b0
+entry 0x403c88b8
+[    23][I][esp32-hal-psram.c:106] psramAddToHeap(): PSRAM added to the heap.
+[    39][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type USB_DM (46) successfully set to 0x42030aec
+[    51][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 19 successfully set to type USB_DM (46) with bus 0x3fcc3c7c
+[    61][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type USB_DP (47) successfully set to 0x42030aec
+[    72][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 20 successfully set to type USB_DP (47) with bus 0x3fcc3c7c
+=========== Before Setup Start ===========
+Chip Info:
+------------------------------------------
+  Model             : ESP32-S3
+  Package           : 0
+  Revision          : 0.02
+  Cores             : 2
+  CPU Frequency     : 240 MHz
+  XTAL Frequency    : 40 MHz
+  Features Bitfield : 0x00000012
+  Embedded Flash    : No
+  Embedded PSRAM    : No
+  2.4GHz WiFi       : Yes
+  Classic BT        : No
+  BT Low Energy     : Yes
+  IEEE 802.15.4     : No
+------------------------------------------
+INTERNAL Memory Info:
+------------------------------------------
+  Total Size        :   207772 B ( 202.9 KB)
+  Free Bytes        :   164312 B ( 160.5 KB)
+  Allocated Bytes   :    38732 B (  37.8 KB)
+  Minimum Free Bytes:   159036 B ( 155.3 KB)
+  Largest Free Block:   106484 B ( 104.0 KB)
+------------------------------------------
+SPIRAM Memory Info:
+------------------------------------------
+  Total Size        :  2097152 B (2048.0 KB)
+  Free Bytes        :  2095104 B (2046.0 KB)
+  Allocated Bytes   :        0 B (   0.0 KB)
+  Minimum Free Bytes:        0 B (   0.0 KB)
+  Largest Free Block:  2064372 B (2016.0 KB)
+  Bus Mode          : QSPI
+------------------------------------------
+Flash Info:
+------------------------------------------
+  Chip Size         :  4194304B (4 MB)
+  Block Size        :    65536B (  64.0 KB)
+  Sector Size       :     4096B (   4.0 KB)
+  Page Size         :      256B (   0.2 KB)
+  Bus Speed         : 80 MHz
+  Flash Frequency   : 80 MHz (source: 80 MHz, divider: 1)
+  Bus Mode          : QIO
+------------------------------------------
+Partitions Info:
+------------------------------------------
+                nvs : addr: 0x00009000, size:    20.0 KB, type: DATA, subtype: NVS
+            otadata : addr: 0x0000E000, size:     8.0 KB, type: DATA, subtype: OTA
+              ota_0 : addr: 0x00010000, size:  1536.0 KB, type:  APP, subtype: OTA_0
+              ota_1 : addr: 0x00190000, size:  1536.0 KB, type:  APP, subtype: OTA_1
+             spiffs : addr: 0x00310000, size:   896.0 KB, type: DATA, subtype: SPIFFS
+           coredump : addr: 0x003F0000, size:    64.0 KB, type: DATA, subtype: COREDUMP
+------------------------------------------
+Software Info:
+------------------------------------------
+  Compile Date/Time : Aug 18 2026 15:21:41
+  ESP-IDF Version   : v5.5.5
+  Arduino Version   : 3.3.11
+------------------------------------------
+Board Info:
+------------------------------------------
+  Arduino Board     : Espressif ESP32-S3-DevKitC-1-N8 (8 MB QD, No PSRAM)
+  Arduino Variant   : esp32s3
+  Core Debug Level  : 5
+  Arduino Runs Core : 1
+  Arduino Events on : 1
+  Arduino USB Mode  : 1
+  CDC On Boot       : 1
+============ Before Setup End ============
+[   199][V][esp32-hal-uart.c:1085] uartSetPins(): UART0: Driver not yet installed, storing pins for later attachment (RX:44, TX:43)
+[   200][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type GPIO (1) successfully set to 0x4207c41c
+[   200][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 15 successfully set to type GPIO (1) with bus 0x10
+[   201][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type GPIO (1) successfully set to 0x4207c41c
+[   202][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 14 successfully set to type GPIO (1) with bus 0xf
+[   202][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type GPIO (1) successfully set to 0x4207c41c
+[   203][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 35 successfully set to type GPIO (1) with bus 0x24
+[HardwareInit] Power latched ON (USB boot — no button hold required)
+[   204][I][esp32-hal-periman.c:170] perimanSetPinBus(): Pin 19 already has type USB_DM (46) with bus 0x3fcc3c7c
+[   204][I][esp32-hal-periman.c:170] perimanSetPinBus(): Pin 20 already has type USB_DP (47) with bus 0x3fcc3c7c
+
+=== RC Brain - Unified Vehicle Controller ===
+
+[ConfigParser] LittleFS mounted
+
+╔══════════════════════════════════════════════════╗
+║            LittleFS File Tree                    ║
+╚══════════════════════════════════════════════════╝
+
+├─ 📄 hardware-MIKRO_V2.json                  1845 bytes
+├─ 📁 sounds/
+│ ├─ 📁 vehicles/
+│ │ ├─ 📁 ScaniaV8/
+│ │ │ ├─ 📄 brake.json                            248669 bytes
+│ │ │ ├─ 📄 fan.json                               39458 bytes
+│ │ │ ├─ 📄 horn.json                              57796 bytes
+│ │ │ ├─ 📄 idle.json                              18706 bytes
+│ │ │ ├─ 📄 indicator.json                         27406 bytes
+│ │ │ ├─ 📄 jakebrake.json                         19322 bytes
+│ │ │ ├─ 📄 knock.json                               764 bytes
+│ │ │ ├─ 📄 rev.json                              124050 bytes
+│ │ │ ├─ 📄 shifting.json                          15607 bytes
+│ │ │ ├─ 📄 siren.json                                58 bytes
+│ │ │ ├─ 📄 sound1.json                            85097 bytes
+│ │ │ ├─ 📄 start.json                            106968 bytes
+│ │ │ ├─ 📄 supercharger.json                       2558 bytes
+│ │ │ ├─ 📄 turbo.json                             15098 bytes
+│ │ │ ├─ 📄 wastegate.json                         76685 bytes
+├─ 📄 vehicle-config.json                     1942 bytes
+
+──────────────────────────────────────────────────
+  Total: 917504 bytes  |  Used: 905216 bytes  |  Free: 12288 bytes
+  Usage: 98.7%
+──────────────────────────────────────────────────
+
+
+── Loading Configs ──
+[ConfigParser] Loaded hardware config: /hardware-MIKRO_V2.json
+[ConfigParser] Loaded vehicle config: Scania V8 (sound_set=ScaniaV8, type=truck)
+
+── Hardware Config ──
+  Sound Volume: 80%
+  Drive Motor: type=1 hwId=225 freq=20000Hz dir=0
+  Steering Servo: hwId=7 freq=50Hz L=1350 R=1650 C=1500
+  Lights: head=38 tail=39 brake=40 turnL=41 turnR=42
+
+── Vehicle Config ──
+  Name: Scania V8 (Type: 0)
+  Description: Scania V8 Heavy Haul Semi Truck
+  Engine: acc=2 dec=1 idle=40 clutch=50
+  Transmission: type=2 gears=3
+  Sound: start=140 idle=80 rev=100 turbo=40 knock=200 horn=100
+
+── Loading Sounds ──
+[ConfigParser] Loaded 14 sounds for Scania V8 (sound_set=ScaniaV8, type=truck)
+
+── Initializing Hardware ──
+[HardwareInit] Initializing peripherals...
+[  7755][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type GPIO (1) successfully set to 0x4207c41c
+[  7755][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 17 successfully set to type GPIO (1) with bus 0x12
+[HardwareInit] Motor (driver): DRIVER_A Freq=20000Hz Duty=20..90%
+[HardwareInit] Servo: Pin=7 Freq=50Hz Center=1500us (L=1350, R=1650)
+[  7757][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 38 successfully set to type GPIO (1) with bus 0x3fcc2360
+[  7758][V][esp32-hal-periman.c:206] perimanSetPinBusExtraType(): Successfully set extra_type LEDC for pin 38
+[  7758][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type LEDC (10) successfully set to 0x420324e0
+[  7759][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 38 successfully set to type INIT (0) with bus 0x0
+[  7759][D][esp32-hal-ledc.c:60] find_matching_timer(): Searching for timer with freq=5000, resolution=10
+[  7760][D][esp32-hal-ledc.c:76] find_matching_timer(): No matching timer found for freq=5000, resolution=10
+[  7761][D][esp32-hal-ledc.c:104] find_free_timer(): Found free timer 0
+[  7761][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 38 successfully set to type LEDC (10) with bus 0x3fccc294
+[  7762][I][esp32-hal-ledc.c:295] ledcAttachChannel(): LEDC attached to pin 38 (channel 0, resolution 10)
+[HardwareInit] Headlight: Pin=38 Brightness=60%
+[  7763][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 43 successfully set to type GPIO (1) with bus 0x3fcc22b0
+[  7764][V][esp32-hal-periman.c:206] perimanSetPinBusExtraType(): Successfully set extra_type LEDC for pin 43
+[  7764][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type LEDC (10) successfully set to 0x420324e0
+[  7765][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 43 successfully set to type INIT (0) with bus 0x0
+[  7765][D][esp32-hal-ledc.c:60] find_matching_timer(): Searching for timer with freq=5000, resolution=10
+[  7766][D][esp32-hal-ledc.c:70] find_matching_timer(): Found matching timer 0 for freq=5000, resolution=10
+[  7767][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 43 successfully set to type LEDC (10) with bus 0x3fccc2b4
+[  7767][I][esp32-hal-ledc.c:295] ledcAttachChannel(): LEDC attached to pin 43 (channel 1, resolution 10)
+[HardwareInit] Full beam: Pin=43 Brightness=100%
+[  7768][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 1 successfully set to type GPIO (1) with bus 0x3fcc2200
+[  7769][V][esp32-hal-periman.c:206] perimanSetPinBusExtraType(): Successfully set extra_type LEDC for pin 1
+[  7769][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type LEDC (10) successfully set to 0x420324e0
+[  7770][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 1 successfully set to type INIT (0) with bus 0x0
+[  7771][D][esp32-hal-ledc.c:60] find_matching_timer(): Searching for timer with freq=5000, resolution=10
+[  7771][D][esp32-hal-ledc.c:70] find_matching_timer(): Found matching timer 0 for freq=5000, resolution=10
+[  7772][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 1 successfully set to type LEDC (10) with bus 0x3fccc2d4
+[  7773][I][esp32-hal-ledc.c:295] ledcAttachChannel(): LEDC attached to pin 1 (channel 2, resolution 10)
+[HardwareInit] Fog lamp: Pin=1 Brightness=100%
+[  7773][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 39 successfully set to type GPIO (1) with bus 0x3fcc1e90
+[  7774][V][esp32-hal-periman.c:206] perimanSetPinBusExtraType(): Successfully set extra_type LEDC for pin 39
+[  7775][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type LEDC (10) successfully set to 0x420324e0
+[  7775][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 39 successfully set to type INIT (0) with bus 0x0
+[  7776][D][esp32-hal-ledc.c:60] find_matching_timer(): Searching for timer with freq=5000, resolution=10
+[  7776][D][esp32-hal-ledc.c:70] find_matching_timer(): Found matching timer 0 for freq=5000, resolution=10
+[  7777][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 39 successfully set to type LEDC (10) with bus 0x3fccc2f4
+[  7778][I][esp32-hal-ledc.c:295] ledcAttachChannel(): LEDC attached to pin 39 (channel 3, resolution 10)
+[HardwareInit] Taillight: Pin=39 Brightness=60%
+[  7778][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 40 successfully set to type GPIO (1) with bus 0x3fcc1de0
+[  7779][V][esp32-hal-periman.c:206] perimanSetPinBusExtraType(): Successfully set extra_type LEDC for pin 40
+[  7780][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type LEDC (10) successfully set to 0x420324e0
+[  7780][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 40 successfully set to type INIT (0) with bus 0x0
+[  7781][D][esp32-hal-ledc.c:60] find_matching_timer(): Searching for timer with freq=5000, resolution=10
+[  7782][D][esp32-hal-ledc.c:70] find_matching_timer(): Found matching timer 0 for freq=5000, resolution=10
+[  7782][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 40 successfully set to type LEDC (10) with bus 0x3fccc314
+[  7783][I][esp32-hal-ledc.c:295] ledcAttachChannel(): LEDC attached to pin 40 (channel 4, resolution 10)
+[HardwareInit] Brakelight: Pin=40
+[  7784][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 41 successfully set to type GPIO (1) with bus 0x3fcc1d30
+[  7784][V][esp32-hal-periman.c:206] perimanSetPinBusExtraType(): Successfully set extra_type LEDC for pin 41
+[  7785][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type LEDC (10) successfully set to 0x420324e0
+[  7786][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 41 successfully set to type INIT (0) with bus 0x0
+[  7786][D][esp32-hal-ledc.c:60] find_matching_timer(): Searching for timer with freq=5000, resolution=10
+[  7787][D][esp32-hal-ledc.c:70] find_matching_timer(): Found matching timer 0 for freq=5000, resolution=10
+[  7787][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 41 successfully set to type LEDC (10) with bus 0x3fccc334
+[  7788][I][esp32-hal-ledc.c:295] ledcAttachChannel(): LEDC attached to pin 41 (channel 5, resolution 10)
+[  7789][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 42 successfully set to type GPIO (1) with bus 0x3fcc1c80
+[  7789][V][esp32-hal-periman.c:206] perimanSetPinBusExtraType(): Successfully set extra_type LEDC for pin 42
+[  7790][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type LEDC (10) successfully set to 0x420324e0
+[  7791][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 42 successfully set to type INIT (0) with bus 0x0
+[  7791][D][esp32-hal-ledc.c:60] find_matching_timer(): Searching for timer with freq=5000, resolution=10
+[  7792][D][esp32-hal-ledc.c:70] find_matching_timer(): Found matching timer 0 for freq=5000, resolution=10
+[  7792][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 42 successfully set to type LEDC (10) with bus 0x3fccc354
+[  7793][I][esp32-hal-ledc.c:295] ledcAttachChannel(): LEDC attached to pin 42 (channel 6, resolution 10)
+[HardwareInit] Turn signals: L=41 R=42 Interval=500/500ms
+[  7794][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 2 successfully set to type GPIO (1) with bus 0x3fcc1bd0
+[  7795][V][esp32-hal-periman.c:206] perimanSetPinBusExtraType(): Successfully set extra_type LEDC for pin 2
+[  7795][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type LEDC (10) successfully set to 0x420324e0
+[  7796][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 2 successfully set to type INIT (0) with bus 0x0
+[  7796][D][esp32-hal-ledc.c:60] find_matching_timer(): Searching for timer with freq=5000, resolution=10
+[  7797][D][esp32-hal-ledc.c:70] find_matching_timer(): Found matching timer 0 for freq=5000, resolution=10
+[  7798][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 2 successfully set to type LEDC (10) with bus 0x3fccc374
+[  7798][I][esp32-hal-ledc.c:295] ledcAttachChannel(): LEDC attached to pin 2 (channel 7, resolution 10)
+[HardwareInit] Reversing light: Pin=2
+[  7799][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type GPIO (1) successfully set to 0x4207c41c
+[  7800][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 11 successfully set to type GPIO (1) with bus 0xc
+[HardwareInit] Aux motor (driver): DRIVER_B Freq=20000Hz
+[HardwareInit] Aux light: Pin=36 Brightness=60%
+[HardwareInit] Done
+
+── Initializing Vehicle Controller ──
+[Lights] Configured Mask: Truck=0x8F, Loco=0x87
+[  7802][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type ADC_ONESHOT (8) successfully set to 0x42031f40
+[  7802][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 4 successfully set to type ADC_ONESHOT (8) with bus 0x5
+[  7803][D][esp32-hal-adc.c:341] __analogReadMilliVolts(): Creating cali handle for ADC_0
+[VehicleController] Battery cell count from config: 1S (Boot V: 3.96V)
+[VehicleController] Battery warning: 3.50V (3.50V/cell), cutoff: 3.30V (3.30V/cell)
+[VehicleController] Vehicle type: TRUCK
+
+── Starting Engine Sound ──
+[RcEngineSound] Initialized with 32 voice slots
+[AudioOutput] Initialized (22,050 Hz)
+[AudioOutput] Started
+
+── Starting RadioKit (BLE) ──
+[Device] Name: 'Scania V8', Description: 'Scania V8 Heavy Haul Semi Truck', Type: 'Truck'
+[  7860][V][esp32-hal-periman.c:267] perimanSetBusDeinit(): Deinit function for type GPIO (1) successfully set to 0x4207c41c
+[  7861][V][esp32-hal-periman.c:192] perimanSetPinBus(): Pin 7 successfully set to type GPIO (1) with bus 0x8
+BLE: Initializing stack...
+D NimBLEDevice: Starting NimBLE-Arduino 2.5.1
+I NimBLEDevice: NimBLE Started!
+I NimBLEDevice: NimBle host synced.
+D NimBLEDevice: Initialized
+BLE: Requested MTU 512
+BLE: Preferred 2M PHY
+BLE: Creating server...
+BLE: Creating service...
+BLE: Creating widget char (0xFFE1)...
+BLE: Creating FS char (0xFFE2)...
+BLE: Creating OTA char (0xFFE3)...
+BLE: Creating Settings char (0xFFE4)...
+BLE: Creating Print char (0xFFE5 — notify-only)...
+BLE: Starting server...
+D NimBLEService: >> start(): Starting service: UUID: 0000ffe0-0000-1000-8000-00805f9b34fb
+D NimBLEService: Adding 5 characteristics for service 0000ffe0-0000-1000-8000-00805f9b34fb
+D NimBLEService: << start()
+D NimBLEServer: Skipping characteristic or descriptor registered with unknown service
+D NimBLEServer: Skipping characteristic or descriptor registered with unknown service
+D NimBLEServer: Skipping characteristic or descriptor registered with unknown service
+D NimBLEServer: Skipping characteristic or descriptor registered with unknown service
+D NimBLEServer: Skipping characteristic or descriptor registered with unknown service
+D NimBLEServer: Service registered: 0000ffe0-0000-1000-8000-00805f9b34fb, handle=14
+D NimBLEServer: Characteristic registered: 0000ffe1-0000-1000-8000-00805f9b34fb, def_handle=15, val_handle=16
+D NimBLEServer: Characteristic registered: 0000ffe2-0000-1000-8000-00805f9b34fb, def_handle=18, val_handle=19
+D NimBLEServer: Characteristic registered: 0000ffe3-0000-1000-8000-00805f9b34fb, def_handle=21, val_handle=22
+D NimBLEServer: Characteristic registered: 0000ffe4-0000-1000-8000-00805f9b34fb, def_handle=24, val_handle=25
+D NimBLEServer: Characteristic registered: 0000ffe5-0000-1000-8000-00805f9b34fb, def_handle=27, val_handle=28
+primary service
+           uuid 0x1800
+         handle 1
+     end_handle 5
+characteristic
+           uuid 0x2a00
+     def_handle 2
+     val_handle 3
+   min_key_size 0
+          flags [READ]
+characteristic
+           uuid 0x2a01
+     def_handle 4
+     val_handle 5
+   min_key_size 0
+          flags [READ]
+primary service
+           uuid 0x1801
+         handle 6
+     end_handle 13
+characteristic
+           uuid 0x2a05
+     def_handle 7
+     val_handle 8
+   min_key_size 0
+          flags [INDICATE]
+ccc descriptor
+           uuid 0x2902
+         handle 9
+   min_key_size 0
+          flags [READ|WRITE]
+characteristic
+           uuid 0x2b3a
+     def_handle 10
+     val_handle 11
+   min_key_size 0
+          flags [READ]
+characteristic
+           uuid 0x2b29
+     def_handle 12
+     val_handle 13
+   min_key_size 0
+          flags [READ|WRITE]
+primary service
+           uuid 0000ffe0-0000-1000-8000-00805f9b34fb
+         handle 14
+     end_handle 29
+characteristic
+           uuid 0000ffe1-0000-1000-8000-00805f9b34fb
+     def_handle 15
+     val_handle 16
+   min_key_size 0
+          flags [WRITE_NO_RSP|WRITE|NOTIFY]
+ccc descriptor
+           uuid 0x2902
+         handle 17
+   min_key_size 0
+          flags [READ|WRITE]
+characteristic
+           uuid 0000ffe2-0000-1000-8000-00805f9b34fb
+     def_handle 18
+     val_handle 19
+   min_key_size 0
+          flags [WRITE_NO_RSP|WRITE|NOTIFY]
+ccc descriptor
+           uuid 0x2902
+         handle 20
+   min_key_size 0
+          flags [READ|WRITE]
+characteristic
+           uuid 0000ffe3-0000-1000-8000-00805f9b34fb
+     def_handle 21
+     val_handle 22
+   min_key_size 0
+          flags [WRITE_NO_RSP|WRITE|NOTIFY]
+ccc descriptor
+           uuid 0x2902
+         handle 23
+   min_key_size 0
+          flags [READ|WRITE]
+characteristic
+           uuid 0000ffe4-0000-1000-8000-00805f9b34fb
+     def_handle 24
+     val_handle 25
+   min_key_size 0
+          flags [WRITE_NO_RSP|WRITE|NOTIFY]
+ccc descriptor
+           uuid 0x2902
+         handle 26
+   min_key_size 0
+          flags [READ|WRITE]
+characteristic
+           uuid 0000ffe5-0000-1000-8000-00805f9b34fb
+     def_handle 27
+     val_handle 28
+   min_key_size 0
+          flags [NOTIFY]
+ccc descriptor
+           uuid 0x2902
+         handle 29
+   min_key_size 0
+          flags [READ|WRITE]
+BLE: Starting advertising...
+E NimBLEAdvertisementData: Cannot add UUID, data length exceeded!
+D NimBLEAdvertising: >> Advertising start: duration=0, dirAddr=NULL
+D NimBLEAdvertising: setAdvertisementData: 02 01 06 0a 09 53 63 61 6e 69 61 20 56 38 05 12 06 00 06 00
+D NimBLEAdvertising: setScanResponseData: 11 07 fb 34 9b 5f 80 00 00 80 00 10 00 00 e0 ff 00 00 09 09 52 4b 5f 52 43 5f 55 49
+D NimBLEAdvertising: << Advertising start
+BLE: System ready.
+[  8574][W][LittleFS.cpp:59] begin(): LittleFS Already Mounted!
+[Lights] Configured Mask: Truck=0x8F, Loco=0x87
+
+── System Ready ──
+Free heap: 69120 bytes
+Free PSRAM: 1955672 bytes
+
+=== Init Complete ===
+
+=========== After Setup Start ============
+INTERNAL Memory Info:
+------------------------------------------
+  Total Size        :   207772 B ( 202.9 KB)
+  Free Bytes        :    69120 B (  67.5 KB)
+  Allocated Bytes   :   131340 B ( 128.3 KB)
+  Minimum Free Bytes:     2460 B (   2.4 KB)
+  Largest Free Block:    31732 B (  31.0 KB)
+------------------------------------------
+SPIRAM Memory Info:
+------------------------------------------
+  Total Size        :  2097152 B (2048.0 KB)
+  Free Bytes        :  1955672 B (1909.8 KB)
+  Allocated Bytes   :   139176 B ( 135.9 KB)
+  Minimum Free Bytes:        0 B (   0.0 KB)
+  Largest Free Block:  1900532 B (1856.0 KB)
+------------------------------------------
+GPIO Info:
+------------------------------------------
+  GPIO : BUS_TYPE[bus/unit][chan]
+  --------------------------------------  
+     1 : LEDC[2][0]
+     2 : LEDC[7][0]
+     4 : ADC_ONESHOT[0][3]
+     7 : GPIO
+    11 : GPIO
+    14 : GPIO
+    15 : GPIO
+    17 : GPIO
+    19 : USB_DM
+    20 : USB_DP
+    35 : GPIO
+    38 : LEDC[0][0]
+    39 : LEDC[3][0]
+    40 : LEDC[4][0]
+    41 : LEDC[5][0]
+    42 : LEDC[6][0]
+    43 : LEDC[1][0]
+============ After Setup End =============
+ [STATUS] Eng:OFF RPM:0 Thr:0% Mot:0% Spd:0km/h Steer:0 Gear:P Brk:0 Head:0 L:0 R:0 Bat:3.94V (63%)
+ [STATUS] Eng:OFF RPM:0 Thr:0% Mot:0% Spd:0km/h Steer:0 Gear:P Brk:0 Head:0 L:0 R:0 Bat:3.93V (61%)
+[STATUS] Eng:OFF RPM:0 Thr:0% Mot:0% Spd:0km/h Steer:0 Gear:P Brk:0 Head:0 L:0 R:0 Bat:3.93V (61%)
+ [STATUS] Eng:OFF RPM:0 Thr:0% Mot:0% Spd:0km/h Steer:0 Gear:P Brk:0 Head:0 L:0 R:0 Bat:3.93V (61%)
+ [STATUS] Eng:OFF RPM:0 Thr:0% Mot:0% Spd:0km/h Steer:0 Gear:P Brk:0 Head:0 L:0 R:0 Bat:3.93V (61%)
+ 

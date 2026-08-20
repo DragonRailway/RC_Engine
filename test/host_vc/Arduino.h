@@ -27,6 +27,12 @@
 #ifndef OUTPUT
 #define OUTPUT 0x1
 #endif
+#ifndef INPUT_PULLUP
+#define INPUT_PULLUP 0x2
+#endif
+#ifndef INPUT_PULLDOWN
+#define INPUT_PULLDOWN 0x3
+#endif
 
 extern uint8_t host_gpio_pin_mode[128];
 extern uint8_t host_gpio_pin_val[128];
