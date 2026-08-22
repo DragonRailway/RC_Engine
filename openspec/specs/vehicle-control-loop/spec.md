@@ -104,7 +104,7 @@ The firmware SHALL trigger the horn sound while `horn_button` is pressed (truck)
 - **THEN** the sound engine's simulated RPM rises and sound pitch follows with responsive acceleration dynamics
 
 ### Requirement: Telemetry reporting
-The firmware SHALL update `telemetry_Battery` with battery voltage converted to percent and `telemetry_Speed` with an estimated speed derived from throttle, at a 100ms interval during active operation. Battery voltage SHALL be computed using `voltage_scale` / `voltage_offset` from the board-specific hardware config (`/hardware-MIKRO_V2.json` or `/hardware-TRACKLINK_V3.json`) when present, falling back to the board's compile-time `VSCALE` / `VOFFSET` calibration values when absent.
+The firmware SHALL update `telemetry_Battery` with battery voltage converted to percent and `telemetry_Speed` with an estimated speed derived from throttle, at a 1000ms interval during active operation. Battery voltage SHALL be computed using `voltage_scale` / `voltage_offset` from the board-specific hardware config (`/hardware-MIKRO_V2.json` or `/hardware-TRACKLINK_V3.json`) when present, falling back to the board's compile-time `VSCALE` / `VOFFSET` calibration values when absent.
 
 #### Scenario: Battery telemetry updated
 - **WHEN** the control loop runs
@@ -112,7 +112,7 @@ The firmware SHALL update `telemetry_Battery` with battery voltage converted to 
 
 #### Scenario: Speed telemetry updated
 - **WHEN** the control loop runs
-- **THEN** `telemetry_Speed.rk.content` holds a speed estimate derived from throttle and direction updated at a 100ms interval
+- **THEN** `telemetry_Speed.rk.content` holds a speed estimate derived from throttle and direction updated at a 1000ms interval
 
 #### Scenario: Config calibration applied
 - **WHEN** the board hardware config contains `voltage_scale` and `voltage_offset`

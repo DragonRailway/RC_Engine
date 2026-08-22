@@ -32,12 +32,12 @@ The firmware SHALL initialize RadioKit widgets and pages via `initRadioKit()`, r
    - Hardware config top-level `name` and `description` (if present and non-empty).
    - Vehicle config `name` and `description` (`vehicle.name` and `vehicle.description`, if present and non-empty).
    - Fallback defaults (`"RC_UI"` and `""`).
-   Set `RadioKit.config.type` to `"Locomotive"` for LOCOMOTIVE and `"Truck"` for truck-family types, setting active page accordingly.
+   Set `RadioKit.config.type` to `"Locomotive"` for LOCOMOTIVE and `"Truck"` for truck-family types, setting active page accordingly. Explicitly call `RadioKit.setName(targetName)` to synchronize the NVS name buffer and BLE advertising name with the active profile.
 3. `RadioKit.begin()`: Commit the resolved dynamic configuration.
 4. `RadioKit.startSerial(Serial)` & `RadioKit.startBLE()`: Start transports broadcasting the resolved name.
 5. `RadioKit.enableFS()`: Mount LittleFS for the RadioKit filesystem protocol.
 
-On config hot-reload (`reloadConfigs()`), the firmware SHALL re-evaluate the metadata cascade and update `RadioKit.config.name`, `RadioKit.config.description`, `RadioKit.config.type`, and the active BLE advertising name.
+On config hot-reload (`reloadConfigs()`), the firmware SHALL re-evaluate the metadata cascade and update `RadioKit.config.name`, `RadioKit.config.description`, `RadioKit.config.type`, and call `RadioKit.setName(targetName)` to update the active BLE advertising name.
 
 #### Scenario: Clean boot with vehicle name
 - **WHEN** the firmware boots with a hardware config that omits `name` and a vehicle config named `"Scania V8"`
