@@ -144,7 +144,7 @@ static bool reloadConfigs() {
 
     if (nameChanged) {
         ConfigParser::loadSounds(profile.config, profile.sounds);
-        engine.begin(profile.sounds);
+        engine.begin(profile.sounds, profile.config);
     }
 
     if (!UiLogger::hasErrors()) {
@@ -228,11 +228,12 @@ void setup() {
     HardwareInit::init(hwConfig);
 
     Serial.println("\n── Initializing Vehicle Controller ──");
+    profile.config.sound.master = hwConfig.sound.volume;
     VehicleController::init(&hwConfig, &engine, &profile);
 
     Serial.println("\n── Starting Engine Sound ──");
     engine.setConfig(profile.config);
-    engine.begin(profile.sounds);
+    engine.begin(profile.sounds, profile.config);
     AudioOutput::begin(&engine);
     AudioOutput::start();
 

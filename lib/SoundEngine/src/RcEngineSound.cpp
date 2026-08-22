@@ -132,7 +132,7 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
 }
 
 void RcEngineSound::begin(const SoundData& soundData) {
-    begin(soundData, Config());
+    begin(soundData, cfg);
 }
 
 void RcEngineSound::startEngine() {

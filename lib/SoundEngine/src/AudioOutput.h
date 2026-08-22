@@ -11,7 +11,7 @@ public:
 
     static RcEngineSound* engine;
     static volatile bool active;
-    static int16_t buffer[BUFFER_SIZE];
+    static int16_t buffer[BUFFER_SIZE * 2];
     static volatile uint32_t bufferPos;
     static hw_timer_t* timer;
     static i2s_chan_handle_t tx_handle;
@@ -61,22 +61,24 @@ public:
             return;
         }
 
-        timer = timerBegin(SAMPLE_RATE);   // new 1-arg API: frequency in Hz, not a divider
-        timerAttachInterrupt(timer, &onTimer);
+        pinMode(AUDIO::I2S_SD, OUTPUT);
+        digitalWrite(AUDIO::I2S_SD, HIGH);
 
         // 8KB stack: getNextSample() needs ~1KB for its VoiceState snapshot and
         // i2s_channel_write() is also deep; 4KB was tight for both in one task.
-        xTaskCreatePinnedToCore(audioTask, "audio", 8192, NULL, 5, &audioTaskHandle, 1);
+        xTaskCreatePinnedToCore(audioTask, "audio", 8192, NULL, 3, &audioTaskHandle, 1);
 
         Serial.println("[AudioOutput] Initialized (22,050 Hz)");
     }
 
     static void start() {
-        if (!timer || !engine) return;
-        active = true;
+        if (AUDIO::I2S_SD != 0xFF) {
+            pinMode(AUDIO::I2S_SD, OUTPUT);
+            digitalWrite(AUDIO::I2S_SD, HIGH);
+        }
         currentOffset = 0; // Start with offset at 0, audioTask will ramp it
         offsetRamping = true;
-        timerAlarm(timer, 1, true, 0);    // alarm every tick (count >= 1 is required)
+        active = true;
         Serial.println("[AudioOutput] Started");
     }
 
@@ -84,27 +86,15 @@ public:
         active = false;
         offsetRamping = false;
         currentOffset = 0;
-        if (timer) timerAlarm(timer, 1, false, 0);
-        size_t bytes_written;
-        int16_t silence[BUFFER_SIZE] = {};
-        i2s_channel_write(tx_handle, silence, sizeof(silence), &bytes_written, 100);
-        Serial.println("[AudioOutput] Stopped");
-    }
-
-    // Minimal ISR: pacing only. Sample generation and all FPU math live in the
-    // audio task — the Xtensa FPU coprocessor is NOT available in ISR context on
-    // this IDF build (a floating-point op in onTimer panics with a Coprocessor
-    // exception), and getNextSample() also needs ~1.3KB of stack for its voice
-    // snapshot which is unsafe on the small ISR stack.
-    static void onTimer() {
-        if (!active) return;
-
-        bufferPos = bufferPos + 1;
-        if (bufferPos >= BUFFER_SIZE) {
-            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-            vTaskNotifyGiveFromISR(audioTaskHandle, &xHigherPriorityTaskWoken);
-            bufferPos = 0;
+        if (tx_handle) {
+            size_t bytes_written;
+            int16_t silence[BUFFER_SIZE * 2] = {};
+            i2s_channel_write(tx_handle, silence, sizeof(silence), &bytes_written, 50);
         }
+        if (AUDIO::I2S_SD != 0xFF) {
+            digitalWrite(AUDIO::I2S_SD, LOW);
+        }
+        Serial.println("[AudioOutput] Stopped");
     }
 
     enum SelftestMode {
@@ -127,11 +117,13 @@ public:
     static TaskHandle_t audioTaskHandle;
 
     // Audio output task: generate samples (FPU-safe task context), apply offset
-    // fade, write to I2S. Paced by the 22.05kHz timer ISR notification.
+    // fade, write to I2S. Paced naturally by I2S DMA blocking.
     static void audioTask(void* param) {
         while (true) {
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-            if (!active || !tx_handle || !engine) continue;
+            if (!active || !tx_handle || !engine) {
+                vTaskDelay(pdMS_TO_TICKS(10));
+                continue;
+            }
 
             int64_t t_start = esp_timer_get_time();
 
@@ -152,12 +144,16 @@ public:
                     } else if (selftestMode == SELFTEST_SILENCE) {
                         sample = 0;
                     }
-                    buffer[i] = (int16_t)sample * 256;
+                    int16_t val = (int16_t)sample * 256;
+                    buffer[i * 2]     = val;
+                    buffer[i * 2 + 1] = val;
                 }
             } else {
                 for (int i = 0; i < BUFFER_SIZE; i++) {
-                    int8_t sample = engine->getNextSample();
-                    buffer[i] = (int16_t)sample * 256;
+                    uint8_t sample = engine->getNextSample();
+                    int16_t val = (int16_t)(((int32_t)sample - 128) << 8);
+                    buffer[i * 2]     = val;
+                    buffer[i * 2 + 1] = val;
                 }
             }
 
@@ -176,7 +172,7 @@ public:
             // Scale buffer by ramp factor (0.0→1.0) instead of adding offset
             // This prevents pops by fading from silence to full volume
             float scale = currentOffset / 128.0f;
-            for (int i = 0; i < BUFFER_SIZE; i++) {
+            for (int i = 0; i < BUFFER_SIZE * 2; i++) {
                 buffer[i] = (int16_t)(buffer[i] * scale);
             }
 
@@ -192,13 +188,13 @@ public:
                 int16_t peak = 0;
                 int64_t sum_sq = 0;
                 int clips = 0;
-                for (int i = 0; i < BUFFER_SIZE; i++) {
+                for (int i = 0; i < BUFFER_SIZE * 2; i++) {
                     int16_t val = buffer[i];
                     if (abs(val) > peak) peak = abs(val);
                     sum_sq += (int64_t)val * val;
                     if (val <= -32768 || val >= 32767) clips++;
                 }
-                uint16_t rms = (uint16_t)sqrtf((float)sum_sq / BUFFER_SIZE);
+                uint16_t rms = (uint16_t)sqrtf((float)sum_sq / (BUFFER_SIZE * 2));
                 uint32_t gen_us = (uint32_t)(t_gen - t_start);
                 uint32_t i2s_us = (uint32_t)(t_i2s - t_gen);
                 Serial.printf("[AUDIO_STATS] {\"peak\":%d,\"rms\":%d,\"clips\":%d,\"nan\":0,\"task_us\":%u,\"i2s_us\":%u}\n",
@@ -211,7 +207,7 @@ public:
 
 RcEngineSound* AudioOutput::engine = nullptr;
 volatile bool AudioOutput::active = false;
-int16_t AudioOutput::buffer[BUFFER_SIZE] = {};
+int16_t AudioOutput::buffer[BUFFER_SIZE * 2] = {};
 volatile uint32_t AudioOutput::bufferPos = 0;
 hw_timer_t* AudioOutput::timer = nullptr;
 i2s_chan_handle_t AudioOutput::tx_handle = nullptr;
