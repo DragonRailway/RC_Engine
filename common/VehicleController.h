@@ -386,13 +386,17 @@ public:
             // edge (scale 1.0 at brakePct=20, 0.0 at full brake 100).
             motorThrottle = (int16_t)((int32_t)throttlePct * (100 - brakePct) / 80);
         }
-        int16_t motorSpeed = reverse ? -motorThrottle : motorThrottle;
+        int16_t targetSpeed = reverse ? -motorThrottle : motorThrottle;
+
+        // Apply Virtual Mass Inertia Drive Ramping
+        int16_t motorSpeed = computeRampedMotorSpeed(targetSpeed, parkingBrake, gear, brakePct, eState);
 
         if (s_hw->drivetrainType == HardwareConfig::SKID_STEER) {
             if (eState == RcEngineSound::RUNNING) {
                 int16_t sens = s_hw->steeringSensitivity;
-                int16_t leftSpeed = motorThrottle + (steerVal * sens / 100);
-                int16_t rightSpeed = motorThrottle - (steerVal * sens / 100);
+                int16_t linearSpeed = abs(motorSpeed);
+                int16_t leftSpeed = linearSpeed + (steerVal * sens / 100);
+                int16_t rightSpeed = linearSpeed - (steerVal * sens / 100);
                 leftSpeed = constrain(leftSpeed, -100, 100);
                 rightSpeed = constrain(rightSpeed, -100, 100);
                 if (reverse) { leftSpeed = -leftSpeed; rightSpeed = -rightSpeed; }
@@ -743,6 +747,84 @@ private:
     static uint8_t  s_gearPrev;
     static bool     s_parkingBrakePrev;
 
+    // Drivetrain Virtual Mass Inertia Simulation
+    static float    s_currentMotorSpeed;
+    static uint32_t s_lastInertiaTime;
+    static bool     s_prevMotorMoving;
+
+    static int16_t computeRampedMotorSpeed(int16_t targetSpeed, bool parkingBrake, uint8_t gear, int16_t brakePct, RcEngineSound::EngineState eState) {
+        // Direct Mode Fallback: if profile is absent, engine config not defined, or inertia == 0
+        bool directMode = (!s_profile || !s_profile->config.engine.hasEngine || s_profile->config.engine.inertia == 0);
+        if (directMode) {
+            s_currentMotorSpeed = (float)targetSpeed;
+            return targetSpeed;
+        }
+
+        // Interlock: Park or Engine OFF instantly zeros speed
+        if (parkingBrake || eState == RcEngineSound::OFF) {
+            s_currentMotorSpeed = 0.0f;
+            s_lastInertiaTime = millis();
+            return 0;
+        }
+
+        uint32_t now = millis();
+        uint32_t dt = (s_lastInertiaTime == 0) ? 20 : (now - s_lastInertiaTime);
+        if (dt == 0) return (int16_t)roundf(s_currentMotorSpeed);
+        s_lastInertiaTime = now;
+
+        // Cap dt to avoid large jumps if loop stalled
+        if (dt > 100) dt = 100;
+
+        // Determine gear-dependent ramp interval
+        uint16_t rampInterval = (s_profile->config.engine.escRampTime > 0) ? s_profile->config.engine.escRampTime : 20;
+        if (s_profile->config.transmission.type != RcEngineSound::TRANS_NONE && gear < 6) {
+            uint8_t gRamp = s_profile->config.transmission.gearRampTimes[gear];
+            if (gRamp > 0) rampInterval = gRamp;
+        }
+
+        float timeFactor = (float)dt / (float)rampInterval;
+        float diff = (float)targetSpeed - s_currentMotorSpeed;
+
+        if (fabs(diff) > 0.01f) {
+            float step = 1.0f;
+            bool isAccelerating = (diff > 0 && s_currentMotorSpeed >= 0) || (diff < 0 && s_currentMotorSpeed <= 0);
+
+            if (isAccelerating) {
+                // Accelerating: ramp towards targetSpeed
+                float accStep = (float)s_profile->config.engine.acc;
+                if (accStep < 1.0f) accStep = 2.0f;
+                step = max(0.5f, accStep * timeFactor);
+            } else if (brakePct > 20 || (targetSpeed == 0 && brakePct > 0)) {
+                // Active braking: rapid deceleration proportional to brake input
+                float brakeDec = (float)s_profile->config.engine.brakeDec;
+                if (brakeDec < 1.0f) brakeDec = 10.0f;
+                float brakeScale = (float)brakePct / 100.0f;
+                step = max(1.0f, brakeDec * brakeScale * timeFactor);
+            } else {
+                // Coasting / decelerating on throttle release
+                float decStep = (float)s_profile->config.engine.dec;
+                if (decStep < 0.5f) decStep = 2.0f;
+                step = max(0.5f, decStep * timeFactor);
+            }
+
+            if (diff > 0) {
+                s_currentMotorSpeed = min((float)targetSpeed, s_currentMotorSpeed + step);
+            } else {
+                s_currentMotorSpeed = max((float)targetSpeed, s_currentMotorSpeed - step);
+            }
+        }
+
+        // Air brake trigger on coming to a complete stop from motion
+        if (s_prevMotorMoving && fabs(s_currentMotorSpeed) < 1.0f && targetSpeed == 0) {
+            if (s_engine) s_engine->triggerBrake(true);
+            s_prevMotorMoving = false;
+        } else if (fabs(s_currentMotorSpeed) > 10.0f) {
+            s_prevMotorMoving = true;
+        }
+
+        return (int16_t)roundf(s_currentMotorSpeed);
+    }
+
     static void applyLightsWithAutomation(uint8_t bits, bool turnL, bool turnR, bool decelBrake, bool manualBrake, uint8_t headlightMode, bool autoReverseLight, bool fogLamp, bool isLoco) {
         if (!s_hw) return;
         const HardwareConfig::Lights& L = s_hw->lights;
@@ -933,6 +1015,10 @@ bool     VehicleController::s_indicatorPrev = false;
 uint32_t VehicleController::s_lastIndicatorClick = 0;
 uint8_t  VehicleController::s_gearPrev = 1;
 bool     VehicleController::s_parkingBrakePrev = false;
+
+float    VehicleController::s_currentMotorSpeed = 0.0f;
+uint32_t VehicleController::s_lastInertiaTime = 0;
+bool     VehicleController::s_prevMotorMoving = false;
 
 int16_t  VehicleController::aux_hydraulic1 = 0;
 bool     VehicleController::bucket_rattle_trigger = false;

@@ -824,6 +824,92 @@ int main() {
 
     std::cout << "  PASS: Turn signal app-suppression and edge-latching verified." << std::endl;
 
+    std::cout << "[Host VC Test] Test 21: Virtual Mass Inertia Drivetrain Simulation & Direct Fallback..." << std::endl;
+    HardwareConfig hwConfig21;
+    hwConfig21.drivetrainType = HardwareConfig::ACKERMANN;
+    hwConfig21.driveMotor.type = HardwareConfig::DriveMotor::DRIVER;
+    hwConfig21.driveMotor.hardwareId = PinMapper::DRIVER_A;
+    hwConfig21.driveMotor.direction = HardwareConfig::DriveMotor::FORWARD;
+    hwConfig21.driveMotor.duty.min = 0;
+    hwConfig21.driveMotor.duty.max = 100;
+    hwConfig21.driveMotor.configured = true;
+
+    HardwareInit::init(hwConfig21);
+    VehicleController::init(&hwConfig21, &engine, &profile);
+    start_button.rk.state = true;
+
+    // Ensure engine is RUNNING
+    for (int i = 0; i < 200; i++) {
+        host_virtual_millis += 10;
+        engine.update(0);
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        VehicleController::update();
+    }
+    assert(engine.getState() == RcEngineSound::RUNNING);
+
+    // 21.1 Direct Mode Fallback: hasEngine = false -> instant 100% output
+    profile.config.engine.hasEngine = false;
+    gear_switch.rk.value = 0; // D
+    gas_pedal.rk.value = 100;
+    brake_pedal.rk.value = -100;
+    VehicleController::update();
+    assert(host_last_motor_speed == 100.0f && "Direct mode should immediately output 100% motor speed");
+
+    // 21.2 Direct Mode Fallback: inertia = 0 -> instant output
+    profile.config.engine.hasEngine = true;
+    profile.config.engine.inertia = 0;
+    gas_pedal.rk.value = -100;
+    VehicleController::update();
+    assert(host_last_motor_speed == 0.0f && "Direct mode should immediately output 0% motor speed on pedal release");
+
+    // 21.3 Virtual Mass Inertia Ramping: hasEngine = true, inertia = 50, acc = 5, dec = 2, ramp = 20ms
+    profile.config.engine.inertia = 50;
+    profile.config.engine.acc = 5;
+    profile.config.engine.dec = 2;
+    profile.config.engine.brakeDec = 15;
+    profile.config.engine.escRampTime = 20;
+
+    // Start from 0 speed in Drive
+    gas_pedal.rk.value = 100; // Request 100% throttle
+    host_virtual_millis += 20;
+    VehicleController::update();
+    float speedTick1 = host_last_motor_speed;
+    assert(speedTick1 > 0.0f && speedTick1 < 15.0f && "Motor speed should ramp gradually under mass inertia");
+
+    host_virtual_millis += 20;
+    VehicleController::update();
+    float speedTick2 = host_last_motor_speed;
+    assert(speedTick2 > speedTick1 && speedTick2 < 25.0f && "Motor speed should continue ramping smoothly");
+
+    // Ramp up over multiple ticks towards 100%
+    for (int t = 0; t < 50; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(fabs(host_last_motor_speed - 100.0f) < 1.0f && "Motor speed should reach 100% after ramp duration");
+
+    // 21.4 Coasting on throttle release (brake = -100 / 0%)
+    gas_pedal.rk.value = -100; // release throttle to idle
+    host_virtual_millis += 20;
+    VehicleController::update();
+    float coastSpeed1 = host_last_motor_speed;
+    assert(coastSpeed1 < 100.0f && coastSpeed1 > 90.0f && "Motor should coast down slowly on throttle release");
+
+    // 21.5 Active Braking: apply brake pedal
+    brake_pedal.rk.value = 100; // 100% brake
+    host_virtual_millis += 20;
+    VehicleController::update();
+    float brakeSpeed1 = host_last_motor_speed;
+    float brakeDelta = coastSpeed1 - brakeSpeed1;
+    assert(brakeDelta > 10.0f && "Brake pedal should decelerate significantly faster than coasting");
+
+    // 21.6 Park Lock Emergency Clamp
+    gear_switch.rk.value = 1; // P
+    VehicleController::update();
+    assert(host_last_motor_speed == 0.0f && "Park lock must instantly clamp ramped motor speed to 0");
+
+    std::cout << "  PASS: Virtual mass inertia ramping, coasting, braking, and direct fallback verified." << std::endl;
+
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;
 }

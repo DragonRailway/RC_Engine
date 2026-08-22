@@ -5,6 +5,7 @@
 #include <EasyMotor.h>
 #include <EasyServo.h>
 #include <EasyLED.h>
+#include <EasyLEDGroup.h>
 #include <RadioKitLib.h>
 #include <iostream>
 
@@ -84,7 +85,7 @@ void EasyLED::write(float percent) {
 
 void EasyLED::setDuty(uint32_t duty) { _duty = duty; }
 void EasyLED::update() {}
-void EasyLED::stop() { write(0.0f); }
+void EasyLED::stop() { _duty = 0; }
 void EasyLED::startBlink(uint32_t onMs, uint32_t offMs, float duty) { write(duty); }
 void EasyLED::stopBlink() { write(0.0f); }
 bool EasyLED::fadeTo(uint32_t target, uint32_t, EasyLED::Curve, void (*)(void*), void*) { _duty = target; return true; }
@@ -94,6 +95,43 @@ uint32_t EasyLED::getMaxDuty() const { return 1023; }
 
 bool EasyLED::isAttached() const { return true; }
 void EasyLED::onPinStolen(uint8_t) {}
+
+// Dummy EasyLEDGroup
+EasyLEDGroup::EasyLEDGroup() {}
+EasyLEDGroup::EasyLEDGroup(std::initializer_list<EasyLED*> members) : m_members(members) {}
+EasyLEDGroup::EasyLEDGroup(const std::vector<EasyLED*>& members) : m_members(members) {}
+void EasyLEDGroup::addMember(EasyLED* member) { m_members.push_back(member); }
+void EasyLEDGroup::clearMembers() { m_members.clear(); }
+void EasyLEDGroup::update() {
+    if (!m_running) return;
+    if (m_members.size() >= 2) {
+        float d0 = m_members[0]->getDutyPercent();
+        m_members[0]->write(d0 > 50.0f ? 0.0f : 100.0f);
+        m_members[1]->write(d0 > 50.0f ? 100.0f : 0.0f);
+    }
+}
+void EasyLEDGroup::stop() {
+    m_running = false;
+    for (auto* m : m_members) if (m) m->stop();
+}
+bool EasyLEDGroup::alternate(uint16_t) {
+    m_running = true;
+    if (m_members.size() >= 2) {
+        if (m_members[0]) m_members[0]->write(100.0f);
+        if (m_members[1]) m_members[1]->write(0.0f);
+    }
+    return true;
+}
+bool EasyLEDGroup::syncFlash(uint16_t, uint16_t) {
+    m_running = true;
+    for (auto* m : m_members) if (m) m->write(100.0f);
+    return true;
+}
+bool EasyLEDGroup::startPattern(const EasyLEDStep*, uint8_t, bool) { m_running = true; return true; }
+bool EasyLEDGroup::startPattern(const std::vector<EasyLEDStep>&, bool) { m_running = true; return true; }
+bool EasyLEDGroup::chase(uint16_t) { m_running = true; return true; }
+bool EasyLEDGroup::doubleStrobe(uint16_t, uint16_t) { m_running = true; return true; }
+void EasyLEDGroup::applyCurrentStep() {}
 
 // RadioKit Global Stubs
 bool host_radiokit_connected = false;

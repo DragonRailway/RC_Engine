@@ -1006,9 +1006,16 @@ private:
 
     static void parseEngine(JsonDocument& doc, RcEngineSound::Config& cfg) {
         JsonVariantConst eng = doc["engine"] | doc["ENGINE"];
+        if (eng.isNull()) {
+            cfg.engine.hasEngine = false;
+            return;
+        }
+        cfg.engine.hasEngine = true;
         cfg.engine.acc = eng["acceleration"] | eng["ACCELERATION"] | 2;
-        cfg.engine.dec = eng["deceleration"] | eng["DECELERATION"] | 1;
+        cfg.engine.dec = eng["deceleration"] | eng["DECELERATION"] | 2;
+        cfg.engine.brakeDec = eng["brake_deceleration"] | eng["BRAKE_DECELERATION"] | 10;
         cfg.engine.inertia = eng["inertia"] | eng["INERTIA"] | 10;
+        cfg.engine.escRampTime = eng["esc_ramp_time"] | eng["ESC_RAMP_TIME"] | 20;
         cfg.engine.maxRpm = 500;
         cfg.engine.minRpm = 0;
         cfg.engine.maxPitchFactor = eng["max_pitch_factor"] | eng["MAX_PITCH_FACTOR"] | 3.3f;

@@ -70,9 +70,12 @@ public:
         VehicleType type = VEHICLE_TRUCK;
 
         struct Engine {
+            bool hasEngine = false;
             uint8_t acc = 2;
             uint8_t dec = 2;
+            uint8_t brakeDec = 10;
             uint8_t inertia = 10;
+            uint16_t escRampTime = 20;
             uint16_t maxRpm = 500;
             uint16_t minRpm = 0;
             float maxPitchFactor = 3.3f;
