@@ -99,6 +99,8 @@ static void applyDeviceMetadata(const HardwareConfig& hw, const RcEngineSound::C
         RadioKit.setActivePage(0);   // page 0 "Truck"
     }
 
+    RadioKit.setConfig(RadioKit.config.name, RadioKit.config.description);
+
 #if defined(RK_ENABLE_BLE)
     NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
     if (pAdv) {
@@ -236,9 +238,9 @@ void setup() {
 
     Serial.println("\n── Starting RadioKit (BLE) ──");
     initRadioKit();
+    RadioKit.begin();
     applyDeviceMetadata(hwConfig, profile.config);
 
-    RadioKit.begin();
     RadioKit.startSerial(Serial);
     RadioKit.startBLE();
     RadioKit.enableFS();
