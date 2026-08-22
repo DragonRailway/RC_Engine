@@ -104,7 +104,9 @@ static void applyDeviceMetadata(const HardwareConfig& hw, const RcEngineSound::C
 #if defined(RK_ENABLE_BLE)
     NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
     if (pAdv) {
-        pAdv->setName(RadioKit.config.name);
+        NimBLEAdvertisementData scanData;
+        scanData.setName(RadioKit.config.name);
+        pAdv->setScanResponseData(scanData);
     }
 #endif
 

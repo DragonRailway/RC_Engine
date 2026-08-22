@@ -203,6 +203,7 @@ public:
     void triggerOthers(bool active);
 
     uint8_t getNextSample();
+    void renderBlock(int16_t* interleavedStereoBuffer, size_t frames);
 
     EngineState getState() const { return state; }
     uint16_t getRpm() const { return currentRpmFixed; }

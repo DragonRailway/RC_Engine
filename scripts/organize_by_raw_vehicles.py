@@ -4,8 +4,8 @@ import re
 import json
 
 SCRIPT_DIR = os.path.dirname(__file__)
-RAW_VEHICLES_DIR = os.path.join(SCRIPT_DIR, "..", "references", "raw_vehicles")
-RAW_SOUNDS_DIR = os.path.join(SCRIPT_DIR, "..", "references", "raw_sounds")
+RAW_VEHICLES_DIR = os.path.join(SCRIPT_DIR, "..", "sounds", "raw_vehicles")
+RAW_SOUNDS_DIR = os.path.join(SCRIPT_DIR, "..", "sounds", "raw_sounds")
 VEHICLES_DIR = os.path.join(SCRIPT_DIR, "..", "configs", "vehicle_configs")
 PRESETS_DIR = os.path.join(VEHICLES_DIR, "common")
 GENERIC_DIR = os.path.join(SCRIPT_DIR, "..", "data", "generic")
@@ -59,6 +59,8 @@ def determine_slot_from_line(line, header_name):
         return "start"
     elif "idle" in h_lower or "idle" in line_lower:
         return "idle"
+    elif "revers" in h_lower or "revers" in line_lower:
+        return "reversing"
     elif "rev" in h_lower or "rev" in line_lower:
         return "rev"
     elif "knock" in h_lower or "knock" in line_lower:
@@ -77,22 +79,20 @@ def determine_slot_from_line(line, header_name):
         return "horn"
     elif "siren" in h_lower or "siren" in line_lower:
         return "siren"
-    elif "brake" in h_lower or "brake" in line_lower:
-        return "brake"
     elif "parking" in h_lower or "parking" in line_lower:
         return "parkingbrake"
+    elif "brake" in h_lower or "brake" in line_lower:
+        return "brake"
     elif "shift" in h_lower or "shift" in line_lower:
         return "shifting"
-    elif "revers" in h_lower or "revers" in line_lower:
-        return "reversing"
     elif "indicator" in h_lower or "indicator" in line_lower:
         return "indicator"
     elif "bell" in h_lower or "bell" in line_lower:
         return "bell"
-    elif "track" in h_lower or "rattle" in h_lower:
-        return "trackrattle"
     elif "bucket" in h_lower:
         return "bucketrattle"
+    elif "track" in h_lower or "rattle" in h_lower:
+        return "trackrattle"
     elif "hydraulic" in h_lower:
         return "hydraulicpump"
     elif "door" in h_lower:

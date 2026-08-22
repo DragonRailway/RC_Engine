@@ -92,8 +92,8 @@ static inline void initRadioKit() {
   truck_light.rk.itemCount = 8;
   start_button.rk.label = "start_button";
   start_button.setLabelHidden(true);
-  start_button.rk.onText = "START";
-  start_button.rk.offText = "STOP";
+  start_button.rk.onText = "STOP";
+  start_button.rk.offText = "START";
   start_button.rk.icon = "refresh-ccw";
   left_indicator.rk.label = "left_indicator";
   left_indicator.setLabelHidden(true);
@@ -145,7 +145,8 @@ static inline void initRadioKit() {
   engine_button.setPage(1);
   engine_button.rk.label = "engine_button";
   engine_button.setLabelHidden(true);
-  engine_button.rk.onText = "START";
+  engine_button.rk.onText = "STOP";
+  engine_button.rk.offText = "START";
   engine_button.rk.icon = "power";
   serial_monitor_2.setPage(1);
   serial_monitor_2.rk.label = "serial_monitor_2";

@@ -12,13 +12,15 @@
 #ifdef __cplusplus
 #include <algorithm>
 
+#include <type_traits>
+
 template<typename A, typename B>
-inline auto min(A a, B b) -> decltype(a < b ? a : b) {
+inline typename std::common_type<A, B>::type min(A a, B b) {
     return (a < b) ? a : b;
 }
 
 template<typename A, typename B>
-inline auto max(A a, B b) -> decltype(a > b ? a : b) {
+inline typename std::common_type<A, B>::type max(A a, B b) {
     return (a > b) ? a : b;
 }
 
@@ -68,9 +70,13 @@ extern DummySerial Serial;
 
 typedef uint32_t portMUX_TYPE;
 #define portMUX_INITIALIZER_UNLOCKED 0
-#define portENTER_CRITICAL(m) ((void)0)
-#define portEXIT_CRITICAL(m)  ((void)0)
-#define portENTER_CRITICAL_ISR(m) ((void)0)
-#define portEXIT_CRITICAL_ISR(m)  ((void)0)
+// Use compiler memory barriers to prevent GCC's tree-dse from eliminating
+// stores to member variables inside "critical sections" (e.g. renderBlock
+// write-back of state/startPos). Without these, -O1+ incorrectly treats
+// those stores as dead.
+#define portENTER_CRITICAL(m) do { __asm__ volatile("" ::: "memory"); } while(0)
+#define portEXIT_CRITICAL(m)  do { __asm__ volatile("" ::: "memory"); } while(0)
+#define portENTER_CRITICAL_ISR(m) do { __asm__ volatile("" ::: "memory"); } while(0)
+#define portEXIT_CRITICAL_ISR(m)  do { __asm__ volatile("" ::: "memory"); } while(0)
 
 #endif // ARDUINO_H_STUB

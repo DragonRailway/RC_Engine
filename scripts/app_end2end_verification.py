@@ -88,8 +88,8 @@ def main():
     time.sleep(0.3)
     http_put(f"/widgets/{W_BRAKE}", {"values": [60]}) # Brake Blend
     time.sleep(0.3)
-    http_put(f"/widgets/{W_BRAKE}", {"values": [0]})
-    http_put(f"/widgets/{W_GAS}", {"values": [0]})
+    http_put(f"/widgets/{W_BRAKE}", {"values": [-100]})
+    http_put(f"/widgets/{W_GAS}", {"values": [-100]})
     time.sleep(0.3)
 
     # Phase 4: Lights & Indicator Automation

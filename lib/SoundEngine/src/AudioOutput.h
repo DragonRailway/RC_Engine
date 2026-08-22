@@ -149,12 +149,7 @@ public:
                     buffer[i * 2 + 1] = val;
                 }
             } else {
-                for (int i = 0; i < BUFFER_SIZE; i++) {
-                    uint8_t sample = engine->getNextSample();
-                    int16_t val = (int16_t)(((int32_t)sample - 128) << 8);
-                    buffer[i * 2]     = val;
-                    buffer[i * 2 + 1] = val;
-                }
+                engine->renderBlock(buffer, BUFFER_SIZE);
             }
 
             int64_t t_gen = esp_timer_get_time();
@@ -169,11 +164,12 @@ public:
                 }
             }
 
-            // Scale buffer by ramp factor (0.0→1.0) instead of adding offset
-            // This prevents pops by fading from silence to full volume
-            float scale = currentOffset / 128.0f;
-            for (int i = 0; i < BUFFER_SIZE * 2; i++) {
-                buffer[i] = (int16_t)(buffer[i] * scale);
+            // Scale buffer by ramp factor (0.0→1.0) during fade-in to prevent pops
+            if (currentOffset < 128) {
+                float scale = currentOffset / 128.0f;
+                for (int i = 0; i < BUFFER_SIZE * 2; i++) {
+                    buffer[i] = (int16_t)(buffer[i] * scale);
+                }
             }
 
             size_t bytes_written;

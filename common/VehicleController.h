@@ -663,15 +663,25 @@ public:
                                  fogLamp,
                                  isLoco);   // gear R auto-lights the reversing lamp
 
-        // ── Indicator Click Sound ──
+        // ── Indicator Click Sound (Synchronized to Light Blink Cycle) ──
+        uint32_t now = millis();
         bool indicatorActive = hazardActive || turnSignalL || turnSignalR;
-        if (indicatorActive != s_indicatorPrev) {
-            s_engine->triggerIndicator(indicatorActive);
-            s_indicatorPrev = indicatorActive;
+        if (indicatorActive) {
+            uint16_t onMs = (s_hw && s_hw->lights.turnLight.intervalOn) ? s_hw->lights.turnLight.intervalOn : 500;
+            uint16_t offMs = (s_hw && s_hw->lights.turnLight.intervalOff) ? s_hw->lights.turnLight.intervalOff : 500;
+            uint32_t period = onMs + offMs;
+            if (period == 0) period = 1000;
+
+            if (!s_indicatorPrev || (now - s_lastIndicatorClick >= period)) {
+                s_engine->triggerIndicator(true);
+                s_lastIndicatorClick = now;
+            }
+        } else if (s_indicatorPrev) {
+            s_engine->triggerIndicator(false);
         }
+        s_indicatorPrev = indicatorActive;
 
         // ── Telemetry & Serial Debug Stream ──
-        uint32_t now = millis();
         if (now - s_lastTelemetry >= 1000) {
             s_lastTelemetry = now;
             updateTelemetry(motorSpeed, steerVal, throttlePct, gear, brakePressed, turnSignalL, turnSignalR, bits, batV);
@@ -729,6 +739,7 @@ private:
     static bool     s_cutoffLightResetDone;
     static bool     s_jakeBrakePrev;
     static bool     s_indicatorPrev;
+    static uint32_t s_lastIndicatorClick;
     static uint8_t  s_gearPrev;
     static bool     s_parkingBrakePrev;
 
@@ -919,6 +930,7 @@ bool     VehicleController::s_engineStartTogglePrev = false;
 bool     VehicleController::s_cutoffLightResetDone = false;
 bool     VehicleController::s_jakeBrakePrev = false;
 bool     VehicleController::s_indicatorPrev = false;
+uint32_t VehicleController::s_lastIndicatorClick = 0;
 uint8_t  VehicleController::s_gearPrev = 1;
 bool     VehicleController::s_parkingBrakePrev = false;
 

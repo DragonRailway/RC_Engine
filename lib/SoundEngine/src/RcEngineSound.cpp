@@ -42,40 +42,39 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     cfg = config;
 
     struct VoiceDef { bool pitchShifted; bool loop; bool oneShot; };
-    static const VoiceDef voiceDefs[SOUND_COUNT] = {
-        {true,  true,  false}, // IDLE
-        {true,  true,  false}, // REV
-        {false, false, false}, // START (handled separately)
-        {false, false, true},  // KNOCK
-        {false, true,  false}, // TURBO
-        {false, false, true},  // WASTEGATE
-        {false, true,  false}, // HORN
-        {false, true,  false}, // SIREN
-        {false, false, true},  // BRAKE
-        {true,  true,  false}, // JAKE_BRAKE
-        {false, true,  false}, // REVERSING
-        {false, false, true},  // PARKING_BRAKE
-        {false, false, true},  // SHIFTING
-        {false, true,  false}, // INDICATOR
-        {false, false, true},  // COUPLING
-        {true,  true,  false}, // FAN
-        {true,  true,  false}, // SUPERCHARGER
-        {false, false, true},  // UNCOUPLING
-        {false, true,  false}, // SOUND1
-        {false, true,  false}, // TIRE_SQUEAL
-        {true,  true,  false}, // HYDRAULIC_PUMP
-        {false, true,  false}, // HYDRAULIC_FLOW
-        {false, false, true},  // TRACK_RATTLE
-        {false, false, true},  // BUCKET_RATTLE
-        {false, true,  false}, // BELL
-        {false, false, true},  // DOOR
-        {false, true,  false}, // SCANNER
-        {false, true,  false}, // MUSIC
-        {false, true,  false}, // WHISTLE
-        {false, false, true},  // GUN
-        {false, true,  false}, // OUT_OF_FUEL
-        {false, true,  false}, // OTHERS
-    };
+    VoiceDef voiceDefs[SOUND_COUNT] = {};
+    voiceDefs[IDLE]           = {true,  true,  false};
+    voiceDefs[REV]            = {true,  true,  false};
+    voiceDefs[START]          = {false, false, false}; // Handled separately in state machine
+    voiceDefs[KNOCK]          = {false, false, true };
+    voiceDefs[TURBO]          = {true,  true,  false};
+    voiceDefs[WASTEGATE]      = {false, false, true };
+    voiceDefs[HORN]           = {false, true,  false};
+    voiceDefs[JAKE_BRAKE]     = {true,  true,  false};
+    voiceDefs[FAN]            = {true,  true,  false};
+    voiceDefs[SIREN]          = {false, true,  false};
+    voiceDefs[BRAKE]          = {false, false, true };
+    voiceDefs[PARKING_BRAKE]  = {false, false, true };
+    voiceDefs[SHIFTING]       = {false, false, true };
+    voiceDefs[REVERSING]      = {false, true,  false};
+    voiceDefs[INDICATOR]      = {false, false, true };
+    voiceDefs[COUPLING]       = {false, false, true };
+    voiceDefs[SUPERCHARGER]   = {true,  true,  false};
+    voiceDefs[UNCOUPLING]     = {false, false, true };
+    voiceDefs[SOUND1]         = {false, true,  false};
+    voiceDefs[TIRE_SQUEAL]    = {false, true,  false};
+    voiceDefs[HYDRAULIC_PUMP] = {true,  true,  false};
+    voiceDefs[HYDRAULIC_FLOW] = {false, true,  false};
+    voiceDefs[TRACK_RATTLE]   = {false, false, true };
+    voiceDefs[BUCKET_RATTLE]  = {false, false, true };
+    voiceDefs[BELL]           = {false, true,  false};
+    voiceDefs[DOOR]           = {false, false, true };
+    voiceDefs[SCANNER]        = {false, true,  false};
+    voiceDefs[MUSIC]          = {false, true,  false};
+    voiceDefs[WHISTLE]        = {false, true,  false};
+    voiceDefs[GUN]            = {false, false, true };
+    voiceDefs[OUT_OF_FUEL]    = {false, true,  false};
+    voiceDefs[OTHERS]         = {false, true,  false};
 
     for (int i = 0; i < SOUND_COUNT; i++) {
         voices[i].samples = sounds.slots[i].samples;
@@ -433,6 +432,21 @@ void RcEngineSound::update(int16_t throttle) {
         }
     } else if (state == OFF) {
         currentRpm = 0;
+        voices[IDLE].active = false;
+        voices[REV].active = false;
+        voices[KNOCK].active = false;
+        voices[TURBO].active = false;
+        voices[FAN].active = false;
+        voices[SUPERCHARGER].active = false;
+        voices[JAKE_BRAKE].active = false;
+        voices[WASTEGATE].active = false;
+        voices[TIRE_SQUEAL].active = false;
+        voices[HYDRAULIC_PUMP].active = false;
+        voices[HYDRAULIC_FLOW].active = false;
+        voices[TRACK_RATTLE].active = false;
+        voices[SHIFTING].active = false;
+        voices[BRAKE].active = false;
+        voices[PARKING_BRAKE].active = false;
     }
 
     // ── Update virtualSpeed for non-automatic transmissions ──
@@ -485,46 +499,53 @@ void RcEngineSound::update(int16_t throttle) {
     if (state == RUNNING && !engineMuted) {
         voices[IDLE].active = (sounds.slots[IDLE].samples && sounds.slots[IDLE].sampleCount > 0);
         voices[REV].active = (sounds.slots[REV].samples && sounds.slots[REV].sampleCount > 0);
-        if (currentRpmFixed <= cfg.engine.idleEndPoint) {
+        if (currentRpmFixed <= cfg.engine.revSwitchPoint) {
             idleProportion = 100;
-        } else if (currentRpmFixed >= cfg.engine.revSwitchPoint) {
+        } else if (currentRpmFixed >= cfg.engine.idleEndPoint) {
             idleProportion = 0;
         } else {
-            idleProportion = map(currentRpmFixed, cfg.engine.idleEndPoint, cfg.engine.revSwitchPoint, 100, 0);
+            idleProportion = map(currentRpmFixed, cfg.engine.revSwitchPoint, cfg.engine.idleEndPoint, 100, 0);
             idleProportion = constrain(idleProportion, 0, 100);
         }
     } else {
         voices[IDLE].active = false;
         voices[REV].active = false;
     }
-    // Scale idle/rev volumes with throttle input (reference parity)
-    // idleVol interpolates from idle (at 0% throttle) to idleMin (at 100% throttle)
-    int32_t idleVol = cfg.sound.idleMin + (int32_t)(cfg.sound.idle - cfg.sound.idleMin) * (100 - throttlePercent) / 100;
-    int32_t revVol = cfg.sound.revMin + (int32_t)(cfg.sound.rev - cfg.sound.revMin) * throttlePercent / 100;
-    voices[IDLE].volume = engineMuted ? 0 : (uint8_t)(idleVol * idleProportion / 100 * cfg.sound.fullThrottle / 100);
-    voices[REV].volume = engineMuted ? 0 : (uint8_t)(revVol * (100 - idleProportion) / 100 * cfg.sound.fullThrottle / 100);
+    // Scale idle/rev volumes with throttle input (reference dynamic scaling)
+    int32_t minEngineScale = (cfg.sound.idleMin > 0) ? cfg.sound.idleMin : 50;
+    int32_t maxEngineScale = (cfg.sound.fullThrottle > 0) ? cfg.sound.fullThrottle : 150;
+    int32_t throttleVol = map(throttlePercent, 0, 100, minEngineScale, maxEngineScale);
+    voices[IDLE].volume = engineMuted ? 0 : (uint8_t)constrain((int32_t)cfg.sound.idle * throttleVol / 100 * idleProportion / 100, 0, 255);
+    voices[REV].volume  = engineMuted ? 0 : (uint8_t)constrain((int32_t)cfg.sound.rev  * throttleVol / 100 * (100 - idleProportion) / 100, 0, 255);
 
-    // ── Turbo volume: RPM-dependent with min volume ──
-    if (!engineMuted) {
+    // ── Turbo volume & active state ──
+    if (state == RUNNING && !engineMuted && sounds.slots[TURBO].samples && cfg.sound.turbo > 0) {
+        voices[TURBO].active = true;
         int32_t turboScale = map(currentRpmFixed, 0, cfg.engine.maxRpm, 0, 100);
         voices[TURBO].volume = (uint8_t)(cfg.sound.turboMin + (int32_t)(cfg.sound.turbo - cfg.sound.turboMin) * constrain(turboScale, 0, 100) / 100);
     } else {
+        voices[TURBO].active = false;
         voices[TURBO].volume = 0;
     }
 
-    // ── Fan volume: RPM-dependent ──
-    if (!engineMuted) {
+    // ── Fan volume & active state ──
+    if (state == RUNNING && !engineMuted && sounds.slots[FAN].samples && cfg.sound.fan > 0) {
+        voices[FAN].active = true;
         int32_t fanScale = map(currentRpmFixed, 0, cfg.engine.maxRpm, 0, 100);
         voices[FAN].volume = (uint8_t)(cfg.sound.fan * constrain(fanScale, 0, 100) / 100);
     } else {
+        voices[FAN].active = false;
         voices[FAN].volume = 0;
     }
 
     // ── Supercharger: RPM-dependent with start point and min volume ──
-    if (!engineMuted && currentRpmFixed > (uint16_t)(cfg.engine.maxRpm * cfg.engine.superchargerStartPoint / 100)) {
+    if (state == RUNNING && !engineMuted && sounds.slots[SUPERCHARGER].samples && cfg.sound.supercharger > 0 &&
+        currentRpmFixed > (uint16_t)(cfg.engine.maxRpm * cfg.engine.superchargerStartPoint / 100)) {
+        voices[SUPERCHARGER].active = true;
         int32_t scScale = map(currentRpmFixed, cfg.engine.maxRpm * cfg.engine.superchargerStartPoint / 100, cfg.engine.maxRpm, 0, 100);
         voices[SUPERCHARGER].volume = (uint8_t)(cfg.sound.superchargerMin + (int32_t)(cfg.sound.supercharger - cfg.sound.superchargerMin) * constrain(scScale, 0, 100) / 100);
     } else {
+        voices[SUPERCHARGER].active = false;
         voices[SUPERCHARGER].volume = 0;
     }
 
@@ -593,44 +614,114 @@ void RcEngineSound::update(int16_t throttle) {
 }
 
 // ─── Multi-Voice Mixer with Fractional Step Interpolation ───────────────────
-uint8_t RcEngineSound::getNextSample() {
-    int32_t engineMix = 0;
-    int32_t effectMix = 0;
+void RcEngineSound::renderBlock(int16_t* interleavedStereoBuffer, size_t frames) {
+    if (!interleavedStereoBuffer || frames == 0) return;
 
+    // Snapshot voices and state under single critical section
     VoiceState snapshot[SOUND_COUNT];
+    uint32_t currentStartPos = startPos;
+    EngineState currentState = state;
+    float currentPitchFactor = pitchFactor;
+    uint8_t currentAttenuator = attenuator;
+
     portENTER_CRITICAL(&voiceMutex);
     memcpy(snapshot, voices, sizeof(voices));
     portEXIT_CRITICAL(&voiceMutex);
 
-    float engineStep = pitchFactor;
-    if (state == STARTING) engineStep = 1.0f;
-    if (state == PARKING_BRAKE || state == OFF) engineStep = 0.0f;
+    float engineStep = currentPitchFactor;
+    if (currentState == STARTING) engineStep = 1.0f;
+    if (currentState == PARKING_BRAKE || currentState == OFF) engineStep = 0.0f;
 
-    for (int i = 0; i < SOUND_COUNT; i++) {
-        VoiceState& v = snapshot[i];
-        if (!v.active || !v.samples || v.count == 0) continue;
+    for (size_t f = 0; f < frames; f++) {
+        int32_t engineMix = 0;
+        int32_t effectMix = 0;
 
-        float step = v.pitchShifted ? engineStep : 1.0f;
-        if (state == PARKING_BRAKE && i != PARKING_BRAKE) continue;
+        for (int i = 0; i < SOUND_COUNT; i++) {
+            VoiceState& v = snapshot[i];
+            if (!v.active || !v.samples || v.count == 0) continue;
+            if (currentState == PARKING_BRAKE && i != PARKING_BRAKE) continue;
+            if (currentState == OFF) {
+                // When engine is OFF, only standalone user effects can play
+                if (i != HORN && i != SIREN && i != INDICATOR && i != BELL && 
+                    i != DOOR && i != SCANNER && i != MUSIC && i != WHISTLE && 
+                    i != GUN && i != COUPLING && i != UNCOUPLING) {
+                    continue;
+                }
+            }
 
-        int8_t sample = readInterpolated(v.samples, v.count, v.position);
-        int32_t scaled = (int32_t)sample * v.volume / 100;
+            float step = v.pitchShifted ? engineStep : 1.0f;
+            int8_t rawSample = readInterpolated(v.samples, v.count, v.position);
+            int32_t scaled = (int32_t)rawSample * v.volume / 100;
 
-        if (state == STOPPING && v.pitchShifted) {
-            scaled = scaled / attenuator;
+            if (currentState == STOPPING && v.pitchShifted && currentAttenuator > 0) {
+                scaled = scaled / currentAttenuator;
+            }
+
+            v.step = step;
+            advanceVoice(v);
+
+            // Group-specific gain multipliers matching reference project:
+            if (v.pitchShifted) {
+                if (i == TURBO || i == FAN || i == SUPERCHARGER) {
+                    engineMix += scaled * 2 / 10;
+                } else if (i == HYDRAULIC_PUMP || i == TRACK_RATTLE) {
+                    engineMix += scaled;
+                } else {
+                    // IDLE, REV, JAKE_BRAKE
+                    engineMix += scaled * 8 / 10;
+                }
+            } else {
+                if (i == HORN || i == SIREN) {
+                    effectMix += scaled * 8 / 10;
+                } else if (i == KNOCK || i == WASTEGATE || i == BRAKE || 
+                           i == PARKING_BRAKE || i == SHIFTING || i == REVERSING || 
+                           i == COUPLING || i == UNCOUPLING) {
+                    effectMix += scaled * 2 / 10;
+                } else if (i == INDICATOR) {
+                    effectMix += scaled / 10;
+                } else {
+                    // SOUND1, TIRE_SQUEAL, HYDRAULIC_FLOW, BUCKET_RATTLE, BELL, DOOR, SCANNER, MUSIC, WHISTLE, GUN, OUT_OF_FUEL, OTHERS
+                    effectMix += scaled;
+                }
+            }
         }
 
-        v.step = step;
-        advanceVoice(v);
-
-        if (v.pitchShifted) {
-            engineMix += scaled;
-        } else {
-            effectMix += scaled;
+        // Start sound processing
+        if (currentState == STARTING && sounds.slots[START].samples && sounds.slots[START].sampleCount > 0) {
+            if (currentStartPos < sounds.slots[START].sampleCount) {
+                int8_t startSample = sounds.slots[START].samples[currentStartPos];
+                int32_t scaled = (int32_t)startSample * cfg.sound.start / 100 * 8 / 10;
+                engineMix += scaled;
+                currentStartPos++;
+                if (currentStartPos >= sounds.slots[START].sampleCount) {
+                    currentState = RUNNING;
+                    currentStartPos = 0;
+                    snapshot[IDLE].position = 0;
+                    snapshot[REV].position = 0;
+                    snapshot[TURBO].position = 0;
+                    snapshot[KNOCK].position = 0;
+                    lastKnockTriggerSample = 0;
+                    curKnockCylinder = 1;
+                    if (sounds.slots[BRAKE].samples && sounds.slots[BRAKE].sampleCount > 0 && cfg.sound.brake > 0) {
+                        snapshot[BRAKE].active = true;
+                        snapshot[BRAKE].position = 0;
+                    }
+                }
+            }
         }
+
+        // Voice mix weights
+        int32_t mixed = (engineMix * cfg.sound.engineMixWeight / 100) + (effectMix * cfg.sound.effectMixWeight / 100);
+
+        // Apply master volume and scale up to 16-bit signed PCM (-32768..32767)
+        int32_t out16 = (mixed * cfg.sound.master / 100) << 8;
+        int16_t sample16 = (int16_t)constrain(out16, -32768, 32767);
+
+        interleavedStereoBuffer[f * 2]     = sample16;
+        interleavedStereoBuffer[f * 2 + 1] = sample16;
     }
 
-    // Batch write back position and active flags under a single critical section
+    // Write back voice states, startPos, and state under single critical section
     portENTER_CRITICAL(&voiceMutex);
     for (int i = 0; i < SOUND_COUNT; i++) {
         if (snapshot[i].samples && snapshot[i].count > 0) {
@@ -638,34 +729,14 @@ uint8_t RcEngineSound::getNextSample() {
             voices[i].active = snapshot[i].active;
         }
     }
+    startPos = currentStartPos;
+    state = currentState;
     portEXIT_CRITICAL(&voiceMutex);
+}
 
-    // ── Start sound ──
-    if (state == STARTING && sounds.slots[START].samples && sounds.slots[START].sampleCount > 0) {
-        uint32_t pos = (uint32_t)startPos;
-        if (pos < sounds.slots[START].sampleCount) {
-            int8_t sample = sounds.slots[START].samples[pos];
-            int32_t scaled = (int32_t)sample * cfg.sound.start / 100;
-            engineMix += scaled;
-            startPos++;
-            if (startPos >= sounds.slots[START].sampleCount) {
-                state = RUNNING;
-                startPos = 0;
-                voices[IDLE].position = 0;
-                voices[REV].position = 0;
-                voices[TURBO].position = 0;
-                voices[KNOCK].position = 0;
-                lastKnockTriggerSample = 0;
-                curKnockCylinder = 1;
-            }
-        }
-    }
-
-    // ── Apply voice mixing weights ──
-    int32_t mixed = (engineMix * cfg.sound.engineMixWeight / 100) + (effectMix * cfg.sound.effectMixWeight / 100);
-
-    // ── Final mix: apply master volume, add DC offset ──
-    mixed = (mixed * cfg.sound.master / 100) + 128;
-
-    return (uint8_t)constrain(mixed, 0, 255);
+uint8_t RcEngineSound::getNextSample() {
+    int16_t temp[2];
+    renderBlock(temp, 1);
+    int32_t u8 = (temp[0] >> 8) + 128;
+    return (uint8_t)constrain(u8, 0, 255);
 }

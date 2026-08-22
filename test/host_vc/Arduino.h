@@ -140,12 +140,13 @@ class DummySerial : public Stream {};
 
 extern DummySerial Serial;
 
-// FreeRTOS MUX Stubs
+// FreeRTOS MUX and Task Stubs
 typedef uint32_t portMUX_TYPE;
 #define portMUX_INITIALIZER_UNLOCKED 0
-inline void portENTER_CRITICAL(portMUX_TYPE*) {}
-inline void portEXIT_CRITICAL(portMUX_TYPE*) {}
+#define portENTER_CRITICAL(m) do { __asm__ volatile("" ::: "memory"); } while(0)
+#define portEXIT_CRITICAL(m)  do { __asm__ volatile("" ::: "memory"); } while(0)
 typedef void* SemaphoreHandle_t;
+typedef void* TaskHandle_t;
 inline SemaphoreHandle_t xSemaphoreCreateMutex() { return (SemaphoreHandle_t)1; }
 
 #endif // MOCK_ARDUINO_VC_H

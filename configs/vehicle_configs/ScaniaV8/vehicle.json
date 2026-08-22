@@ -11,7 +11,7 @@
     "idle_rpm": 10,
     "clutch_rpm": 100,
     "rev_switch_point": 50,
-    "idle_end_point": 40,
+    "idle_end_point": 300,
     "diesel_knock_interval": 8,
     "diesel_knock_start_point": 30,
     "jakebrake_min_rpm": 60,

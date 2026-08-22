@@ -19,11 +19,11 @@ static void initSyntheticVoiceSlot(SoundSlot& slot, int frequency, int lengthSam
     }
 }
 
-static float calculateZCR(const std::vector<uint8_t>& samples, size_t startIdx, size_t count) {
+static float calculateZCR(const std::vector<int16_t>& samples, size_t startIdx, size_t count) {
     if (count < 2 || startIdx + count > samples.size()) return 0.0f;
     int crossings = 0;
     for (size_t i = startIdx + 1; i < startIdx + count; i++) {
-        if ((samples[i-1] >= 128 && samples[i] < 128) || (samples[i-1] < 128 && samples[i] >= 128)) {
+        if ((samples[i-1] >= 0 && samples[i] < 0) || (samples[i-1] < 0 && samples[i] >= 0)) {
             crossings++;
         }
     }
@@ -81,40 +81,40 @@ int main(int argc, char** argv) {
             host_virtual_millis += 10;
             engine.update(0);
         }
-        uint8_t u8 = engine.getNextSample();
-        int16_t pcm16 = ((int16_t)u8 - 128) * 256;
-        fullStreamPCM16.push_back(pcm16);
+        int16_t block[2];
+        engine.renderBlock(block, 1);
+        fullStreamPCM16.push_back(block[0]);
         if (engine.getState() == RcEngineSound::RUNNING) break;
     }
 
     // Phase 2: Idle (1 second = 22050 samples)
-    std::vector<uint8_t> idleBuffer;
+    std::vector<int16_t> idleBuffer;
     for (int i = 0; i < 22050; i++) {
         if (i % 22 == 0) {
             host_virtual_millis += 10;
             engine.update(0);
         }
-        uint8_t u8 = engine.getNextSample();
-        idleBuffer.push_back(u8);
-        int16_t pcm16 = ((int16_t)u8 - 128) * 256;
-        fullStreamPCM16.push_back(pcm16);
+        int16_t block[2];
+        engine.renderBlock(block, 1);
+        idleBuffer.push_back(block[0]);
+        fullStreamPCM16.push_back(block[0]);
     }
     float idleZCR = calculateZCR(idleBuffer, 0, idleBuffer.size());
     std::cout << "[Host DSP Harness] Idle ZCR (low RPM=" << engine.getRpm() << ", pitch=" << engine.getPitchFactor() << "): " << idleZCR << std::endl;
 
     // Phase 3: Rev Ramp Up (2 seconds = 44100 samples)
-    std::vector<uint8_t> revBuffer;
+    std::vector<int16_t> revBuffer;
     for (int i = 0; i < 44100; i++) {
         if (i % 22 == 0) {
             host_virtual_millis += 10;
             engine.update(100);
         }
-        uint8_t u8 = engine.getNextSample();
+        int16_t block[2];
+        engine.renderBlock(block, 1);
         if (i >= 22050) {
-            revBuffer.push_back(u8);
+            revBuffer.push_back(block[0]);
         }
-        int16_t pcm16 = ((int16_t)u8 - 128) * 256;
-        fullStreamPCM16.push_back(pcm16);
+        fullStreamPCM16.push_back(block[0]);
     }
     float revZCR = calculateZCR(revBuffer, 0, revBuffer.size());
     std::cout << "[Host DSP Harness] Rev ZCR (high RPM=" << engine.getRpm() << ", pitch=" << engine.getPitchFactor() << "): " << revZCR << std::endl;
@@ -126,9 +126,9 @@ int main(int argc, char** argv) {
             host_virtual_millis += 10;
             engine.update(100);
         }
-        uint8_t u8 = engine.getNextSample();
-        int16_t pcm16 = ((int16_t)u8 - 128) * 256;
-        fullStreamPCM16.push_back(pcm16);
+        int16_t block[2];
+        engine.renderBlock(block, 1);
+        fullStreamPCM16.push_back(block[0]);
     }
     engine.triggerHorn(false);
 
@@ -139,9 +139,9 @@ int main(int argc, char** argv) {
             host_virtual_millis += 10;
             engine.update(0);
         }
-        uint8_t u8 = engine.getNextSample();
-        int16_t pcm16 = ((int16_t)u8 - 128) * 256;
-        fullStreamPCM16.push_back(pcm16);
+        int16_t block[2];
+        engine.renderBlock(block, 1);
+        fullStreamPCM16.push_back(block[0]);
     }
 
     assert(revZCR > idleZCR && "Pitch scaling failed: Rev ZCR should be higher than Idle ZCR!");

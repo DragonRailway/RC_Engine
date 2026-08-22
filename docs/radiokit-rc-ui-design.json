@@ -240,8 +240,8 @@
           "haptic": true,
           "properties": {
             "variant": "toggle",
-            "onText": "START",
-            "offText": "STOP",
+            "onText": "STOP",
+            "offText": "START",
             "onIcon": "refresh-ccw",
             "offIcon": "refresh-ccw",
             "autoCenter": [
@@ -632,8 +632,8 @@
           "haptic": true,
           "properties": {
             "variant": "toggle",
-            "onText": "START",
-            "offText": "",
+            "onText": "STOP",
+            "offText": "START",
             "onIcon": "power",
             "offIcon": null,
             "autoCenter": [
