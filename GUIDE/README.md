@@ -14,9 +14,8 @@ default, allowed values, and notes.
 ## Vehicle config
 
 - [Vehicle Config Reference](VEHICLE_CONFIG.md) — the `vehicle.json` schema
-  (engine, transmission, sound volumes, features). Currently a stub; the
-  authoritative sources are `common/ConfigParser.h` and the shipped configs
-  under `configs/vehicle_configs/`.
+  (identity, engine physics, transmission, sound volumes, features, loop points,
+  and sample resolution hierarchy) with worked examples.
 
 ## Where configs live
 
