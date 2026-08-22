@@ -191,6 +191,9 @@ void setup() {
     // chunks. Enlarge before begin() so serial protocol frames arrive intact.
     Serial.setRxBufferSize(8192);
     Serial.begin(2000000);
+#if ARDUINO_USB_CDC_ON_BOOT || ARDUINO_USB_MODE
+    Serial.setTxTimeoutMs(0);
+#endif
     delay(1000);
 
     Serial.println("\n=== RC Brain - Unified Vehicle Controller ===\n");
