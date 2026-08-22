@@ -142,6 +142,7 @@ public:
             TransmissionType type = TRANS_NONE;
             uint8_t numberOfGears = 3;
             uint8_t gearRampTimes[6] = {20, 50, 75, 75, 75, 75};
+            uint8_t torqueConverterSlip = 100;
         } transmission;
 
         struct Features {

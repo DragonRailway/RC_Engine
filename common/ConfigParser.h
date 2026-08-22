@@ -1104,6 +1104,7 @@ private:
         }
 
         cfg.transmission.numberOfGears = tr["number_of_gears"] | tr["NUMBER_OF_GEARS"] | 3;
+        cfg.transmission.torqueConverterSlip = tr["torque_converter_slip"] | tr["TORQUE_CONVERTER_SLIP"] | 100;
 
         JsonArrayConst rampTimes = tr["gear_ramp_times"] | tr["GEAR_RAMP_TIMES"];
         if (rampTimes) {

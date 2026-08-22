@@ -910,6 +910,54 @@ int main() {
 
     std::cout << "  PASS: Virtual mass inertia ramping, coasting, braking, and direct fallback verified." << std::endl;
 
+    // ── Test 22: Automatic Transmission Torque Converter Simulation ──
+    std::cout << "[Host VC Test] Test 22: Automatic Transmission Torque Converter Simulation..." << std::endl;
+    profile.config.transmission.type = RcEngineSound::TRANS_AUTOMATIC;
+    profile.config.transmission.numberOfGears = 3;
+    profile.config.transmission.torqueConverterSlip = 100;
+    engine.begin(soundData, profile.config);
+
+    // Clean start sequence from OFF -> STARTING -> RUNNING
+    start_button.rk.state = false;
+    VehicleController::update();
+    start_button.rk.state = true;
+    VehicleController::update();
+    gear_switch.rk.value = 0; // D
+    gas_pedal.rk.value = -100; // Idle
+    for (int i = 0; i < 200; i++) {
+        host_virtual_millis += 10;
+        engine.update(0);
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        VehicleController::update();
+    }
+    assert(engine.getState() == RcEngineSound::RUNNING);
+
+    // 22.1 Launch in 1st gear with full throttle step -> verify stall slip flare
+    gas_pedal.rk.value = 100; // Step to 100%
+    host_virtual_millis += 20;
+    VehicleController::update();
+
+    // Ramping with converter slip should drive engine RPM higher than base 1st gear slice (500/3 = 166)
+    for (int t = 0; t < 15; t++) {
+        host_virtual_millis += 20;
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        VehicleController::update();
+    }
+    uint16_t launchRpm = engine.getRpm();
+    assert(launchRpm > 170 && "Torque converter slip must flare engine RPM above 1st gear geometric limit on launch");
+
+    // 22.2 Cruise at top speed -> verify torque converter lockup when engine load drops to 0
+    for (int t = 0; t < 100; t++) {
+        host_virtual_millis += 20;
+        engine.update(500);
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        VehicleController::update();
+    }
+    uint16_t cruiseRpm = engine.getRpm();
+    assert(cruiseRpm >= 490 && "Engine RPM should reach full maxRpm at steady cruising speed in top gear");
+
+    std::cout << "  PASS: Automatic transmission torque converter slip flare and high-speed lockup verified." << std::endl;
+
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;
 }

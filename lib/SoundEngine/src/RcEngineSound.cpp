@@ -40,6 +40,13 @@ RcEngineSound::~RcEngineSound() {
 void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     sounds = soundData;
     cfg = config;
+    currentRpm = 0;
+    currentRpmFixed = 0;
+    virtualSpeed = 0;
+    selectedGear = 0;
+    lastGear = 0;
+    startPos = 0;
+    state = OFF;
 
     struct VoiceDef { bool pitchShifted; bool loop; bool oneShot; };
     VoiceDef voiceDefs[SOUND_COUNT] = {};
@@ -299,7 +306,12 @@ void RcEngineSound::update(int16_t throttle) {
     // ── Crawler Mode Detection ──
     crawlerMode = (cfg.sound.master <= cfg.sound.crawlerModeThreshold);
 
-    // ── Automatic Transmission Simulation ──
+    // ── Engine Load Calculation (used for torque converter slip & dynamic sounds) ──
+    int32_t engineLoad = targetRpm - currentRpm;
+    if (engineLoad < 0) engineLoad = 0;
+    if (engineLoad > 180) engineLoad = 180;
+
+    // ── Automatic Transmission Simulation with Torque Converter Slip ──
     int32_t effectiveTarget = targetRpm;
     if (cfg.transmission.type == TRANS_AUTOMATIC && state == RUNNING) {
         int32_t gearSize = cfg.engine.maxRpm / cfg.transmission.numberOfGears;
@@ -317,7 +329,19 @@ void RcEngineSound::update(int16_t throttle) {
             int32_t throttleInGear = targetRpm - gearBase;
             if (throttleInGear < 0) throttleInGear = 0;
             if (throttleInGear > gearSize) throttleInGear = gearSize;
-            effectiveTarget = (targetRpm < gearBase) ? targetRpm : gearBase + throttleInGear;
+
+            int32_t converterSlip = 0;
+            if (cfg.transmission.torqueConverterSlip > 0) {
+                if (selectedGear == 0) {
+                    // 1st / launch gear: 2x slip multiplier simulating stall speed & hydraulic slip
+                    converterSlip = (engineLoad * (int32_t)cfg.transmission.torqueConverterSlip / 100) * 2;
+                } else {
+                    converterSlip = (engineLoad * (int32_t)cfg.transmission.torqueConverterSlip / 100);
+                }
+            }
+
+            int32_t baseGearTarget = (targetRpm < gearBase) ? targetRpm : (gearBase + throttleInGear);
+            effectiveTarget = min((int32_t)cfg.engine.maxRpm, baseGearTarget + converterSlip);
         }
     }
 
