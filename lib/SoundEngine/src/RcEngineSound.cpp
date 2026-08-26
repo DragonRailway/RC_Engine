@@ -152,6 +152,7 @@ void RcEngineSound::startEngine() {
 void RcEngineSound::stopEngine() {
     if (state == RUNNING) {
         engineStopRequested = true;
+        printf("[DEBUG] stopEngine() called while RUNNING at millis=%lu\n", millis());
     }
 }
 
@@ -643,13 +644,17 @@ void RcEngineSound::renderBlock(int16_t* interleavedStereoBuffer, size_t frames)
 
     // Snapshot voices and state under single critical section
     VoiceState snapshot[SOUND_COUNT];
-    uint32_t currentStartPos = startPos;
-    EngineState currentState = state;
-    float currentPitchFactor = pitchFactor;
-    uint8_t currentAttenuator = attenuator;
+    uint32_t currentStartPos;
+    EngineState currentState;
+    float currentPitchFactor;
+    uint8_t currentAttenuator;
 
     portENTER_CRITICAL(&voiceMutex);
     memcpy(snapshot, voices, sizeof(voices));
+    currentStartPos = startPos;
+    currentState = state;
+    currentPitchFactor = pitchFactor;
+    currentAttenuator = attenuator;
     portEXIT_CRITICAL(&voiceMutex);
 
     float engineStep = currentPitchFactor;
@@ -711,12 +716,14 @@ void RcEngineSound::renderBlock(int16_t* interleavedStereoBuffer, size_t frames)
         }
 
         // Start sound processing
-        if (currentState == STARTING && sounds.slots[START].samples && sounds.slots[START].sampleCount > 0) {
-            if (currentStartPos < sounds.slots[START].sampleCount) {
-                int8_t startSample = sounds.slots[START].samples[currentStartPos];
-                int32_t scaled = (int32_t)startSample * cfg.sound.start / 100 * 8 / 10;
-                engineMix += scaled;
-                currentStartPos++;
+        if (currentState == STARTING) {
+            if (sounds.slots[START].samples && sounds.slots[START].sampleCount > 0) {
+                if (currentStartPos < sounds.slots[START].sampleCount) {
+                    int8_t startSample = sounds.slots[START].samples[currentStartPos];
+                    int32_t scaled = (int32_t)startSample * cfg.sound.start / 100 * 8 / 10;
+                    engineMix += scaled;
+                    currentStartPos++;
+                }
                 if (currentStartPos >= sounds.slots[START].sampleCount) {
                     currentState = RUNNING;
                     currentStartPos = 0;
@@ -731,6 +738,9 @@ void RcEngineSound::renderBlock(int16_t* interleavedStereoBuffer, size_t frames)
                         snapshot[BRAKE].position = 0;
                     }
                 }
+            } else {
+                currentState = RUNNING;
+                currentStartPos = 0;
             }
         }
 

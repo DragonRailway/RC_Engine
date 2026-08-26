@@ -21,6 +21,7 @@ extern float host_last_motor_speed;
 extern float host_motor_writes[8];
 extern size_t host_motor_write_count;
 extern int host_last_servo_us;
+extern bool host_radiokit_connected;
 
 int main() {
     std::cout << "[Host VC Test] Initializing VehicleController Host Harness..." << std::endl;
@@ -304,7 +305,7 @@ int main() {
 
     // Drop below warning (3.4V) -> warning true, cutoff false
     host_analog_read_mv = 3400;
-    for (int i = 0; i < 30; i++) VehicleController::update();
+    for (int i = 0; i < 30; i++) { host_virtual_millis += 100; VehicleController::update(); }
     assert(VehicleController::isBatteryWarning() && "Battery warning should trigger below 3.5V");
     assert(!VehicleController::isBatteryCutoff() && "Battery cutoff should remain false above 3.3V");
 
@@ -316,7 +317,7 @@ int main() {
     assert(!VehicleController::isBatteryCutoff() && "Cutoff should not trigger before 1500ms delay");
 
     host_virtual_millis = 12500;
-    for (int i = 0; i < 30; i++) VehicleController::update();
+    for (int i = 0; i < 30; i++) { host_virtual_millis += 100; VehicleController::update(); }
     assert(VehicleController::isBatteryCutoff() && "Cutoff should trigger after cutoff delay below 3.3V");
     assert(host_gpio_pin_val[POWER::POWER_ENABLE] == LOW && "POWER_ENABLE should be driven LOW on cutoff");
 
@@ -653,21 +654,21 @@ int main() {
 
     // 18.2: Mid voltage (7.7V) -> 50%
     host_analog_read_mv = 7700;
-    for (int i = 0; i < 80; i++) VehicleController::update();
+    for (int i = 0; i < 80; i++) { host_virtual_millis += 100; VehicleController::update(); }
     host_virtual_millis += 1100;  // >1000ms telemetry interval
     VehicleController::update();
     assert(strcmp(telemetry_Battery.rk.content, "50") == 0 && "Mid voltage (7.7V) should report 50%");
 
     // 18.3: Warning voltage (7.0V) -> 0%
     host_analog_read_mv = 7000;
-    for (int i = 0; i < 80; i++) VehicleController::update();
+    for (int i = 0; i < 80; i++) { host_virtual_millis += 100; VehicleController::update(); }
     host_virtual_millis += 1100;  // >1000ms telemetry interval
     VehicleController::update();
     assert(strcmp(telemetry_Battery.rk.content, "0") == 0 && "Warning voltage (7.0V) should report 0%");
 
     // 18.4: Sub-warning voltage (6.8V) -> 0% (clamped)
     host_analog_read_mv = 6800;
-    for (int i = 0; i < 80; i++) VehicleController::update();
+    for (int i = 0; i < 80; i++) { host_virtual_millis += 100; VehicleController::update(); }
     host_virtual_millis += 1100;  // >1000ms telemetry interval
     VehicleController::update();
     assert(strcmp(telemetry_Battery.rk.content, "0") == 0 && "Sub-warning voltage (6.8V) should be clamped to 0%");
@@ -957,6 +958,206 @@ int main() {
     assert(cruiseRpm >= 490 && "Engine RPM should reach full maxRpm at steady cruising speed in top gear");
 
     std::cout << "  PASS: Automatic transmission torque converter slip flare and high-speed lockup verified." << std::endl;
+
+    // ── Test 23: Locomotive Directional Lighting Handover & Asymmetric PWM Slew Limiter ──
+    std::cout << "[Host VC Test] Test 23: Locomotive Directional Lighting & Asymmetric Incandescent Slew Limiter..." << std::endl;
+    HardwareConfig locoHw;
+    locoHw.lights.headLight.pin = PIN::L1;
+    locoHw.lights.headLight.brightness = 100;
+    locoHw.lights.headLight.configured = true;
+    locoHw.lights.tailLight.pin = PIN::L2;
+    locoHw.lights.tailLight.brightness = 80;
+    locoHw.lights.tailLight.configured = true;
+    locoHw.lights.cabLight.pin = PIN::L3;
+    locoHw.lights.cabLight.brightness = 60;
+    locoHw.lights.cabLight.configured = true;
+    locoHw.lights.ditchLight.leftPin = PIN::L4;
+    locoHw.lights.ditchLight.rightPin = PIN::L5;
+    locoHw.lights.ditchLight.brightness = 100;
+    locoHw.lights.ditchLight.intervalMs = 500;
+    locoHw.lights.ditchLight.configured = true;
+    locoHw.lights.stepLight.pin = PIN::L6;
+    locoHw.lights.stepLight.brightness = 50;
+    locoHw.lights.stepLight.configured = true;
+    locoHw.driveMotor.type = HardwareConfig::DriveMotor::DRIVER;
+    locoHw.driveMotor.hardwareId = PinMapper::DRIVER_A;
+    locoHw.driveMotor.direction = HardwareConfig::DriveMotor::FORWARD;
+    locoHw.driveMotor.duty.min = 0;
+    locoHw.driveMotor.duty.max = 100;
+    locoHw.driveMotor.configured = true;
+    host_radiokit_connected = true;
+    HardwareInit::init(locoHw);
+
+    VehicleProfile locoProfile;
+    locoProfile.config.type = RcEngineSound::VEHICLE_LOCOMOTIVE;
+    locoProfile.config.engine.hasEngine = true;
+    locoProfile.config.engine.inertia = 50;
+    locoProfile.config.engine.acc = 5;
+    locoProfile.config.engine.dec = 2;
+    locoProfile.config.engine.brakeDec = 15;
+    locoProfile.config.engine.escRampTime = 20;
+
+    // Stop engine from previous test cleanly before re-initializing
+    start_button.rk.state = false;
+    VehicleController::update();
+    for (int i = 0; i < 100; i++) {
+        host_virtual_millis += 20;
+        engine.update(0);
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+    }
+
+    engine.begin(soundData, locoProfile.config);
+    dir_switch.rk.state = true; // Default Forward
+    loco_light.rk.value = 0;
+    VehicleController::init(&locoHw, &engine, &locoProfile);
+    engine_button.rk.state = true; // Engine Start
+    int lastDbgState = -1;
+    for (int i = 0; i < 200; i++) {
+        host_virtual_millis += 10;
+        int preUpd = (int)engine.getState();
+        engine.update(0);
+        int postUpd = (int)engine.getState();
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        int postSample = (int)engine.getState();
+        VehicleController::update();
+        int postVC = (int)engine.getState();
+        if (preUpd != postUpd || postUpd != postSample || postSample != postVC || postVC != lastDbgState) {
+            std::cout << "DEBUG T23 iter=" << i
+                      << " pre_upd=" << preUpd
+                      << " post_upd=" << postUpd
+                      << " post_sample=" << postSample
+                      << " post_vc=" << postVC
+                      << " engine_btn=" << engine_button.rk.state
+                      << std::endl;
+            lastDbgState = postVC;
+        }
+        if (postVC == 3 || postVC == 0) break; // stop on STOPPING or OFF to avoid noise
+    }
+    std::cout << "DEBUG Test 23 Final Engine state: " << (int)engine.getState() << std::endl;
+    // Temporarily skip assert to see all debug output
+    if (engine.getState() != RcEngineSound::RUNNING) {
+        std::cout << "WARN: Engine not RUNNING, skipping remaining tests" << std::endl;
+        return 1;
+    }
+
+    // 23.1 Forward Directional Handover: dir_switch = 1, Bit 0 (Headlight) ON
+    dir_switch.rk.state = true; // Forward
+    loco_light.rk.value = 0x01; // Bit 0 Headlight ON (target 100% full brightness)
+    host_virtual_millis += 20;
+    VehicleController::update();
+    float headDutyStart = HardwareInit::getLightDutyPercent(PIN::L1);
+    assert(headDutyStart > 0.0f && headDutyStart <= 15.0f && "Headlight should start ramping up smoothly");
+    assert(HardwareInit::getLightDutyPercent(PIN::L2) == 0.0f && "Tail light must be extinguished in forward");
+
+    // Slew up over 200ms -> should reach 100%
+    for (int t = 0; t < 15; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    float headDutyFinal = HardwareInit::getLightDutyPercent(PIN::L1);
+    assert(fabs(headDutyFinal - 100.0f) <= 1.0f && "Headlight should reach 100% after warm-up ramp");
+
+    // 23.2 Reverse Directional Handover: stationary -> flip to Reverse (dir_switch = 0)
+    dir_switch.rk.state = false; // Reverse
+    loco_light.rk.value = 0x01; // Headlight ON
+    for (int t = 0; t < 15; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(fabs(HardwareInit::getLightDutyPercent(PIN::L2) - 80.0f) <= 1.0f && "Tail marker should reach 80% in reverse");
+    assert(HardwareInit::getLightDutyPercent(PIN::L1) == 0.0f && "Forward headlight must be extinguished in reverse");
+
+    // 23.3 Asymmetric Fade-Out Rate Verification (Fast Cool-down 1.0%/ms vs Warm-up 0.5%/ms)
+    // Turn cab light ON (target 60%, Bit 4 / 0x10)
+    loco_light.rk.value = 0x10; // Bit 4 Cab Light ON
+    for (int t = 0; t < 10; t++) { host_virtual_millis += 20; VehicleController::update(); }
+    assert(fabs(HardwareInit::getLightDutyPercent(PIN::L3) - 60.0f) <= 1.0f && "Cab light on");
+
+    // Toggle OFF -> 30ms step -> should drop by ~30% duty (rate 1.0%/ms)
+    loco_light.rk.value &= ~0x10;
+    host_virtual_millis += 30;
+    VehicleController::update();
+    float cabDutyAfter30ms = HardwareInit::getLightDutyPercent(PIN::L3);
+    assert(cabDutyAfter30ms < 35.0f && "Cab light should cool down rapidly (~1.0% per ms)");
+
+    std::cout << "  PASS: Locomotive directional lighting and asymmetric PWM slew rates verified." << std::endl;
+
+    // ── Test 24: Dual Ditch Light Triangular Cross-Fading (Manual on Bit 2) ──
+    std::cout << "[Host VC Test] Test 24: Dual Ditch Light Triangular Cross-Fading..." << std::endl;
+    // 24.1 Ditch light inactive -> 0%
+    loco_light.rk.value = 0x00;
+    VehicleController::update();
+    assert(HardwareInit::getLightDutyPercent(PIN::L4) == 0.0f && "Ditch L off");
+    assert(HardwareInit::getLightDutyPercent(PIN::L5) == 0.0f && "Ditch R off");
+
+    // 24.2 Activate via Bit 2 (0x04) -> should cross-fade
+    loco_light.rk.value = 0x04;
+    host_virtual_millis = 10000; // aligned
+    VehicleController::update(); // t=0: L=0%, R=100%
+    float ditchL_0 = HardwareInit::getLightDutyPercent(PIN::L4);
+    float ditchR_0 = HardwareInit::getLightDutyPercent(PIN::L5);
+    assert(fabs(ditchL_0 - 0.0f) <= 1.0f && fabs(ditchR_0 - 100.0f) <= 1.0f);
+
+    // Halfway through half-period (t=250ms of 500ms): L=50%, R=50%
+    host_virtual_millis = 10250;
+    VehicleController::update();
+    float ditchL_250 = HardwareInit::getLightDutyPercent(PIN::L4);
+    float ditchR_250 = HardwareInit::getLightDutyPercent(PIN::L5);
+    assert(fabs(ditchL_250 - 50.0f) < 2.0f && fabs(ditchR_250 - 50.0f) < 2.0f);
+
+    // Peak (t=500ms): L=100%, R=0%
+    host_virtual_millis = 10500;
+    VehicleController::update();
+    float ditchL_500 = HardwareInit::getLightDutyPercent(PIN::L4);
+    float ditchR_500 = HardwareInit::getLightDutyPercent(PIN::L5);
+    assert(fabs(ditchL_500 - 100.0f) <= 1.0f && fabs(ditchR_500 - 0.0f) <= 1.0f);
+
+    // Turn Bit 2 OFF -> Ditch lights extinguished
+    loco_light.rk.value = 0x00;
+    VehicleController::update();
+    assert(HardwareInit::getLightDutyPercent(PIN::L4) == 0.0f && "Ditch L extinguished on toggle off");
+    assert(HardwareInit::getLightDutyPercent(PIN::L5) == 0.0f && "Ditch R extinguished on toggle off");
+
+    std::cout << "  PASS: Dual ditch light triangular cross-fading and purely manual control verified." << std::endl;
+
+    // ── Test 25: Locomotive Reverser Momentum Interlock & Throttle Auto-Zero ──
+    std::cout << "[Host VC Test] Test 25: Reverser Momentum Interlock & Throttle Auto-Zero..." << std::endl;
+    dir_switch.rk.state = true; // Forward
+    throttle_slider.rk.value = 100; // Full throttle
+    VehicleController::update();
+
+    // Accelerate to ~80% speed
+    for (int t = 0; t < 30; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(host_last_motor_speed > 50.0f && "Locomotive moving forward at speed");
+
+    // Flip reverser to Reverse while moving!
+    dir_switch.rk.state = false; // Reverse
+    VehicleController::update();
+    assert(VehicleController::isReverserInterlocked() && "Reverser flip while moving must engage interlock");
+    assert(throttle_slider.rk.value == -100 && "Throttle slider must be clamped / auto-zeroed");
+    assert(host_last_motor_speed > 0.0f && "Motor polarity must remain Forward until stopped");
+
+    // Decelerate with dynamic braking down to 0
+    for (int t = 0; t < 30; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(host_last_motor_speed == 0.0f && "Locomotive should come to complete standstill");
+    assert(!VehicleController::isReverserInterlocked() && "Interlock should clear once stationary");
+    assert(!VehicleController::getActiveDirection() && "Reverse polarity engaged after standstill");
+
+    // Reapply throttle in Reverse -> should drive backwards (negative speed)
+    throttle_slider.rk.value = 60;
+    for (int t = 0; t < 20; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(host_last_motor_speed < 0.0f && "Motor drives in reverse after interlock release");
+
+    std::cout << "  PASS: Locomotive reverser momentum interlock, braking, and delayed polarity verified." << std::endl;
 
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;

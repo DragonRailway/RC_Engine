@@ -1,0 +1,70 @@
+{
+  "vehicle": {
+    "name": "Union Pacific 2002",
+    "description": "EMD SD70M Diesel-Electric Locomotive",
+    "type": "locomotive",
+    "sound_set": "UnionPacific2002"
+  },
+  "engine": {
+    "acceleration": 1,
+    "deceleration": 1,
+    "idle_rpm": 10,
+    "clutch_rpm": 500,
+    "rev_switch_point": 100,
+    "idle_end_point": 300,
+    "diesel_knock_interval": 16,
+    "diesel_knock_start_point": 10,
+    "knock_pattern": "v8",
+    "knock_adaptive_volume": 50,
+    "max_pitch_factor": 2.5
+  },
+  "transmission": {
+    "type": "direct"
+  },
+  "loop_points": {
+    "horn_begin": 0,
+    "horn_end": 0,
+    "siren_begin": 0,
+    "siren_end": 0,
+    "reversing_begin": 0,
+    "reversing_end": 0,
+    "sound1_begin": 0,
+    "sound1_end": 0
+  },
+  "mix_weights": {
+    "engine": 100,
+    "effects": 100
+  },
+  "features": {
+    "tire_squeal_threshold": 0,
+    "tire_squeal_max_speed": 0,
+    "hydraulic_enabled": false,
+    "hydrostatic_mode": false,
+    "track_rattle_enabled": false,
+    "dump_bed_enabled": false
+  },
+  "sound_volumes": {
+    "start": 160,
+    "idle": 90,
+    "engine_idle": 60,
+    "full_throttle": 130,
+    "rev": 110,
+    "engine_rev": 60,
+    "turbo": 15,
+    "knock": 100,
+    "wastegate": 0,
+    "horn": 200,
+    "siren": 0,
+    "brake": 150,
+    "parking_brake": 150,
+    "shifting": 0,
+    "reversing": 0,
+    "indicator": 0,
+    "coupling": 0,
+    "jakebrake": 0,
+    "fan": 0,
+    "supercharger": 0,
+    "uncoupling": 0,
+    "sound1": 100
+  }
+}

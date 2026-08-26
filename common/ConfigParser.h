@@ -368,12 +368,26 @@ public:
     static const char* soundTypeNames[];
     static const char* genericNames[];
 
-private:
+    struct SpiRamAllocator : ArduinoJson::Allocator {
+        void* allocate(size_t size) override {
+            void* p = ps_malloc(size);
+            return p ? p : malloc(size);
+        }
+        void deallocate(void* pointer) override {
+            free(pointer);
+        }
+        void* reallocate(void* ptr, size_t new_size) override {
+            void* p = ps_realloc(ptr, new_size);
+            return p ? p : realloc(ptr, new_size);
+        }
+    };
+
     static SoundSlot loadSoundSlot(const char* path) {
         File file = LittleFS.open(path, "r");
         if (!file) return SoundSlot();
 
-        JsonDocument doc;
+        static SpiRamAllocator spiAlloc;
+        JsonDocument doc(&spiAlloc);
         DeserializationError error = deserializeJson(doc, file);
         file.close();
 
@@ -1097,7 +1111,7 @@ private:
         if (strcasecmp(transTypeStr, "AUTOMATIC") == 0) cfg.transmission.type = RcEngineSound::TRANS_AUTOMATIC;
         else if (strcasecmp(transTypeStr, "MANUAL") == 0) cfg.transmission.type = RcEngineSound::TRANS_MANUAL;
         else {
-            if (strcasecmp(transTypeStr, "NONE") != 0) {
+            if (strcasecmp(transTypeStr, "NONE") != 0 && strcasecmp(transTypeStr, "DIRECT") != 0) {
                 LOG_CFG_WARN("transmission: unknown type '%s' — defaulting to none", transTypeStr);
             }
             cfg.transmission.type = RcEngineSound::TRANS_NONE;

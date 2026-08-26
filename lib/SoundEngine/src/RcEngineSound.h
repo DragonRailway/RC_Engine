@@ -254,7 +254,7 @@ private:
     };
 
     // Engine state
-    EngineState state;
+    volatile EngineState state;
     SoundData sounds;
     Config cfg;
 
@@ -267,7 +267,7 @@ private:
     VoiceState voices[SOUND_COUNT];
 
     // Start sound position (special: uses separate sample array)
-    uint32_t startPos = 0;
+    volatile uint32_t startPos = 0;
 
     // Knock trigger state
     uint32_t lastKnockTriggerSample = 0;

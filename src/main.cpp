@@ -69,6 +69,14 @@ static uint32_t fileWriteTime(const char* path) {
 #include <NimBLEDevice.h>
 #endif
 
+#ifdef MIKRO_V2
+#define BOARD_DEFAULT_NAME "MIKRO_V2"
+#elif defined(TRACKLINK_V3)
+#define BOARD_DEFAULT_NAME "TRACKLINK_V3"
+#else
+#define BOARD_DEFAULT_NAME "RC_Brain"
+#endif
+
 // ── Device Metadata Cascade ──
 // Priority:
 // 1) Hardware config (board-specific name / description)
@@ -80,7 +88,7 @@ static void applyDeviceMetadata(const HardwareConfig& hw, const RcEngineSound::C
     } else if (vc.name[0] != '\0' && strcmp(vc.name, "Unknown") != 0) {
         RadioKit.config.name = vc.name;
     } else {
-        RadioKit.config.name = "RC_UI";
+        RadioKit.config.name = BOARD_DEFAULT_NAME;
     }
 
     if (hw.description[0] != '\0') {
@@ -103,16 +111,20 @@ static void applyDeviceMetadata(const HardwareConfig& hw, const RcEngineSound::C
 
 #if defined(RK_ENABLE_BLE)
     NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
-    if (pAdv) {
+    if (pAdv && pAdv->isAdvertising()) {
+        pAdv->stop();
         NimBLEAdvertisementData scanData;
         scanData.setName(RadioKit.config.name);
         pAdv->setScanResponseData(scanData);
+        pAdv->start();
     }
 #endif
 
     Serial.printf("[Device] Name: '%s', Description: '%s', Type: '%s'\n",
                   RadioKit.config.name, RadioKit.config.description, RadioKit.config.type);
 }
+
+static bool s_audioStarted = false;
 
 static bool reloadConfigs() {
     Serial.println("\n── Reloading Configs ──");
@@ -132,6 +144,7 @@ static bool reloadConfigs() {
         return false;
     }
 
+    bool wasConfigured = (hwConfig.name[0] != '\0' || profile.config.name[0] != '\0');
     bool nameChanged = strcmp(newVc.name, profile.config.name) != 0;
 
     hwConfig = newHw;
@@ -139,14 +152,20 @@ static bool reloadConfigs() {
     profile.config.sound.master = hwConfig.sound.volume;
 
     HardwareInit::hotReload(hwConfig);
+    VehicleController::init(&hwConfig, &engine, &profile);
     VehicleController::applyConfiguredLightMask(hwConfig.lights, hwConfig.auxLight.configured);
     engine.setConfig(profile.config);
     applyAuxSliderProfile();
     applyDeviceMetadata(hwConfig, profile.config);
 
-    if (nameChanged) {
+    if (nameChanged || !wasConfigured) {
         ConfigParser::loadSounds(profile.config, profile.sounds);
         engine.begin(profile.sounds, profile.config);
+        if (!s_audioStarted) {
+            AudioOutput::begin(&engine);
+            AudioOutput::start();
+            s_audioStarted = true;
+        }
     }
 
     if (!UiLogger::hasErrors()) {
@@ -205,52 +224,57 @@ void setup() {
     if (!ConfigParser::begin()) {
         Serial.println("FATAL: LittleFS mount failed");
         UiLogger::log("FATAL: LittleFS mount failed");
-        while (1) delay(100);
     }
 
     ConfigParser::printFilesystemInfo();
+
+    // Start RadioKit stack
+    Serial.println("\n── Starting RadioKit ──");
+    initRadioKit();
+    RadioKit.config.name = BOARD_DEFAULT_NAME;
+    RadioKit.config.description = "RC Brain Controller";
+    RadioKit.begin();
 
     Serial.println("\n── Loading Configs ──");
     bool hwOk = ConfigParser::loadHardwareConfig(HW_CONFIG_PATH, hwConfig);
     bool vcOk = ConfigParser::loadVehicleConfig("/vehicle-config.json", profile.config);
 
-    if (!hwOk || !vcOk) {
-        Serial.printf("\nFATAL ERROR: Failed to load %s or /vehicle-config.json!\n", HW_CONFIG_PATH);
-        Serial.println("Execution halted. Please upload valid configuration files to LittleFS.");
-        UiLogger::logf("FATAL: Failed to load config!");
-        while (1) delay(100);
+    if (hwOk && vcOk) {
+        printConfig(hwConfig, profile.config);
+
+        Serial.println("\n── Loading Sounds ──");
+        ConfigParser::loadSounds(profile.config, profile.sounds);
+
+        Serial.println("\n── Initializing Hardware ──");
+        HardwareInit::init(hwConfig);
+
+        Serial.println("\n── Initializing Vehicle Controller ──");
+        profile.config.sound.master = hwConfig.sound.volume;
+        VehicleController::init(&hwConfig, &engine, &profile);
+
+        Serial.println("\n── Starting Engine Sound ──");
+        engine.setConfig(profile.config);
+        engine.begin(profile.sounds, profile.config);
+        AudioOutput::begin(&engine);
+        AudioOutput::start();
+        s_audioStarted = true;
+
+        applyDeviceMetadata(hwConfig, profile.config);
+        applyAuxSliderProfile();
+        VehicleController::applyConfiguredLightMask(hwConfig.lights, hwConfig.auxLight.configured);
+    } else {
+        Serial.println("\n── Recovery Mode Active ──");
+        Serial.printf("Config missing or incomplete (%s: %s, /vehicle-config.json: %s)\n",
+                      HW_CONFIG_PATH, hwOk ? "OK" : "MISSING", vcOk ? "OK" : "MISSING");
+        Serial.println("RadioKit BLE and LittleFS are active. Upload configuration files to initialize.");
+        UiLogger::log("WARN: Config missing — Recovery Mode");
     }
 
-    printConfig(hwConfig, profile.config);
-
-    Serial.println("\n── Loading Sounds ──");
-    ConfigParser::loadSounds(profile.config, profile.sounds);
-
-    Serial.println("\n── Initializing Hardware ──");
-    HardwareInit::init(hwConfig);
-
-    Serial.println("\n── Initializing Vehicle Controller ──");
-    profile.config.sound.master = hwConfig.sound.volume;
-    VehicleController::init(&hwConfig, &engine, &profile);
-
-    Serial.println("\n── Starting Engine Sound ──");
-    engine.setConfig(profile.config);
-    engine.begin(profile.sounds, profile.config);
-    AudioOutput::begin(&engine);
-    AudioOutput::start();
-
-    Serial.println("\n── Starting RadioKit (BLE) ──");
-    initRadioKit();
-    RadioKit.begin();
-    applyDeviceMetadata(hwConfig, profile.config);
-
+    Serial.println("\n── Starting RadioKit Services ──");
     RadioKit.startSerial(Serial);
     RadioKit.startBLE();
     RadioKit.enableFS();
-
     UiLogger::onRadioKitStarted();
-    applyAuxSliderProfile();
-    VehicleController::applyConfiguredLightMask(hwConfig.lights, hwConfig.auxLight.configured);
 
     Serial.println("\n── System Ready ──");
     Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());

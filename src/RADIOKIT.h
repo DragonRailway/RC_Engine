@@ -49,7 +49,7 @@ RK_Slider throttle_slider(67, 105, 114, 20, 0);  // slider: pos=(67,105) size=20
 
 RK_SlideSwitch dir_switch(67, 173, 18, 32, 0);  // switch: pos=(67,173) size=32x18 label="dir_switch"
 
-RK_MultipleSelect loco_light(31, 97, 130, 24, 0);  // multiple: pos=(31,97) size=24x130 label="loco_light"
+RK_MultipleSelect loco_light(31, 97, 129, 24, 0);  // multiple: pos=(31,97) size=24x129 label="loco_light"
 
 RK_PushButton bell_button(31, 175, 20, 0, 0);  // button: pos=(31,175) size=?x20 label="bell_button"
 
@@ -63,6 +63,8 @@ RK_Telemetry telemetry_Speed("Speed");
 
 // ─── Config Init ───
 static inline void initRadioKit() {
+  RadioKit.config.name        = "RC_UI";
+  RadioKit.config.type        = "Locomotive";
   RadioKit.config.theme       = "dragon";
   RadioKit.config.baudrate    = 1000000;
 
@@ -92,9 +94,10 @@ static inline void initRadioKit() {
   truck_light.rk.itemCount = 8;
   start_button.rk.label = "start_button";
   start_button.setLabelHidden(true);
-  start_button.rk.onText = "STOP";
-  start_button.rk.offText = "START";
+  start_button.rk.onText = "START";
+  start_button.rk.offText = "STOP";
   start_button.rk.icon = "refresh-ccw";
+  start_button.rk.offIcon = "refresh-ccw";
   left_indicator.rk.label = "left_indicator";
   left_indicator.setLabelHidden(true);
   left_indicator.rk.icon = "arrow-fat-left";
@@ -129,25 +132,27 @@ static inline void initRadioKit() {
   loco_light.setPage(1);
   loco_light.rk.label = "loco_light";
   loco_light.setLabelHidden(true);
-  loco_light.rk.items[0] = {"", "arrow-up", 0};
-  loco_light.rk.items[1] = {"", "arrow-down", 1};
-  loco_light.rk.items[2] = {"", "snowflake", 2};
-  loco_light.rk.items[3] = {"", "crosshair", 3};
-  loco_light.rk.items[4] = {"", "siren", 4};
-  loco_light.rk.items[5] = {"", "cable-car", 5};
-  loco_light.rk.items[6] = {"", "tablet", 6};
-  loco_light.rk.items[7] = {"", "x", 7};
+  loco_light.rk.items[0] = {"", "lightbulb", 0};
+  loco_light.rk.items[1] = {"", "snowflake", 1};
+  loco_light.rk.items[2] = {"", "crosshair", 2};
+  loco_light.rk.items[3] = {"", "siren", 3};
+  loco_light.rk.items[4] = {"", "cable-car", 4};
+  loco_light.rk.items[5] = {"", "tablet", 5};
+  loco_light.rk.items[6] = {"", "x", 6};
+  loco_light.rk.items[7] = {"H", "warning", 7};
   loco_light.rk.itemCount = 8;
   bell_button.setPage(1);
   bell_button.rk.label = "bell_button";
   bell_button.setLabelHidden(true);
   bell_button.rk.icon = "bell-ringing";
+  bell_button.rk.offIcon = "bell";
   engine_button.setPage(1);
   engine_button.rk.label = "engine_button";
   engine_button.setLabelHidden(true);
-  engine_button.rk.onText = "STOP";
-  engine_button.rk.offText = "START";
-  engine_button.rk.icon = "power";
+  engine_button.rk.onText = "START";
+  engine_button.rk.offText = "STOP";
+  engine_button.rk.icon = "refresh-ccw";
+  engine_button.rk.offIcon = "refresh-ccw";
   serial_monitor_2.setPage(1);
   serial_monitor_2.rk.label = "serial_monitor_2";
   serial_monitor_2.setLabelHidden(true);
@@ -155,11 +160,13 @@ static inline void initRadioKit() {
   telemetry_Battery.rk.unit = "%";
   telemetry_Battery.rk.content = "--";
   telemetry_Speed.rk.icon = "gauge";
+  telemetry_Speed.rk.unit = "km/h";
   telemetry_Speed.rk.content = "--";
 
   RadioKit.setNumPages(RK_NUM_PAGES);
   RadioKit.setPageNames(rk_pageNames);
   RadioKit.setPageOrientations(rk_pageOrientations);
+  RadioKit.setCanvasFlags(0x01);
 }
 
 #endif // RADIOKIT_GENERATED_H

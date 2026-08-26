@@ -66,9 +66,8 @@ public:
 
         // 8KB stack: getNextSample() needs ~1KB for its VoiceState snapshot and
         // i2s_channel_write() is also deep; 4KB was tight for both in one task.
-        xTaskCreatePinnedToCore(audioTask, "audio", 8192, NULL, 3, &audioTaskHandle, 1);
-
-        Serial.println("[AudioOutput] Initialized (22,050 Hz)");
+        BaseType_t taskRes = xTaskCreatePinnedToCore(audioTask, "audio", 8192, NULL, 3, &audioTaskHandle, 1);
+        Serial.printf("[AudioOutput] Initialized (22,050 Hz) TaskCreate=%d\n", (int)taskRes);
     }
 
     static void start() {
@@ -99,10 +98,10 @@ public:
 
     enum SelftestMode {
         SELFTEST_OFF = 0,
-        SELFTEST_SINE = 1,
-        SELFTEST_IMPULSE = 2,
-        SELFTEST_SWEEP = 3,
-        SELFTEST_SILENCE = 4
+        SELFTEST_SINE,
+        SELFTEST_IMPULSE,
+        SELFTEST_SWEEP,
+        SELFTEST_SILENCE,
     };
 
     static volatile SelftestMode selftestMode;
@@ -119,10 +118,17 @@ public:
     // Audio output task: generate samples (FPU-safe task context), apply offset
     // fade, write to I2S. Paced naturally by I2S DMA blocking.
     static void audioTask(void* param) {
+        Serial.println("[AudioOutput] audioTask entered loop");
+        uint32_t blockCount = 0;
         while (true) {
             if (!active || !tx_handle || !engine) {
                 vTaskDelay(pdMS_TO_TICKS(10));
                 continue;
+            }
+            blockCount++;
+            if (blockCount == 1 || blockCount % 344 == 0) { // ~once per second (22050/64 ≈ 344)
+                Serial.printf("[AudioOutput] alive: blocks=%u state=%d rpm=%u\n",
+                              blockCount, (int)engine->getState(), engine->getRpm());
             }
 
             int64_t t_start = esp_timer_get_time();
@@ -172,8 +178,11 @@ public:
                 }
             }
 
-            size_t bytes_written;
-            i2s_channel_write(tx_handle, buffer, sizeof(buffer), &bytes_written, portMAX_DELAY);
+            size_t bytes_written = 0;
+            esp_err_t write_err = i2s_channel_write(tx_handle, buffer, sizeof(buffer), &bytes_written, pdMS_TO_TICKS(20));
+            if (write_err != ESP_OK) {
+                vTaskDelay(pdMS_TO_TICKS(2));
+            }
             int64_t t_i2s = esp_timer_get_time();
 
 #ifdef AUDIO_DEBUG

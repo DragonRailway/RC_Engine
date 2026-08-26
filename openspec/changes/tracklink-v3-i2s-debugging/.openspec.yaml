@@ -1,0 +1,5 @@
+name: tracklink-v3-i2s-debugging
+schema: spec-driven
+status: active
+created: 2026-08-24
+description: Debug and fix I2S audio output on TrackLink V3 board

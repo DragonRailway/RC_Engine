@@ -150,6 +150,21 @@ public:
                       s_warningVoltage, s_hw->battery.warningVoltage,
                       s_cutoffVoltage, s_hw->battery.cutoffVoltage);
 
+        // ── Reset Locomotive Dynamics & Lighting State ──
+        s_currentMotorSpeed = 0.0f;
+        s_lastInertiaTime = 0;
+        s_prevMotorMoving = false;
+        s_locoInitialized = false;
+        s_activeDirection = true;
+        s_reverserInterlocked = false;
+        s_dirSwitchPrev = true;
+        s_slewHeadDuty = 0.0f;
+        s_slewTailDuty = 0.0f;
+        s_slewCabDuty = 0.0f;
+        s_slewStepDuty = 0.0f;
+        s_lastLightSlewMs = 0;
+        s_ditchRunning = false;
+
         // ── Vehicle type boot visibility ──
         const RcEngineSound::VehicleType t = s_profile->config.type;
         if (t == RcEngineSound::VEHICLE_EXCAVATOR) {
@@ -167,6 +182,8 @@ public:
     static bool isBatteryCutoff() { return s_batteryCutoff; }
     static bool isDisconnectWarning() { return s_inWarningPhase; }
     static bool isChargingState() { return HardwareInit::isCharging(); }
+    static bool isReverserInterlocked() { return s_reverserInterlocked; }
+    static bool getActiveDirection() { return s_activeDirection; }
 
     static void update() {
         if (!s_hw || !s_engine || !s_profile) return;
@@ -234,35 +251,53 @@ public:
         const bool isLoco = (vtype == RcEngineSound::VEHICLE_LOCOMOTIVE);
 
         // ── Battery Protection & Low Voltage Cutoff ──
-        float pinV = analogReadMilliVolts(POWER::VOLTAGE_SENS) / 1000.0f;
-        float rawBatV = pinV * s_hw->battery.vScale + s_hw->battery.vOffset;
+        static uint32_t s_lastBatSample = 0;
+        uint32_t nowMs = millis();
+        if (nowMs - s_lastBatSample >= 100) {
+            s_lastBatSample = nowMs;
+            if (POWER::VOLTAGE_SENS != 0xFF) {
+                float pinV = analogReadMilliVolts(POWER::VOLTAGE_SENS) / 1000.0f;
+                float rawBatV = pinV * s_hw->battery.vScale + s_hw->battery.vOffset;
 
-        // Exponential moving average filter (EMA) to reject motor PWM / inrush noise
-        if (s_filteredBatV <= 0.1f) {
-            s_filteredBatV = rawBatV;
-        } else {
-            s_filteredBatV = 0.90f * s_filteredBatV + 0.10f * rawBatV;
+                // Only enforce battery cutoff if battery is physically attached (>2.5V per cell)
+                // so USB/bench powered operation is never prematurely shut down.
+                if (rawBatV > 2.5f * s_cellCount) {
+                    if (s_filteredBatV <= 0.1f) {
+                        s_filteredBatV = rawBatV;
+                    } else {
+                        s_filteredBatV = 0.90f * s_filteredBatV + 0.10f * rawBatV;
+                    }
+                } else {
+                    s_filteredBatV = 0.0f;
+                }
+            }
         }
         float batV = s_filteredBatV;
 
-        if (batV < s_warningVoltage) {
-            if (!s_batteryWarning) {
-                UiLogger::logf("WARN: Low battery (%.2fV)", batV);
+        if (s_cutoffVoltage > 0.0f && batV > 2.5f * s_cellCount) {
+            if (batV < s_warningVoltage) {
+                if (!s_batteryWarning) {
+                    UiLogger::logf("WARN: Low battery (%.2fV)", batV);
+                }
+                s_batteryWarning = true;
+            } else if (batV > (s_warningVoltage + 0.2f * s_cellCount)) {
+                s_batteryWarning = false;
             }
-            s_batteryWarning = true;
-        } else if (batV > (s_warningVoltage + 0.2f * s_cellCount)) {
-            s_batteryWarning = false;
-        }
 
-        uint32_t cutoffDelayMs = (uint32_t)(s_hw->power.cutoffDelayS * 1000.0f);
-        if (batV < s_cutoffVoltage) {
-            if (s_lowVoltageStart == 0) s_lowVoltageStart = millis();
-            else if (millis() - s_lowVoltageStart >= cutoffDelayMs) {
-                s_batteryCutoff = true;
+            uint32_t cutoffDelayMs = (uint32_t)(s_hw->power.cutoffDelayS * 1000.0f);
+            if (batV < s_cutoffVoltage) {
+                if (s_lowVoltageStart == 0) s_lowVoltageStart = millis();
+                else if (millis() - s_lowVoltageStart >= cutoffDelayMs) {
+                    s_batteryCutoff = true;
+                }
+            } else if (batV > (s_cutoffVoltage + 0.2f * s_cellCount)) {
+                s_lowVoltageStart = 0;
+                s_batteryCutoff = false;
             }
-        } else if (batV > (s_cutoffVoltage + 0.2f * s_cellCount)) {
-            s_lowVoltageStart = 0;
+        } else {
+            s_batteryWarning = false;
             s_batteryCutoff = false;
+            s_lowVoltageStart = 0;
         }
 
         if (s_batteryCutoff) {
@@ -289,7 +324,9 @@ public:
         // ── Throttle input ──
         int16_t throttlePct = 0;
         if (isLoco) {
-            throttlePct = constrain(throttle_slider.rk.value, 0, 100);
+            // throttle_slider operates from -100 (idle/released) to +100 (full throttle)
+            int16_t rawPedal = constrain((int16_t)throttle_slider.rk.value, -100, 100);
+            throttlePct = (rawPedal + 100) / 2;
         } else {
             // gas_pedal operates from -100 (idle/released) to +100 (full throttle)
             int16_t rawPedal = constrain(gas_pedal.rk.value, -100, 100);
@@ -307,7 +344,7 @@ public:
         uint8_t bits = isLoco ? loco_light.rk.value : truck_light.rk.value;
         bool engineStartToggle = isLoco ? engine_button.rk.state : start_button.rk.state;
 
-        // Auto Gear Shift Interlock on Engine Start / Stop (TRUCK)
+        // Auto Interlock on Engine Start / Stop
         if (!isLoco) {
             if (engineStartToggle && !s_engineStartTogglePrev) {
                 // Engine Start edge: auto-shift to Drive (D=0)
@@ -318,6 +355,11 @@ public:
             } else if (!engineStartToggle && gear_switch.rk.value != 1) {
                 // While engine is OFF/stopped, force Park (P=1)
                 gear_switch.rk.value = 1;
+            }
+        } else {
+            if (engineStartToggle && !s_engineStartTogglePrev) {
+                // Engine Start edge: reset throttle lever to neutral idle (-100)
+                throttle_slider.rk.value = -100;
             }
         }
         s_engineStartTogglePrev = engineStartToggle;
@@ -337,13 +379,51 @@ public:
         }
 
         // ── Direction / Gear (type-driven) ──
-        // LOCOMOTIVE: dir_switch is the sole direction authority.
+        // LOCOMOTIVE: dir_switch is the sole direction authority (1 = Forward, 0 = Reverse).
         // TRUCK: gear_switch radio group D=0 (Drive), P=1 (Park), R=2 (Reverse).
         bool reverse;
         bool parkingBrake = false;
         uint8_t gear = 1;   // default Park (safe) until the radio reports a selection
+        int16_t brakePct = 0;
+
         if (isLoco) {
-            reverse = dir_switch.rk.state;
+            if (!s_locoInitialized) {
+                s_activeDirection = dir_switch.rk.state;
+                s_dirSwitchPrev = dir_switch.rk.state;
+                s_reverserInterlocked = false;
+                s_locoInitialized = true;
+            }
+
+            bool userDir = dir_switch.rk.state;
+            if (userDir != s_dirSwitchPrev) {
+                s_dirSwitchPrev = userDir;
+                // If moving when flipped, engage momentum interlock & dynamic braking
+                if (fabs(s_currentMotorSpeed) > 0.5f) {
+                    s_reverserInterlocked = true;
+                    Serial.printf("[EVENT] Reverser flipped to %s while moving (Speed: %.1f) -> Dynamic braking interlock\n",
+                                  userDir ? "FWD" : "REV", s_currentMotorSpeed);
+                } else {
+                    s_activeDirection = userDir;
+                    s_reverserInterlocked = false;
+                    Serial.printf("[EVENT] Reverser switched to %s (Stationary)\n", userDir ? "FWD" : "REV");
+                }
+            }
+
+            if (s_reverserInterlocked) {
+                // Clamp throttle demand to 0 and apply dynamic braking until stopped
+                throttlePct = 0;
+                throttle_slider.rk.value = -100;
+                brakePct = 100;
+                if (fabs(s_currentMotorSpeed) < 0.5f) {
+                    s_currentMotorSpeed = 0.0f;
+                    s_activeDirection = userDir;
+                    s_reverserInterlocked = false;
+                    Serial.printf("[EVENT] Reverser interlock cleared -> Engaged %s\n",
+                                  s_activeDirection ? "FWD" : "REV");
+                }
+            }
+
+            reverse = !s_activeDirection;
         } else {
             uint8_t g = gear_switch.rk.value;
             if (g <= 2) gear = g;
@@ -373,7 +453,6 @@ public:
         int16_t steerVal = isLoco ? 0 : steering_wheel.rk.value;
 
         // Proportional brake blend: brake_pedal normalized from [-100, 100] to [0, 100]%
-        int16_t brakePct = 0;
         if (!isLoco) {
             int16_t rawBrake = constrain(brake_pedal.rk.value, -100, 100);
             brakePct = (rawBrake + 100) / 2;
@@ -637,26 +716,16 @@ public:
                 Serial.printf("[EVENT] FogLamp -> %s\n", fogLamp ? "ON" : "OFF");
             }
         } else {
-            // Locomotive headlight mapping from loco_light bits
-            bool headLight = (bits & 0x01);
-            bool highBeam  = (bits & 0x02);
-            if (!headLight && (loco_light.rk.value & 0x02)) {
-                loco_light.rk.value &= ~0x02;
-                highBeam = false;
-            }
-            if (headLight) {
-                headlightMode = highBeam ? 2 : 1;
-            } else {
-                headlightMode = 0;
-            }
-            s_headlightMode = headlightMode;
+            // Locomotive headlight: simple ON/OFF from Bit 0 (independent)
+            s_headlightMode = (bits & 0x01) ? 1 : 0;
+            headlightMode = s_headlightMode;
         }
 
         // ── Apply Lights with Automation ──
-        // Hazard (Bit 3 / Item D) drives both indicators; the blink engine
+        // Hazard (Truck: Bit 3 / 0x08; Loco: Bit 7 / 0x80) drives both indicators; the blink engine
         // handles the on/off timing from the config interval — no hand-rolled
         // flash here.
-        bool hazardActive = (bits & 0x08) || s_inWarningPhase;
+        bool hazardActive = isLoco ? ((bits & 0x80) != 0) : ((bits & 0x08) || s_inWarningPhase);
         applyLightsWithAutomation(bits,
                                  hazardActive || turnSignalL,
                                  hazardActive || turnSignalR,
@@ -752,6 +821,18 @@ private:
     static uint32_t s_lastInertiaTime;
     static bool     s_prevMotorMoving;
 
+    // Locomotive Dynamics & Directional Lighting
+    static bool     s_locoInitialized;
+    static bool     s_activeDirection;
+    static bool     s_reverserInterlocked;
+    static bool     s_dirSwitchPrev;
+    static float    s_slewHeadDuty;
+    static float    s_slewTailDuty;
+    static float    s_slewCabDuty;
+    static float    s_slewStepDuty;
+    static uint32_t s_lastLightSlewMs;
+    static bool     s_ditchRunning;
+
     static int16_t computeRampedMotorSpeed(int16_t targetSpeed, bool parkingBrake, uint8_t gear, int16_t brakePct, RcEngineSound::EngineState eState) {
         // Direct Mode Fallback: if profile is absent, engine config not defined, or inertia == 0
         bool directMode = (!s_profile || !s_profile->config.engine.hasEngine || s_profile->config.engine.inertia == 0);
@@ -828,7 +909,91 @@ private:
     static void applyLightsWithAutomation(uint8_t bits, bool turnL, bool turnR, bool decelBrake, bool manualBrake, uint8_t headlightMode, bool autoReverseLight, bool fogLamp, bool isLoco) {
         if (!s_hw) return;
         const HardwareConfig::Lights& L = s_hw->lights;
-        bool manualTail = isLoco ? (bits & 0x02) : false;
+
+        if (isLoco) {
+            // Directional Headlight and Rear Marker Handover (Direction-aware)
+            uint8_t targetHead = 0;
+            uint8_t targetTail = 0;
+            if (headlightMode > 0) {
+                if (s_activeDirection) {
+                    // Forward: full forward headlight, extinguished rear marker
+                    targetHead = L.headLight.brightness;
+                    targetTail = 0;
+                } else {
+                    // Reverse: full rear marker, extinguished forward headlight
+                    targetHead = 0;
+                    targetTail = L.tailLight.brightness;
+                }
+            }
+
+            uint8_t targetCab  = (bits & 0x10) ? (L.cabLight.configured ? L.cabLight.brightness : 0) : 0;  // Bit 4 (cable-car)
+            uint8_t targetStep = (bits & 0x20) ? (L.stepLight.configured ? L.stepLight.brightness : 0) : 0;  // Bit 5 (tablet)
+
+            // Asymmetric software PWM slew rate limiter:
+            // ~200ms warm-up (0.5% per ms), ~100ms cool-down (1.0% per ms)
+            uint32_t nowLight = millis();
+            uint32_t dt = (s_lastLightSlewMs == 0) ? 20 : (nowLight - s_lastLightSlewMs);
+            if (dt > 100) dt = 100;
+            s_lastLightSlewMs = nowLight;
+
+            auto slewChannel = [&](float& current, uint8_t target) -> uint8_t {
+                float t = (float)target;
+                if (t > current) {
+                    current = min(t, current + 0.5f * (float)dt);
+                } else if (t < current) {
+                    current = max(t, current - 1.0f * (float)dt);
+                }
+                return (uint8_t)roundf(current);
+            };
+
+            uint8_t headDuty = slewChannel(s_slewHeadDuty, targetHead);
+            uint8_t tailDuty = slewChannel(s_slewTailDuty, targetTail);
+            uint8_t cabDuty  = slewChannel(s_slewCabDuty,  targetCab);
+            uint8_t stepDuty = slewChannel(s_slewStepDuty, targetStep);
+
+            HardwareInit::setLight(L.headLight.pin, headDuty);
+            HardwareInit::setLight(L.tailLight.pin, tailDuty);
+            if (L.cabLight.configured)  HardwareInit::setLight(L.cabLight.pin, cabDuty);
+            if (L.stepLight.configured) HardwareInit::setLight(L.stepLight.pin, stepDuty);
+
+            // Dual Ditch Lights: smooth triangular cross-fading (purely manual on Bit 2 / 0x04)
+            bool ditchActive = (bits & 0x04);
+            if (L.ditchLight.configured) {
+                if (ditchActive) {
+                    uint16_t interval = (L.ditchLight.intervalMs <= 20) ? (L.ditchLight.intervalMs * 100) : L.ditchLight.intervalMs;
+                    if (interval == 0) interval = 600;
+                    uint32_t cycleMs = 2 * (uint32_t)interval;
+                    uint32_t t = nowLight % cycleMs;
+                    float phase = (t < interval) ? ((float)t / (float)interval) : ((float)(cycleMs - t) / (float)interval);
+                    uint8_t maxDuty = L.ditchLight.brightness;
+                    uint8_t leftDuty = (uint8_t)roundf(phase * maxDuty);
+                    uint8_t rightDuty = (uint8_t)roundf((1.0f - phase) * maxDuty);
+                    HardwareInit::setLight(L.ditchLight.leftPin, leftDuty);
+                    HardwareInit::setLight(L.ditchLight.rightPin, rightDuty);
+                    s_ditchRunning = true;
+                } else if (s_ditchRunning) {
+                    HardwareInit::setLight(L.ditchLight.leftPin, 0);
+                    HardwareInit::setLight(L.ditchLight.rightPin, 0);
+                    s_ditchRunning = false;
+                }
+            }
+
+            // Beacon Light: Bit 3 (0x08 / siren)
+            bool beaconOn = (bits & 0x08);
+            HardwareInit::setBeacon(beaconOn);
+
+            // Aux Light: Bit 6 (0x40 / x) or Bit 1 (0x02 / snowflake)
+            uint8_t auxDuty = ((bits & 0x40) || (bits & 0x02)) ? L.auxLight.brightness : 0;
+            if (L.auxLight.configured) {
+                HardwareInit::setLight(L.auxLight.pin, auxDuty);
+            } else if (s_hw->auxLight.configured) {
+                HardwareInit::setAuxLight(((bits & 0x40) || (bits & 0x02)) ? s_hw->auxLight.brightness : 0);
+            }
+
+            return;
+        }
+
+        bool manualTail = false;
         bool brakeActive = manualBrake || decelBrake;
         bool manualRev  = autoReverseLight; // gear-R automatic
 
@@ -889,11 +1054,8 @@ private:
             HardwareInit::setLight(L.fogLamp.pin, fogDuty);
         }
 
-        // Bit 3: Hazard Light (Truck) or Ditch Lights (Locomotive)
-        if (isLoco) {
-            bool ditchOn = (bits & 0x08);
-            HardwareInit::setDitchLights(ditchOn, L.ditchLight.intervalMs);
-        }
+        // Bit 3: Hazard Light (Truck)
+        // Handled via turn signals below
 
         // Bit 4: Beacon Light (Strobe / Flasher)
         bool beaconOn = (bits & 0x10);
@@ -905,17 +1067,10 @@ private:
             HardwareInit::setLight(L.cabLight.pin, cabDuty);
         }
 
-        // Bit 6: Work Light (Truck) or Step Light (Locomotive)
-        if (!isLoco) {
-            uint8_t workDuty = (bits & 0x40) ? L.workLight.brightness : 0;
-            if (L.workLight.configured) {
-                HardwareInit::setLight(L.workLight.pin, workDuty);
-            }
-        } else {
-            uint8_t stepDuty = (bits & 0x40) ? L.stepLight.brightness : 0;
-            if (L.stepLight.configured) {
-                HardwareInit::setLight(L.stepLight.pin, stepDuty);
-            }
+        // Bit 6: Work Light (Truck)
+        uint8_t workDuty = (bits & 0x40) ? L.workLight.brightness : 0;
+        if (L.workLight.configured) {
+            HardwareInit::setLight(L.workLight.pin, workDuty);
         }
 
         // Bit 7: Aux Light
@@ -1019,6 +1174,18 @@ bool     VehicleController::s_parkingBrakePrev = false;
 float    VehicleController::s_currentMotorSpeed = 0.0f;
 uint32_t VehicleController::s_lastInertiaTime = 0;
 bool     VehicleController::s_prevMotorMoving = false;
+
+// Locomotive Dynamics & Directional Lighting
+bool     VehicleController::s_locoInitialized = false;
+bool     VehicleController::s_activeDirection = true;
+bool     VehicleController::s_reverserInterlocked = false;
+bool     VehicleController::s_dirSwitchPrev = true;
+float    VehicleController::s_slewHeadDuty = 0.0f;
+float    VehicleController::s_slewTailDuty = 0.0f;
+float    VehicleController::s_slewCabDuty = 0.0f;
+float    VehicleController::s_slewStepDuty = 0.0f;
+uint32_t VehicleController::s_lastLightSlewMs = 0;
+bool     VehicleController::s_ditchRunning = false;
 
 int16_t  VehicleController::aux_hydraulic1 = 0;
 bool     VehicleController::bucket_rattle_trigger = false;

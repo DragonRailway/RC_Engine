@@ -1,6 +1,4 @@
 {
-  "name": "TrackLink Loco",
-  "description": "TrackLink V3 Locomotive Controller",
   "sound": {
     "volume": 80
   },
@@ -26,7 +24,7 @@
     },
     "ditch_light": {
       "left": {
-        "hardware": "L4"
+        "hardware": "L6"
       },
       "right": {
         "hardware": "L5"
@@ -35,7 +33,7 @@
       "interval_ms": 8
     },
     "step_light": {
-      "hardware": "L6",
+      "hardware": "L4",
       "brightness_max": 30
     },
     "cab_light": {
