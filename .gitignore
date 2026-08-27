@@ -13,6 +13,7 @@ test/host_vc/host_vc_harness
 
 libdeps/
 lib/rk-arduino/
+dist/
 build/
 .cache/
 .dummy
@@ -54,6 +55,8 @@ build_output.txt
 
 # Agents
 .*/
+!.github/
+!.github/**
 
 # openspec
 /archive/

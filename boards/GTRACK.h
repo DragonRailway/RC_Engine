@@ -50,11 +50,12 @@ struct AUDIO {
 };
 
 struct POWER {
-  static constexpr uint8_t POWER_ENABLE = 35; // PWR_EN: set HIGH to keep board ON
-  static constexpr uint8_t POWER_BUTTON = 36; // PWR_BTN: digital read from MCU
-  static constexpr uint8_t VOLTAGE_SENS = 7;  // VSENS: voltage divider 20k/5.1k
-  static constexpr uint8_t BUCK_5V_EN   = 44; // 5V_EN: pull LOW to disable 5V buck
-  static constexpr uint8_t POWER_OUT    = 43; // OUT: High-side MOSFET for external loads
+  static constexpr uint8_t POWER_ENABLE = 35;   // PWR_EN: set HIGH to keep board ON
+  static constexpr uint8_t POWER_BUTTON = 36;   // PWR_BTN: digital read from MCU
+  static constexpr uint8_t VOLTAGE_SENS = 7;    // VSENS: voltage divider 20k/5.1k
+  static constexpr uint8_t CHARGE_SENS  = 0xFF; // No dedicated charge sense pin
+  static constexpr uint8_t BUCK_5V_EN   = 44;   // 5V_EN: pull LOW to disable 5V buck
+  static constexpr uint8_t POWER_OUT    = 43;   // OUT: High-side MOSFET for external loads
 };
 
 
