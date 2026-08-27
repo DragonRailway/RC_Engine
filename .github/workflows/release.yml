@@ -46,14 +46,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install platformio jsonschema
 
-      - name: Validate Configurations
-        run: |
-          python scripts/validate_configs.py
-
-      - name: Build All Environments & Package Release Assets
-        run: |
-          python scripts/package_release.py --output-dir dist
-
       - name: Determine Release Tag
         id: vars
         run: |
@@ -62,6 +54,14 @@ jobs:
           else
             echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Validate Configurations
+        run: |
+          python scripts/validate_configs.py
+
+      - name: Build All Environments & Package Release Assets
+        run: |
+          python scripts/package_release.py --version "${{ steps.vars.outputs.tag }}" --output-dir dist
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

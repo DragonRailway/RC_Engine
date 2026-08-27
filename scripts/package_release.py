@@ -50,11 +50,31 @@ def package_configs_zip(output_path):
     print(f"[Package] Created configs archive: {output_path.name} ({output_path.stat().st_size / 1024:.1f} KB)")
 
 
-def package_release(target_envs=None, dist_dir=DEFAULT_DIST_DIR, skip_build=False):
+def get_chip_for_env(env_name):
+    config = configparser.ConfigParser()
+    config.read(PLATFORMIO_INI)
+    section = f"env:{env_name}"
+    board = config.get(section, "board", fallback="esp32-s3-devkitc-1").lower()
+    if "esp32-s3" in board or "esp32s3" in board:
+        return "esp32s3"
+    elif "esp32-c3" in board or "esp32c3" in board:
+        return "esp32c3"
+    elif "esp32-c6" in board or "esp32c6" in board:
+        return "esp32c6"
+    elif "esp32-s2" in board or "esp32s2" in board:
+        return "esp32s2"
+    elif "esp32-h2" in board or "esp32h2" in board:
+        return "esp32h2"
+    return "esp32"
+
+
+def package_release(target_envs=None, dist_dir=DEFAULT_DIST_DIR, skip_build=False, version="v1.0.0"):
     dist_dir.mkdir(parents=True, exist_ok=True)
     all_envs = get_all_environments()
     envs_to_build = target_envs or all_envs
+    ver_str = version if version.startswith("v") else f"v{version}"
 
+    print(f"[Package] Version: {ver_str}")
     print(f"[Package] Target environments: {', '.join(envs_to_build)}")
 
     packaged_files = []
@@ -71,8 +91,9 @@ def package_release(target_envs=None, dist_dir=DEFAULT_DIST_DIR, skip_build=Fals
         if not factory_src.exists() or not ota_src.exists():
             raise FileNotFoundError(f"Binary outputs missing in {build_dir}. Ensure build succeeded.")
 
-        factory_dst = dist_dir / f"RC_Engine-{env}-factory.bin"
-        ota_dst = dist_dir / f"RC_Engine-{env}-ota.bin"
+        chip = get_chip_for_env(env)
+        factory_dst = dist_dir / f"RC_Engine-{ver_str}-{chip}-{env}-factory.bin"
+        ota_dst = dist_dir / f"RC_Engine-{ver_str}-{chip}-{env}-ota.bin"
 
         shutil.copy2(factory_src, factory_dst)
         shutil.copy2(ota_src, ota_dst)
@@ -82,7 +103,7 @@ def package_release(target_envs=None, dist_dir=DEFAULT_DIST_DIR, skip_build=Fals
         print(f"[Package] Copied {ota_dst.name} ({ota_dst.stat().st_size / 1024:.1f} KB)")
 
     # 2. Package configs zip
-    configs_zip = dist_dir / "RC_Engine-configs.zip"
+    configs_zip = dist_dir / f"RC_Engine-{ver_str}-configs.zip"
     package_configs_zip(configs_zip)
     packaged_files.append(configs_zip)
 
@@ -97,11 +118,12 @@ def package_release(target_envs=None, dist_dir=DEFAULT_DIST_DIR, skip_build=Fals
 def main():
     parser = argparse.ArgumentParser(description="Package RC_Engine release artifacts")
     parser.add_argument("--env", action="append", help="Target specific environment(s)")
+    parser.add_argument("--version", default="v1.0.0", help="Release version tag (e.g. v1.0.0)")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_DIST_DIR, help="Destination directory for artifacts")
     parser.add_argument("--skip-build", action="store_true", help="Skip compilation, package existing binaries")
     args = parser.parse_args()
 
-    package_release(target_envs=args.env, dist_dir=args.output_dir, skip_build=args.skip_build)
+    package_release(target_envs=args.env, dist_dir=args.output_dir, skip_build=args.skip_build, version=args.version)
 
 
 if __name__ == "__main__":
