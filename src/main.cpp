@@ -74,7 +74,7 @@ static uint32_t fileWriteTime(const char* path) {
 #elif defined(TRACKLINK_V3)
 #define BOARD_DEFAULT_NAME "TRACKLINK_V3"
 #else
-#define BOARD_DEFAULT_NAME "RC_Brain"
+#define BOARD_DEFAULT_NAME "RC_Engine"
 #endif
 
 // ── Device Metadata Cascade ──
@@ -219,7 +219,7 @@ void setup() {
 #endif
     delay(1000);
 
-    Serial.println("\n=== RC Brain - Unified Vehicle Controller ===\n");
+    Serial.println("\n=== RC Engine - Unified Vehicle Controller ===\n");
 
     if (!ConfigParser::begin()) {
         Serial.println("FATAL: LittleFS mount failed");
@@ -232,7 +232,7 @@ void setup() {
     Serial.println("\n── Starting RadioKit ──");
     initRadioKit();
     RadioKit.config.name = BOARD_DEFAULT_NAME;
-    RadioKit.config.description = "RC Brain Controller";
+    RadioKit.config.description = "RC Engine Controller";
     RadioKit.begin();
 
     Serial.println("\n── Loading Configs ──");

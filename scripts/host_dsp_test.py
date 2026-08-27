@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host DSP Test Harness for RC_brain.
+"""Host DSP Test Harness for RC_Engine.
 
 Compiles lib/SoundEngine/src/RcEngineSound.cpp against stub Arduino.h on x86,
 drives deterministic test scripts, and asserts on generated PCM sample streams:

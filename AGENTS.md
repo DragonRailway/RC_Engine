@@ -1,17 +1,17 @@
-# RC Brain - AGENTS.md
+# RC_Engine - AGENTS.md
 
 ## Project Overview
-ESP32-based RC vehicle controller (TRACKLINK_V3 board) with configurable hardware, sound engine, and vehicle profiles. Built with PlatformIO, Arduino framework, and LittleFS for config storage.
+ESP32-based RC vehicle controller and sound synthesizer (TRACKLINK_V3 & MIKRO_V2 boards) with configurable hardware, sound engine, and vehicle profiles. Built with PlatformIO, Arduino framework, and LittleFS for config storage.
 
 ## Key Components
 - **src/main.cpp** - Entry point; loads configs, runs the control loop and RadioKit
 - **common/** - Shared headers: `Config.h`/`ConfigParser.h` (LittleFS + ArduinoJson), `HardwareInit.h` (peripherals + light animation), `VehicleController.h` (drive/light/gear logic), `RADIOKIT.h` (generated RadioKit surface)
-- **boards/** - Pin definitions per board (TRACKLINK_V3.h, etc.), generated into `boards/boards.h` by `scripts/gen_boards_header.py`
+- **boards/** - Pin definitions per board (TRACKLINK_V3.h, MIKRO_V2.h), generated into `boards/boards.h` by `scripts/gen_boards_header.py`
 - **configs/** - The deployable config library (bundle model):
   - `configs/hardware_configs/hardware-<BOARD>.json` — one per board
   - `configs/vehicle_configs/<sound_set>/` — self-contained vehicle bundles (`vehicle.json` + `sounds/`)
   - `configs/vehicle_configs/common/<preset>/` — shared preset fallback sounds
-- **lib/SoundEngine/** - Sound engine library; **lib/rk-arduino** - vendored RadioKit stack; **ESP32_EasyKit** - standalone sibling repo (`../ESP32_EasyKit`)
+- **lib/SoundEngine/** - Sound engine library; **lib/rk-arduino** - RadioKit stack; **ESP32_EasyKit** - fetched via GitHub (`DragonRailway/ESP32_EasyKit`)
 - **references/** - Legacy C-header sources (raw_sounds, raw_vehicles, upstream libs)
 - **data/** - Gitignored scratch (never deployed; see FS deployment below)
 - **scripts/build_fs.py** - The ONLY supported LittleFS flash path

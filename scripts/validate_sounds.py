@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sound Data Validator for RC_brain (config-bundles layout).
+"""Sound Data Validator for RC_Engine (config-bundles layout).
 
 Walks configs/vehicle_configs/ to validate:
 - Bundle layout: bundle dir name == the `sound_set` in its vehicle.json;

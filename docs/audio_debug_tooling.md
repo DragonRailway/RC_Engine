@@ -1,6 +1,6 @@
-# Audio Debug Tooling Guide
+# Audio Verification & Debug Tooling
 
-This document describes the 5-layer audio verification system for `RC_brain`.
+This document describes the 5-layer audio verification system for `RC_Engine`.
 
 ## Architectural Layers
 

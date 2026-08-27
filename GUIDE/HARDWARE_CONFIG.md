@@ -1,4 +1,4 @@
-# RC Brain — Hardware Config Reference
+# RC Engine — Hardware Config Reference
 
 This document provides a description of the configuration options available
 for the **hardware config** (`hardware-<BOARD>.json`). It is modeled after the

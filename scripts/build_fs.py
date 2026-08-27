@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manifest-driven LittleFS deployment for RC_brain (config-bundles model).
+"""Manifest-driven LittleFS deployment for RC_Engine (config-bundles model).
 
 Assembles a board's LittleFS image from the configs/ library — exactly one
 hardware config + one vehicle bundle (+ shared preset fallbacks) — and flashes

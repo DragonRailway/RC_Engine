@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Golden Metric Profile Generator & Comparison Tool for RC_brain.
+"""Golden Metric Profile Generator & Comparison Tool for RC_Engine.
 
 Stores reference feature profiles (RMS envelope, Zero-Crossing Rate, FFT peaks)
 and compares test run metrics against goldens using relative tolerances (±15% RMS, ±10% ZCR)

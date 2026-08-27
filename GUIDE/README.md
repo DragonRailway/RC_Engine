@@ -1,6 +1,6 @@
-# RC Brain — Configuration Guide
+# RC Engine — Configuration Guide
 
-User-facing guides for configuring the RC Brain firmware. Modeled after the
+User-facing guides for configuring the RC Engine firmware. Modeled after the
 [Klipper configuration reference](https://www.klipper3d.org/Config_Reference.html)
 style: one page per config area, every parameter documented with its type,
 default, allowed values, and notes.

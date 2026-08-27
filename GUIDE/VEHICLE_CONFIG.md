@@ -1,4 +1,4 @@
-# RC Brain — Vehicle Config Reference
+# RC Engine — Vehicle Config Reference
 
 This document provides a description of all configuration options available
 for the **vehicle config** (`vehicle-config.json` or `vehicle.json`). It is modeled after the

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://rc-brain.local/schemas/hardware_config.schema.json",
-  "title": "RC Brain hardware config",
+  "title": "RC Engine hardware config",
   "description": "Schema for configs/hardware_configs/hardware-<BOARD>.json. Mirrors what common/ConfigParser.h reads, including documented quirks: turn_light.type is accepted-but-ignored, brake/reversing brightness_max is accepted-but-ignored (firmware forces 100%), and reversing_light.hardware accepts a pin token or a light alias. Motor type is derived from the hardware token, so drive_motor/left_motor/right_motor have no 'type' key.",
   "type": "object",
   "additionalProperties": false,

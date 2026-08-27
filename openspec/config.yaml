@@ -1,7 +1,7 @@
 schema: spec-driven
 
 context: |
-  RC Brain - ESP32-S3 RC vehicle sound and control controller.
+  RC Engine - ESP32-S3 RC vehicle sound and control controller.
   
   Tech stack:
   - ESP32-S3 N4R2 (4MB flash, 2MB PSRAM)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""On-Device Audio Capture & Feature Analyzer for RC_brain.
+"""On-Device Audio Capture & Feature Analyzer for RC_Engine.
 
 Parses structured [AUDIO_STATS] and [AUDIO_WAVE] lines over serial (or from a capture log),
 reassembles waveform samples into WAV files, and asserts audio features:
