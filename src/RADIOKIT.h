@@ -4,9 +4,15 @@
 #ifndef RADIOKIT_GENERATED_H
 #define RADIOKIT_GENERATED_H
 
+#ifndef RK_ENABLE_OTA
 #define RK_ENABLE_OTA
+#endif
+#ifndef RK_ENABLE_FS
 #define RK_ENABLE_FS
+#endif
+#ifndef RK_ENABLE_BLE
 #define RK_ENABLE_BLE
+#endif
 
 #include <RadioKitLib.h>
 
@@ -49,7 +55,7 @@ RK_Slider throttle_slider(67, 105, 114, 20, 0);  // slider: pos=(67,105) size=20
 
 RK_SlideSwitch dir_switch(67, 173, 18, 32, 0);  // switch: pos=(67,173) size=32x18 label="dir_switch"
 
-RK_MultipleSelect loco_light(31, 97, 129, 24, 0);  // multiple: pos=(31,97) size=24x129 label="loco_light"
+RK_MultipleSelect loco_light(31, 97, 130, 24, 0);  // multiple: pos=(31,97) size=24x130 label="loco_light"
 
 RK_PushButton bell_button(31, 175, 20, 0, 0);  // button: pos=(31,175) size=?x20 label="bell_button"
 
@@ -67,6 +73,8 @@ static inline void initRadioKit() {
   RadioKit.config.type        = "Locomotive";
   RadioKit.config.theme       = "dragon";
   RadioKit.config.baudrate    = 1000000;
+  RadioKit.config.fs_url       = RK_FS_URL;
+  RadioKit.config.ota_url      = RK_OTA_URL;
 
   steering_wheel.rk.label = "steering_wheel";
   steering_wheel.setLabelHidden(true);
@@ -132,14 +140,14 @@ static inline void initRadioKit() {
   loco_light.setPage(1);
   loco_light.rk.label = "loco_light";
   loco_light.setLabelHidden(true);
-  loco_light.rk.items[0] = {"", "lightbulb", 0};
-  loco_light.rk.items[1] = {"", "snowflake", 1};
-  loco_light.rk.items[2] = {"", "crosshair", 2};
-  loco_light.rk.items[3] = {"", "siren", 3};
-  loco_light.rk.items[4] = {"", "cable-car", 4};
-  loco_light.rk.items[5] = {"", "tablet", 5};
-  loco_light.rk.items[6] = {"", "x", 6};
-  loco_light.rk.items[7] = {"H", "warning", 7};
+  loco_light.rk.items[0] = {"", "arrow-up", 0};
+  loco_light.rk.items[1] = {"", "arrow-down", 1};
+  loco_light.rk.items[2] = {"", "snowflake", 2};
+  loco_light.rk.items[3] = {"", "crosshair", 3};
+  loco_light.rk.items[4] = {"", "siren", 4};
+  loco_light.rk.items[5] = {"", "cable-car", 5};
+  loco_light.rk.items[6] = {"", "tablet", 6};
+  loco_light.rk.items[7] = {"", "x", 7};
   loco_light.rk.itemCount = 8;
   bell_button.setPage(1);
   bell_button.rk.label = "bell_button";
@@ -150,9 +158,7 @@ static inline void initRadioKit() {
   engine_button.rk.label = "engine_button";
   engine_button.setLabelHidden(true);
   engine_button.rk.onText = "START";
-  engine_button.rk.offText = "STOP";
-  engine_button.rk.icon = "refresh-ccw";
-  engine_button.rk.offIcon = "refresh-ccw";
+  engine_button.rk.icon = "power";
   serial_monitor_2.setPage(1);
   serial_monitor_2.rk.label = "serial_monitor_2";
   serial_monitor_2.setLabelHidden(true);
@@ -167,7 +173,9 @@ static inline void initRadioKit() {
   RadioKit.setPageNames(rk_pageNames);
   RadioKit.setPageOrientations(rk_pageOrientations);
   RadioKit.setCanvasFlags(0x01);
+
+  RadioKit.enableFS();
+  RadioKit.enableOTA();
 }
 
 #endif // RADIOKIT_GENERATED_H
-
