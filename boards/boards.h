@@ -4,6 +4,10 @@
 
 #pragma once
 
+#ifdef GTRACK
+#include "GTRACK.h"
+#endif
+
 #ifdef MIKRO_V2
 #include "MIKRO_V2.h"
 #endif

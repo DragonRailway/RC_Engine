@@ -11,7 +11,7 @@ ESP32-based RC vehicle controller and sound synthesizer (TRACKLINK_V3 & MIKRO_V2
   - `configs/hardware_configs/hardware-<BOARD>.json` — one per board
   - `configs/vehicle_configs/<sound_set>/` — self-contained vehicle bundles (`vehicle.json` + `sounds/`)
   - `configs/vehicle_configs/common/<preset>/` — shared preset fallback sounds
-- **lib/SoundEngine/** - Sound engine library; **lib/rk-arduino** - RadioKit stack; **ESP32_EasyKit** - fetched via GitHub (`DragonRailway/ESP32_EasyKit`)
+- **lib/SoundEngine/** - Sound engine library; **lib/rk-arduino** - RadioKit stack (fetched via GitHub `Radio-Kit/RadioKit`); **ESP32_EasyKit** - fetched via GitHub (`DragonRailway/ESP32_EasyKit`)
 - **references/** - Legacy C-header sources (raw_sounds, raw_vehicles, upstream libs)
 - **data/** - Gitignored scratch (never deployed; see FS deployment below)
 - **scripts/build_fs.py** - The ONLY supported LittleFS flash path

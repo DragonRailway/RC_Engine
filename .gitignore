@@ -12,6 +12,7 @@ test/host_dsp/host_dsp_harness
 test/host_vc/host_vc_harness
 
 libdeps/
+lib/rk-arduino/
 build/
 .cache/
 .dummy

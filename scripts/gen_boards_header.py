@@ -3,9 +3,15 @@ gen_boards_header.py
 PlatformIO script to auto-generate src/boards/boards.h
 from all *.h files in src/boards/ (excluding boards.h itself).
 """
-Import("env")
 import os
 import glob
+
+try:
+    from SCons.Script import Import
+    Import("env")
+    PROJECT_DIR = env["PROJECT_DIR"]
+except Exception:
+    PROJECT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 def generate_boards_header(source, target, env):
     project_dir = env["PROJECT_DIR"]
@@ -45,7 +51,7 @@ def generate_boards_header(source, target, env):
         print("[gen_boards_header] WARNING: No board headers found in src/boards/")
 
 # Execute immediately when script is loaded
-project_dir = env["PROJECT_DIR"]
+project_dir = PROJECT_DIR
 boards_dir = os.path.join(project_dir, "boards")
 boards_h = os.path.join(boards_dir, "boards.h")
 
