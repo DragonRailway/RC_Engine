@@ -5,27 +5,29 @@
         "volume": 80
     },
     "drivetrain": {
-        "drive_motor": {
-            "hardware": "DRIVER_A",
-            "frequency": 20000,
-            "direction": "forward",
-            "duty": {
-                "min": 20,
-                "max": 90
+        "drive_motors": [
+            {
+                "hardware": "DRIVER_A",
+                "frequency": 20000,
+                "direction": "forward",
+                "duty": {
+                    "min": 20,
+                    "max": 90
+                }
             }
-        }
+        ]
     },
     "lights": {
         "head_light": {
-            "hardware": "L1",
+            "hardware": ["L1"],
             "brightness_max": 60
         },
         "tail_light": {
-            "hardware": "L2",
+            "hardware": ["L2"],
             "brightness_max": 60
         },
         "brake_light": {
-            "hardware": "L3"
+            "hardware": ["L3"]
         },
         "reversing_light": {
             "hardware": "brake_light"

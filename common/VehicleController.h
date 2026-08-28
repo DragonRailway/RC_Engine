@@ -64,6 +64,9 @@ public:
             s_profile->config.sound.master = s_hw->sound.volume;
         }
 
+        // Initialize locomotive throttle slider at neutral idle (-100 / 0%)
+        throttle_slider.rk.value = -100;
+
         s_engineStatePrev = RcEngineSound::OFF;
         s_brakePrev = false;
         s_hornPrev = false;
@@ -926,8 +929,8 @@ private:
                 }
             }
 
-            uint8_t targetCab  = (bits & 0x10) ? (L.cabLight.configured ? L.cabLight.brightness : 0) : 0;  // Bit 4 (cable-car)
-            uint8_t targetStep = (bits & 0x20) ? (L.stepLight.configured ? L.stepLight.brightness : 0) : 0;  // Bit 5 (tablet)
+            uint8_t targetCab  = (bits & 0x04) ? (L.cabLight.configured ? L.cabLight.brightness : 0) : 0;  // Bit 2 (CAB / cable-car)
+            uint8_t targetStep = (bits & 0x08) ? (L.stepLight.configured ? L.stepLight.brightness : 0) : 0;  // Bit 3 (STEP / tablet)
 
             // Asymmetric software PWM slew rate limiter:
             // ~200ms warm-up (0.5% per ms), ~100ms cool-down (1.0% per ms)
@@ -956,8 +959,8 @@ private:
             if (L.cabLight.configured)  HardwareInit::setLight(L.cabLight.pin, cabDuty);
             if (L.stepLight.configured) HardwareInit::setLight(L.stepLight.pin, stepDuty);
 
-            // Dual Ditch Lights: smooth triangular cross-fading (purely manual on Bit 2 / 0x04)
-            bool ditchActive = (bits & 0x04);
+            // Dual Ditch Lights: smooth triangular cross-fading (purely manual on Bit 1 / 0x02 / DITCH siren)
+            bool ditchActive = (bits & 0x02);
             if (L.ditchLight.configured) {
                 if (ditchActive) {
                     uint16_t interval = (L.ditchLight.intervalMs <= 20) ? (L.ditchLight.intervalMs * 100) : L.ditchLight.intervalMs;
@@ -978,16 +981,16 @@ private:
                 }
             }
 
-            // Beacon Light: Bit 3 (0x08 / siren)
-            bool beaconOn = (bits & 0x08);
+            // Beacon / Aux Light: Bit 4 (0x10 / crosshair)
+            bool beaconOn = (bits & 0x10);
             HardwareInit::setBeacon(beaconOn);
 
-            // Aux Light: Bit 6 (0x40 / x) or Bit 1 (0x02 / snowflake)
-            uint8_t auxDuty = ((bits & 0x40) || (bits & 0x02)) ? L.auxLight.brightness : 0;
+            // Aux Light: Bit 5 (0x20 / x)
+            uint8_t auxDuty = (bits & 0x20) ? L.auxLight.brightness : 0;
             if (L.auxLight.configured) {
                 HardwareInit::setLight(L.auxLight.pin, auxDuty);
             } else if (s_hw->auxLight.configured) {
-                HardwareInit::setAuxLight(((bits & 0x40) || (bits & 0x02)) ? s_hw->auxLight.brightness : 0);
+                HardwareInit::setAuxLight((bits & 0x20) ? s_hw->auxLight.brightness : 0);
             }
 
             return;

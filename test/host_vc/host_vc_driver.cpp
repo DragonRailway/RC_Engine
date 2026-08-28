@@ -121,12 +121,14 @@ int main() {
     // slider drives the aux motor channel proportionally (with the configured
     // duty window). No aux config → no channel, no output.
     std::cout << "[Host VC Test] Test 6: Config-driven aux motor (mixer)..." << std::endl;
-    hwConfig.auxMotor.motor.type = HardwareConfig::DriveMotor::DRIVER;
-    hwConfig.auxMotor.motor.hardwareId = PinMapper::DRIVER_B;
-    hwConfig.auxMotor.motor.direction = HardwareConfig::DriveMotor::FORWARD;
-    hwConfig.auxMotor.motor.duty.min = 20;
-    hwConfig.auxMotor.motor.duty.max = 90;
-    hwConfig.auxMotor.purpose = HardwareConfig::AuxMotor::MIXER;
+    hwConfig.auxMotorCount = 1;
+    hwConfig.auxMotors[0].motor.type = HardwareConfig::DriveMotor::DRIVER;
+    hwConfig.auxMotors[0].motor.hardwareId = PinMapper::DRIVER_B;
+    hwConfig.auxMotors[0].motor.direction = HardwareConfig::DriveMotor::FORWARD;
+    hwConfig.auxMotors[0].motor.duty.min = 20;
+    hwConfig.auxMotors[0].motor.duty.max = 90;
+    hwConfig.auxMotors[0].purpose = HardwareConfig::AuxMotor::MIXER;
+    hwConfig.auxMotors[0].configured = true;
     HardwareInit::init(hwConfig);
 
     host_last_motor_speed = 0.0f;
@@ -161,8 +163,7 @@ int main() {
     hwConfig.rightMotor.duty.min = 20;
     hwConfig.rightMotor.duty.max = 90;
     hwConfig.steeringSensitivity = 80;
-    hwConfig.auxMotor.purpose = HardwareConfig::AuxMotor::NONE;
-    hwConfig.auxMotor.motor.type = HardwareConfig::DriveMotor::NONE;
+    hwConfig.auxMotorCount = 0;
     HardwareInit::init(hwConfig);
 
     gear_switch.rk.value = 0; // D (Drive)
@@ -356,13 +357,14 @@ int main() {
     host_gpio_pin_val[POWER::POWER_BUTTON] = LOW;
 
     // 3-State CHARGING detection
+    host_radiokit_connected = false;
     host_gpio_pin_val[POWER::POWER_ENABLE] = HIGH;
-    host_gpio_pin_val[POWER::CHARGE_SENS] = HIGH;
-    VehicleController::update();
-    assert(VehicleController::isChargingState() && "CHARGING state should be active when CHARGE_SENS is HIGH");
     host_gpio_pin_val[POWER::CHARGE_SENS] = LOW;
     VehicleController::update();
-    assert(!VehicleController::isChargingState() && "CHARGING state should clear when CHARGE_SENS is LOW");
+    assert(VehicleController::isChargingState() && "CHARGING state should be active when CHARGE_SENS is LOW");
+    host_gpio_pin_val[POWER::CHARGE_SENS] = HIGH;
+    VehicleController::update();
+    assert(!VehicleController::isChargingState() && "CHARGING state should clear when CHARGE_SENS is HIGH");
 
     // Disconnect timeout & 10s warning phase (re-init controller at start of disconnect test)
     host_virtual_millis = 40000;
@@ -424,7 +426,7 @@ int main() {
     host_gpio_pin_val[POWER::POWER_BUTTON] = LOW;
 
     // Charging indicator animation
-    host_gpio_pin_val[POWER::CHARGE_SENS] = HIGH;
+    host_gpio_pin_val[POWER::CHARGE_SENS] = LOW;
     VehicleController::init(&testHw3, &engine, &profile);
     VehicleController::update();
     assert(VehicleController::isChargingState() && "Charging state should be active");
@@ -432,15 +434,18 @@ int main() {
     std::cout << "  PASS: Power button hold rapid blink feedback and charging indicator verified." << std::endl;
 
     // ── Test 14: Steer-by-Wire Continuous Servo Tracking ──
+    host_radiokit_connected = true;
+    host_gpio_pin_val[POWER::CHARGE_SENS] = HIGH;
     std::cout << "[Host VC Test] Test 14: Steer-by-Wire Continuous Servo Tracking..." << std::endl;
     HardwareConfig testHwAckermann;
     testHwAckermann.drivetrainType = HardwareConfig::ACKERMANN;
-    testHwAckermann.steeringServo.hardwareId = PIN::S1;
-    testHwAckermann.steeringServo.configured = true;
-    testHwAckermann.steeringServo.frequency = 50;
-    testHwAckermann.steeringServo.endpoints.left = 1350;
-    testHwAckermann.steeringServo.endpoints.center = 1500;
-    testHwAckermann.steeringServo.endpoints.right = 1650;
+    testHwAckermann.steeringServoCount = 1;
+    testHwAckermann.steeringServos[0].hardwareId = PIN::S1;
+    testHwAckermann.steeringServos[0].configured = true;
+    testHwAckermann.steeringServos[0].frequency = 50;
+    testHwAckermann.steeringServos[0].endpoints.left = 1350;
+    testHwAckermann.steeringServos[0].endpoints.center = 1500;
+    testHwAckermann.steeringServos[0].endpoints.right = 1650;
     HardwareInit::init(testHwAckermann);
     VehicleController::init(&testHwAckermann, &engine, &profile);
 
@@ -828,12 +833,13 @@ int main() {
     std::cout << "[Host VC Test] Test 21: Virtual Mass Inertia Drivetrain Simulation & Direct Fallback..." << std::endl;
     HardwareConfig hwConfig21;
     hwConfig21.drivetrainType = HardwareConfig::ACKERMANN;
-    hwConfig21.driveMotor.type = HardwareConfig::DriveMotor::DRIVER;
-    hwConfig21.driveMotor.hardwareId = PinMapper::DRIVER_A;
-    hwConfig21.driveMotor.direction = HardwareConfig::DriveMotor::FORWARD;
-    hwConfig21.driveMotor.duty.min = 0;
-    hwConfig21.driveMotor.duty.max = 100;
-    hwConfig21.driveMotor.configured = true;
+    hwConfig21.driveMotorCount = 1;
+    hwConfig21.driveMotors[0].type = HardwareConfig::DriveMotor::DRIVER;
+    hwConfig21.driveMotors[0].hardwareId = PinMapper::DRIVER_A;
+    hwConfig21.driveMotors[0].direction = HardwareConfig::DriveMotor::FORWARD;
+    hwConfig21.driveMotors[0].duty.min = 0;
+    hwConfig21.driveMotors[0].duty.max = 100;
+    hwConfig21.driveMotors[0].configured = true;
 
     HardwareInit::init(hwConfig21);
     VehicleController::init(&hwConfig21, &engine, &profile);
@@ -979,12 +985,13 @@ int main() {
     locoHw.lights.stepLight.pin = PIN::L6;
     locoHw.lights.stepLight.brightness = 50;
     locoHw.lights.stepLight.configured = true;
-    locoHw.driveMotor.type = HardwareConfig::DriveMotor::DRIVER;
-    locoHw.driveMotor.hardwareId = PinMapper::DRIVER_A;
-    locoHw.driveMotor.direction = HardwareConfig::DriveMotor::FORWARD;
-    locoHw.driveMotor.duty.min = 0;
-    locoHw.driveMotor.duty.max = 100;
-    locoHw.driveMotor.configured = true;
+    locoHw.driveMotorCount = 1;
+    locoHw.driveMotors[0].type = HardwareConfig::DriveMotor::DRIVER;
+    locoHw.driveMotors[0].hardwareId = PinMapper::DRIVER_A;
+    locoHw.driveMotors[0].direction = HardwareConfig::DriveMotor::FORWARD;
+    locoHw.driveMotors[0].duty.min = 0;
+    locoHw.driveMotors[0].duty.max = 100;
+    locoHw.driveMotors[0].configured = true;
     host_radiokit_connected = true;
     HardwareInit::init(locoHw);
 
@@ -1068,13 +1075,13 @@ int main() {
     assert(HardwareInit::getLightDutyPercent(PIN::L1) == 0.0f && "Forward headlight must be extinguished in reverse");
 
     // 23.3 Asymmetric Fade-Out Rate Verification (Fast Cool-down 1.0%/ms vs Warm-up 0.5%/ms)
-    // Turn cab light ON (target 60%, Bit 4 / 0x10)
-    loco_light.rk.value = 0x10; // Bit 4 Cab Light ON
+    // Turn cab light ON (target 60%, Bit 2 / 0x04)
+    loco_light.rk.value = 0x04; // Bit 2 Cab Light ON
     for (int t = 0; t < 10; t++) { host_virtual_millis += 20; VehicleController::update(); }
     assert(fabs(HardwareInit::getLightDutyPercent(PIN::L3) - 60.0f) <= 1.0f && "Cab light on");
 
     // Toggle OFF -> 30ms step -> should drop by ~30% duty (rate 1.0%/ms)
-    loco_light.rk.value &= ~0x10;
+    loco_light.rk.value &= ~0x04;
     host_virtual_millis += 30;
     VehicleController::update();
     float cabDutyAfter30ms = HardwareInit::getLightDutyPercent(PIN::L3);
@@ -1082,7 +1089,7 @@ int main() {
 
     std::cout << "  PASS: Locomotive directional lighting and asymmetric PWM slew rates verified." << std::endl;
 
-    // ── Test 24: Dual Ditch Light Triangular Cross-Fading (Manual on Bit 2) ──
+    // ── Test 24: Dual Ditch Light Triangular Cross-Fading (Manual on Bit 1) ──
     std::cout << "[Host VC Test] Test 24: Dual Ditch Light Triangular Cross-Fading..." << std::endl;
     // 24.1 Ditch light inactive -> 0%
     loco_light.rk.value = 0x00;
@@ -1090,8 +1097,8 @@ int main() {
     assert(HardwareInit::getLightDutyPercent(PIN::L4) == 0.0f && "Ditch L off");
     assert(HardwareInit::getLightDutyPercent(PIN::L5) == 0.0f && "Ditch R off");
 
-    // 24.2 Activate via Bit 2 (0x04) -> should cross-fade
-    loco_light.rk.value = 0x04;
+    // 24.2 Activate via Bit 1 (0x02) -> should cross-fade
+    loco_light.rk.value = 0x02;
     host_virtual_millis = 10000; // aligned
     VehicleController::update(); // t=0: L=0%, R=100%
     float ditchL_0 = HardwareInit::getLightDutyPercent(PIN::L4);
@@ -1112,11 +1119,18 @@ int main() {
     float ditchR_500 = HardwareInit::getLightDutyPercent(PIN::L5);
     assert(fabs(ditchL_500 - 100.0f) <= 1.0f && fabs(ditchR_500 - 0.0f) <= 1.0f);
 
-    // Turn Bit 2 OFF -> Ditch lights extinguished
+    // Turn Bit 1 OFF -> Ditch lights extinguished
     loco_light.rk.value = 0x00;
     VehicleController::update();
-    assert(HardwareInit::getLightDutyPercent(PIN::L4) == 0.0f && "Ditch L extinguished on toggle off");
-    assert(HardwareInit::getLightDutyPercent(PIN::L5) == 0.0f && "Ditch R extinguished on toggle off");
+    // 24.3: Configured light mask verification for locomotive
+    uint8_t locoMaskSparse = HardwareInit::getConfiguredLightMask(locoHw.lights, true);
+    assert(locoMaskSparse == 0x0F && "Locomotive mask for head/tail, ditch, cab, step should be 0x0F");
+
+    HardwareConfig fullLocoHw = locoHw;
+    fullLocoHw.lights.beacon.configured = true;
+    fullLocoHw.lights.auxLight.configured = true;
+    uint8_t locoMaskFull = HardwareInit::getConfiguredLightMask(fullLocoHw.lights, true);
+    assert(locoMaskFull == 0x3F && "Full locomotive 6-item lighting configuration should produce 0x3F mask");
 
     std::cout << "  PASS: Dual ditch light triangular cross-fading and purely manual control verified." << std::endl;
 

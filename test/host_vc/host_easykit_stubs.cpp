@@ -134,7 +134,7 @@ bool EasyLEDGroup::doubleStrobe(uint16_t, uint16_t) { m_running = true; return t
 void EasyLEDGroup::applyCurrentStep() {}
 
 // RadioKit Global Stubs
-bool host_radiokit_connected = false;
+bool host_radiokit_connected = true;
 RadioKitClass::RadioKitClass() {}
 RadioKitClass RadioKit;
 void RadioKitClass::_registerWidget(RadioKit_Widget*) {}
@@ -144,5 +144,6 @@ void RadioKitClass::startSerial(Stream&) {}
 void RadioKitClass::begin() {}
 void RadioKitClass::startBLE(const char*) {}
 bool RadioKitClass::enableFS() { return true; }
+void RadioKitClass::enableOTA() {}
 void RadioKitClass::update() {}
 bool RadioKitClass::isConnected() const { return host_radiokit_connected; }

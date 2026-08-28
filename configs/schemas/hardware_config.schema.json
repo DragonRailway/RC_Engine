@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://rc-brain.local/schemas/hardware_config.schema.json",
   "title": "RC Engine hardware config",
-  "description": "Schema for configs/hardware_configs/hardware-<BOARD>.json. Mirrors what common/ConfigParser.h reads, including documented quirks: turn_light.type is accepted-but-ignored, brake/reversing brightness_max is accepted-but-ignored (firmware forces 100%), and reversing_light.hardware accepts a pin token or a light alias. Motor type is derived from the hardware token, so drive_motor/left_motor/right_motor have no 'type' key.",
+  "description": "Schema for configs/hardware_configs/hardware-<BOARD>.json. Defines multi-instance drive motors, steering servos, aux motors, and multi-pin light channels.",
   "type": "object",
   "additionalProperties": false,
   "required": ["drivetrain"],
@@ -21,15 +21,29 @@
       "additionalProperties": false,
       "properties": {
         "type": { "type": "string", "enum": ["ackermann", "skid_steer"] },
-        "drive_motor": { "$ref": "#/definitions/motor" },
+        "drive_motors": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/motor" },
+          "minItems": 1,
+          "maxItems": 2
+        },
         "left_motor": { "$ref": "#/definitions/motor" },
         "right_motor": { "$ref": "#/definitions/motor" },
-        "steering_servo": { "$ref": "#/definitions/steering_servo" },
+        "steering_servos": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/steering_servo" },
+          "minItems": 1,
+          "maxItems": 2
+        },
         "steering_sensitivity": { "type": "integer", "minimum": 0, "maximum": 100, "default": 80 }
       }
     },
-    "steering_servo": { "$ref": "#/definitions/steering_servo" },
-    "aux_motor": { "$ref": "#/definitions/aux_motor" },
+    "aux_motors": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/aux_motor" },
+      "minItems": 1,
+      "maxItems": 2
+    },
     "aux_light": { "$ref": "#/definitions/light" },
     "lights": {
       "type": "object",
@@ -80,7 +94,12 @@
           "properties": {
             "hardware": {
               "oneOf": [
-                { "$ref": "#/definitions/pin_name" },
+                {
+                  "type": "array",
+                  "items": { "$ref": "#/definitions/pin_name" },
+                  "minItems": 1,
+                  "maxItems": 4
+                },
                 { "enum": ["head_light", "tail_light", "brake_light"] }
               ]
             },
@@ -141,7 +160,6 @@
         "mode": { "type": "string", "enum": ["solid", "blink", "pulse"], "default": "solid" }
       }
     }
-
   },
   "definitions": {
     "pin_name": {
@@ -159,7 +177,12 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "hardware": { "$ref": "#/definitions/pin_name" },
+        "hardware": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/pin_name" },
+          "minItems": 1,
+          "maxItems": 4
+        },
         "brightness_max": { "type": "integer", "minimum": 0, "maximum": 100, "default": 60 }
       }
     },

@@ -69,12 +69,11 @@ public:
         if (!docObj["drivetrain"].isNull() || !docObj["DRIVE_MOTOR"].isNull()) {
             JsonObjectConst dtObj = docObj["drivetrain"];
             if (dtObj.isNull()) {
-                // Legacy top-level DRIVE_MOTOR
                 config.drivetrainType = HardwareConfig::ACKERMANN;
-                parseDriveMotor(docObj["DRIVE_MOTOR"], config.driveMotor);
+                config.driveMotorCount = 0;
+                parseDriveMotor(docObj["DRIVE_MOTOR"], config.driveMotors[0]);
+                if (config.driveMotors[0].configured) config.driveMotorCount = 1;
             } else {
-                // Explicit drivetrain.type wins; legacy key-presence inference
-                // remains the fallback when the token is absent.
                 const char* type = dtObj["type"] | dtObj["TYPE"] | "";
                 if (strcasecmp(type, "skid_steer") == 0) {
                     config.drivetrainType = HardwareConfig::SKID_STEER;
@@ -99,12 +98,44 @@ public:
                         LOG_CFG_WARN("skid-steer: right_motor missing — right track unconfigured");
                     }
                 } else {
-                    JsonObjectConst driveObj = dtObj["drive_motor"] | dtObj["DRIVE_MOTOR"];
-                    if (!driveObj.isNull()) parseDriveMotor(driveObj, config.driveMotor);
-                    JsonObjectConst steerObj = dtObj["steering_servo"] | dtObj["STEERING_SERVO"];
-                    if (!steerObj.isNull()) parseSteeringServo(steerObj, config.steeringServo);
-                    if (!config.driveMotor.configured) {
-                        LOG_CFG_WARN("drivetrain: drive_motor missing or unconfigured — vehicle cannot drive!");
+                    config.driveMotorCount = 0;
+                    if (dtObj["drive_motors"].is<JsonArrayConst>()) {
+                        for (JsonObjectConst motor : dtObj["drive_motors"].as<JsonArrayConst>()) {
+                            if (config.driveMotorCount < HardwareConfig::MAX_DRIVE_MOTORS) {
+                                parseDriveMotor(motor, config.driveMotors[config.driveMotorCount]);
+                                if (config.driveMotors[config.driveMotorCount].configured) {
+                                    config.driveMotorCount++;
+                                }
+                            }
+                        }
+                    } else {
+                        JsonObjectConst driveObj = dtObj["drive_motor"] | dtObj["DRIVE_MOTOR"];
+                        if (!driveObj.isNull()) {
+                            parseDriveMotor(driveObj, config.driveMotors[0]);
+                            if (config.driveMotors[0].configured) config.driveMotorCount = 1;
+                        }
+                    }
+
+                    config.steeringServoCount = 0;
+                    if (dtObj["steering_servos"].is<JsonArrayConst>()) {
+                        for (JsonObjectConst servo : dtObj["steering_servos"].as<JsonArrayConst>()) {
+                            if (config.steeringServoCount < HardwareConfig::MAX_STEERING_SERVOS) {
+                                parseSteeringServo(servo, config.steeringServos[config.steeringServoCount]);
+                                if (config.steeringServos[config.steeringServoCount].configured) {
+                                    config.steeringServoCount++;
+                                }
+                            }
+                        }
+                    } else {
+                        JsonObjectConst steerObj = dtObj["steering_servo"] | dtObj["STEERING_SERVO"];
+                        if (!steerObj.isNull()) {
+                            parseSteeringServo(steerObj, config.steeringServos[0]);
+                            if (config.steeringServos[0].configured) config.steeringServoCount = 1;
+                        }
+                    }
+
+                    if (config.driveMotorCount == 0) {
+                        LOG_CFG_WARN("drivetrain: drive_motors missing or unconfigured — vehicle cannot drive!");
                     }
                 }
             }
@@ -113,26 +144,34 @@ public:
         }
 
         if (!docObj["steering_servo"].isNull() || !docObj["STEERING_SERVO"].isNull()) {
-            parseSteeringServo(docObj["steering_servo"] | docObj["STEERING_SERVO"], config.steeringServo);
+            if (config.steeringServoCount == 0) {
+                parseSteeringServo(docObj["steering_servo"] | docObj["STEERING_SERVO"], config.steeringServos[0]);
+                if (config.steeringServos[0].configured) config.steeringServoCount = 1;
+            }
         }
 
         if (!docObj["lights"].isNull() || !docObj["LIGHTS"].isNull()) {
             parseLights(docObj["lights"] | docObj["LIGHTS"], config.lights);
         }
 
-        if (!docObj["aux_motor"].isNull() || !docObj["AUX_MOTOR"].isNull()) {
-            parseAuxMotor(docObj["aux_motor"] | docObj["AUX_MOTOR"], config.auxMotor);
+        config.auxMotorCount = 0;
+        if (docObj["aux_motors"].is<JsonArrayConst>()) {
+            for (JsonObjectConst motor : docObj["aux_motors"].as<JsonArrayConst>()) {
+                if (config.auxMotorCount < HardwareConfig::MAX_AUX_MOTORS) {
+                    parseAuxMotor(motor, config.auxMotors[config.auxMotorCount]);
+                    if (config.auxMotors[config.auxMotorCount].configured) {
+                        config.auxMotorCount++;
+                    }
+                }
+            }
+        } else if (!docObj["aux_motor"].isNull() || !docObj["AUX_MOTOR"].isNull()) {
+            parseAuxMotor(docObj["aux_motor"] | docObj["AUX_MOTOR"], config.auxMotors[0]);
+            if (config.auxMotors[0].configured) config.auxMotorCount = 1;
         }
 
-        // Skid-steer owns both motor drivers (left + right tracks) — the aux
-        // work-machine channel cannot coexist. Warn and leave it unconfigured
-        // (same degrade-with-warning pattern as trailer_dcc).
-        if (config.drivetrainType == HardwareConfig::SKID_STEER &&
-            config.auxMotor.purpose != HardwareConfig::AuxMotor::NONE) {
-            LOG_CFG_WARN("aux_motor: ignored in skid-steer mode (the right track owns the second motor output)");
-            config.auxMotor.purpose = HardwareConfig::AuxMotor::NONE;
-            config.auxMotor.motor.type = HardwareConfig::DriveMotor::NONE;
-            config.auxMotor.configured = false;
+        if (config.drivetrainType == HardwareConfig::SKID_STEER && config.auxMotorCount > 0) {
+            LOG_CFG_WARN("aux_motors: ignored in skid-steer mode (the right track owns the second motor output)");
+            config.auxMotorCount = 0;
         }
 
         if (!docObj["aux_light"].isNull() || !docObj["AUX_LIGHT"].isNull()) {
@@ -156,8 +195,6 @@ public:
             config.battery.fullVoltage = batObj["full_voltage"] | batObj["FULL_VOLTAGE"] | config.battery.fullVoltage;
 
             config.battery.cellCount = constrain(config.battery.cellCount, 0, 4);
-            // Voltage sense calibration: config wins when present; fall back to the
-            // compile-time VSCALE/VOFFSET macros (defined per-env in platformio.ini).
 #ifndef VSCALE
 #define VSCALE 1.0f
 #endif
@@ -234,8 +271,6 @@ public:
         } else if (strcasecmp(vehicleTypeStr, "TRUCK") == 0) {
             config.type = RcEngineSound::VEHICLE_TRUCK;
         } else {
-            // No silent TRUCK fallback: an unrecognized type string is
-            // visible in the boot log so config typos are caught.
             config.type = RcEngineSound::VEHICLE_UNKNOWN;
             LOG_CFG_WARN("unknown vehicle type '%s' — defaulting to truck", vehicleTypeStr);
         }
@@ -271,17 +306,14 @@ public:
         for (int i = 0; i < SOUND_COUNT; i++) {
             const char* slot = soundTypeNames[i];
 
-            // Tier 1: /sounds/vehicles/<soundSet>/<slot>.json
             String p1 = "/sounds/vehicles/" + soundSet + "/" + String(slot) + ".json";
             soundData.slots[i] = loadSoundSlot(p1.c_str());
 
-            // Tier 1 (flat legacy): /sounds/<soundSet>-<slot>.json
             if (!soundData.slots[i].samples) {
                 String p1_flat = "/sounds/" + soundSet + "-" + String(slot) + ".json";
                 soundData.slots[i] = loadSoundSlot(p1_flat.c_str());
             }
 
-            // Tier 2: /sounds/common/<typeStr>/<slot>.json or /sounds/presets/<typeStr>/<slot>.json
             if (!soundData.slots[i].samples) {
                 String p2 = "/sounds/common/" + String(typeStr) + "/" + String(slot) + ".json";
                 soundData.slots[i] = loadSoundSlot(p2.c_str());
@@ -291,13 +323,11 @@ public:
                 soundData.slots[i] = loadSoundSlot(p2_alt.c_str());
             }
 
-            // Tier 3: /sounds/generic/<slot>.json
             if (!soundData.slots[i].samples) {
                 String p3 = "/sounds/generic/" + String(slot) + ".json";
                 soundData.slots[i] = loadSoundSlot(p3.c_str());
             }
 
-            // Tier 3 (flat legacy): /sounds/<slot>.json or /sounds/<genericNames[i]>
             if (!soundData.slots[i].samples) {
                 String p3_flat = String("/sounds/") + slot + ".json";
                 soundData.slots[i] = loadSoundSlot(p3_flat.c_str());
@@ -399,10 +429,6 @@ public:
 
         if (declaredCount == 0 || !samples) return SoundSlot();
 
-        // Defensive: never trust the declared sampleCount blindly. The actual
-        // number of samples in the JSON array is authoritative — a corrupt or
-        // stale declaration (e.g. generated from a header with //offset line
-        // comments) could overflow the allocation below.
         uint32_t sampleCount = samples.size();
         if (sampleCount == 0) return SoundSlot();
 
@@ -411,7 +437,7 @@ public:
 
         uint32_t i = 0;
         for (int val : samples) {
-            if (i >= sampleCount) break;   // hard bound — never write past the buffer
+            if (i >= sampleCount) break;
             buffer[i++] = (int8_t)val;
         }
 
@@ -422,18 +448,10 @@ public:
 
         SoundSlot slot;
         slot.samples = buffer;
-        slot.sampleCount = sampleCount;   // actual copied count
+        slot.sampleCount = sampleCount;
         slot.sampleRate = sampleRate;
         return slot;
     }
-
-    // ────────────────────────────────────────────────────────────────
-    // Semantic config validation (warn-and-continue; no halt). Unknown
-    // keys and unrecognized values are reported so a typo looks like a
-    // WARN line instead of a silently-dead output. Matching is
-    // case-insensitive so both the snake_case and legacy UPPER_CASE
-    // variants the parser accepts are covered.
-    // ────────────────────────────────────────────────────────────────
 
     static bool keyAllowed(const char* key, const char* const* allowed, size_t n) {
         for (size_t i = 0; i < n; i++) {
@@ -463,8 +481,8 @@ public:
         static const char* top[] = {"name", "description", "sound", "drivetrain",
                                     "steering_servo", "lights", "animation",
                                     "battery", "power", "charging",
-                                    "drive_motor", "aux_motor", "aux_light"};
-        checkKeys(doc, "hardware", top, 13);
+                                    "drive_motor", "aux_motors", "aux_motor", "aux_light"};
+        checkKeys(doc, "hardware", top, 14);
 
         JsonObjectConst sound = doc["sound"];
         if (!sound.isNull()) {
@@ -474,15 +492,36 @@ public:
 
         JsonObjectConst dt = doc["drivetrain"];
         if (!dt.isNull()) {
-            static const char* k[] = {"drive_motor", "steering_servo",
-                                      "left_motor", "right_motor",
+            static const char* k[] = {"drive_motors", "drive_motor", "steering_servos",
+                                      "steering_servo", "left_motor", "right_motor",
                                       "steering_sensitivity", "type"};
-            checkKeys(dt, "drivetrain", k, 6);
+            checkKeys(dt, "drivetrain", k, 8);
+            if (dt["drive_motors"].is<JsonArrayConst>()) {
+                for (JsonObjectConst m : dt["drive_motors"].as<JsonArrayConst>()) {
+                    static const char* mk[] = {"hardware", "frequency", "direction", "duty"};
+                    checkKeys(m, "drive_motors[]", mk, 4);
+                    JsonObjectConst duty = m["duty"];
+                    if (!duty.isNull()) {
+                        static const char* dk[] = {"min", "max"};
+                        checkKeys(duty, "duty", dk, 2);
+                    }
+                }
+            }
+            if (dt["steering_servos"].is<JsonArrayConst>()) {
+                for (JsonObjectConst ss : dt["steering_servos"].as<JsonArrayConst>()) {
+                    static const char* sk[] = {"hardware", "frequency", "endpoints"};
+                    checkKeys(ss, "steering_servos[]", sk, 3);
+                    JsonObjectConst ep = ss["endpoints"];
+                    if (!ep.isNull()) {
+                        static const char* ek[] = {"left", "right", "center"};
+                        checkKeys(ep, "endpoints", ek, 3);
+                    }
+                }
+            }
             for (const char* motorKey : {"drive_motor", "left_motor", "right_motor"}) {
                 JsonObjectConst m = dt[motorKey];
                 if (m.isNull()) continue;
-                static const char* mk[] = {"hardware", "frequency",
-                                           "direction", "duty"};
+                static const char* mk[] = {"hardware", "frequency", "direction", "duty"};
                 checkKeys(m, motorKey, mk, 4);
                 JsonObjectConst duty = m["duty"];
                 if (!duty.isNull()) {
@@ -549,6 +588,17 @@ public:
             }
         }
 
+        if (doc["aux_motors"].is<JsonArrayConst>()) {
+            for (JsonObjectConst am : doc["aux_motors"].as<JsonArrayConst>()) {
+                static const char* k[] = {"hardware", "frequency", "direction", "duty", "type"};
+                checkKeys(am, "aux_motors[]", k, 5);
+                JsonObjectConst duty = am["duty"];
+                if (!duty.isNull()) {
+                    static const char* dk[] = {"min", "max"};
+                    checkKeys(duty, "aux_motors[].duty", dk, 2);
+                }
+            }
+        }
         JsonObjectConst auxMotor = doc["aux_motor"];
         if (!auxMotor.isNull()) {
             static const char* k[] = {"hardware", "frequency",
@@ -612,30 +662,41 @@ public:
                              name, m.frequency);
             }
         };
-        checkMotor(cfg.driveMotor, "drive_motor");
-        checkMotor(cfg.leftMotor, "left_motor");
-        checkMotor(cfg.rightMotor, "right_motor");
-        checkMotor(cfg.auxMotor.motor, "aux_motor");
 
         if (cfg.drivetrainType == HardwareConfig::SKID_STEER) {
+            checkMotor(cfg.leftMotor, "left_motor");
+            checkMotor(cfg.rightMotor, "right_motor");
             if (cfg.leftMotor.type == HardwareConfig::DriveMotor::NONE) {
                 LOG_CFG_WARN("skid-steer: left_motor missing — left track not configured");
             }
             if (cfg.rightMotor.type == HardwareConfig::DriveMotor::NONE) {
                 LOG_CFG_WARN("skid-steer: right_motor missing — right track not configured");
             }
+        } else {
+            for (uint8_t i = 0; i < cfg.driveMotorCount; i++) {
+                checkMotor(cfg.driveMotors[i], "drive_motors");
+            }
+            if (cfg.driveMotorCount == 0) {
+                LOG_CFG_WARN("drivetrain: drive_motors missing or unconfigured — vehicle cannot drive!");
+            }
         }
 
-        if (cfg.steeringServo.hardwareId != 0xFF) {
-            if (cfg.steeringServo.frequency < 40 || cfg.steeringServo.frequency > 400) {
-                LOG_CFG_WARN("steering_servo: frequency %d Hz outside 40-400",
-                             cfg.steeringServo.frequency);
-            }
-            const auto& ep = cfg.steeringServo.endpoints;
-            if (ep.left < 500 || ep.left > 2500 || ep.right < 500 || ep.right > 2500 ||
-                ep.center < 500 || ep.center > 2500) {
-                LOG_CFG_WARN("steering_servo: endpoints out of range (L=%d R=%d C=%d, expected ~500-2500 us)",
-                             ep.left, ep.right, ep.center);
+        for (uint8_t i = 0; i < cfg.auxMotorCount; i++) {
+            checkMotor(cfg.auxMotors[i].motor, "aux_motors");
+        }
+
+        for (uint8_t i = 0; i < cfg.steeringServoCount; i++) {
+            const auto& s = cfg.steeringServos[i];
+            if (s.hardwareId != 0xFF) {
+                if (s.frequency < 40 || s.frequency > 400) {
+                    LOG_CFG_WARN("steering_servos: frequency %d Hz outside 40-400", s.frequency);
+                }
+                const auto& ep = s.endpoints;
+                if (ep.left < 500 || ep.left > 2500 || ep.right < 500 || ep.right > 2500 ||
+                    ep.center < 500 || ep.center > 2500) {
+                    LOG_CFG_WARN("steering_servos: endpoints out of range (L=%d R=%d C=%d, expected ~500-2500 us)",
+                                 ep.left, ep.right, ep.center);
+                }
             }
         }
 
@@ -648,110 +709,6 @@ public:
         checkLight(cfg.lights.tailLight.configured, cfg.lights.tailLight.brightness, "tail_light");
         checkLight(cfg.lights.turnLight.configured, cfg.lights.turnLight.brightness, "turn_light");
         checkLight(cfg.lights.ditchLight.configured, cfg.lights.ditchLight.brightness, "ditch_light");
-        if (cfg.lights.ditchLight.configured && cfg.lights.ditchLight.intervalMs == 0) {
-            LOG_CFG_WARN("ditch_light: interval_ms 0 — clamping to 1");
-        }
-        checkLight(cfg.lights.stepLight.configured, cfg.lights.stepLight.brightness, "step_light");
-        checkLight(cfg.lights.cabLight.configured, cfg.lights.cabLight.brightness, "cab_light");
-        checkLight(cfg.auxLight.configured, cfg.auxLight.brightness, "aux_light");
-
-        if (cfg.battery.cellCount > 4) {
-            LOG_CFG_WARN("battery: cell_count %d out of range (0-4)",
-                         cfg.battery.cellCount);
-        }
-        if (cfg.battery.cutoffVoltage > cfg.battery.fullVoltage) {
-            LOG_CFG_WARN("battery: cutoff (%.1f) > full (%.1f)",
-                         cfg.battery.cutoffVoltage, cfg.battery.fullVoltage);
-        }
-        if (cfg.battery.warningVoltage < cfg.battery.cutoffVoltage || cfg.battery.warningVoltage > cfg.battery.fullVoltage) {
-            LOG_CFG_WARN("battery: warning (%.1f) out of range (cutoff %.1f - full %.1f)",
-                         cfg.battery.warningVoltage, cfg.battery.cutoffVoltage, cfg.battery.fullVoltage);
-        }
-
-    }
-
-    static void checkUnknownVehicleKeys(JsonObjectConst doc) {
-        static const char* top[] = {"vehicle", "engine", "transmission",
-                                    "loop_points", "mix_weights", "features",
-                                    "sound_volumes"};
-        checkKeys(doc, "vehicle config", top, 7);
-
-        JsonObjectConst v = doc["vehicle"];
-        if (!v.isNull()) {
-            static const char* k[] = {"name", "description", "type", "sound_set"};
-            checkKeys(v, "vehicle", k, 4);
-        }
-
-        JsonObjectConst e = doc["engine"];
-        if (!e.isNull()) {
-            // Includes legacy keys carried by shipped configs that the parser
-            // does not read (idle_rpm, clutch_rpm, diesel_knock_start_point,
-            // fan_start_point) — accepted-but-ignored, not errors.
-            static const char* k[] = {"acceleration", "deceleration", "inertia",
-                                      "max_pitch_factor", "rev_switch_point",
-                                      "idle_end_point", "knock_pattern",
-                                      "diesel_knock_interval", "knock_adaptive_volume",
-                                      "min_knock_volume", "knock_start_rpm",
-                                      "jakebrake_min_rpm", "jakebrake_decel_rate",
-                                      "supercharger_start_point", "idle_rpm",
-                                      "clutch_rpm", "diesel_knock_start_point",
-                                      "fan_start_point"};
-            checkKeys(e, "engine", k, 18);
-        }
-
-        JsonObjectConst tr = doc["transmission"];
-        if (!tr.isNull()) {
-            static const char* k[] = {"type", "number_of_gears", "gear_ramp_times"};
-            checkKeys(tr, "transmission", k, 3);
-        }
-
-        JsonObjectConst lp = doc["loop_points"];
-        if (!lp.isNull()) {
-            static const char* k[] = {"horn_begin", "horn_end", "siren_begin",
-                                      "siren_end", "reversing_begin",
-                                      "reversing_end", "sound1_begin", "sound1_end"};
-            checkKeys(lp, "loop_points", k, 8);
-        }
-
-        JsonObjectConst mw = doc["mix_weights"];
-        if (!mw.isNull()) {
-            static const char* k[] = {"engine", "effects"};
-            checkKeys(mw, "mix_weights", k, 2);
-        }
-
-        JsonObjectConst ft = doc["features"];
-        if (!ft.isNull()) {
-            static const char* k[] = {"hydraulic_enabled", "hydrostatic_mode",
-                                      "track_rattle_enabled", "dump_bed_enabled",
-                                      "tire_squeal_threshold", "tire_squeal_max_speed",
-                                      "track_rattle_interval_min", "track_rattle_interval_max"};
-            checkKeys(ft, "features", k, 8);
-        }
-
-        JsonObjectConst sv = doc["sound_volumes"];
-        if (!sv.isNull()) {
-            // Includes legacy engine_idle/engine_rev carried by shipped configs
-            // (parser reads idle/rev); accepted-but-ignored, not errors.
-            static const char* k[] = {"start", "idle", "idle_min", "rev", "rev_min",
-                                      "full_throttle", "turbo", "turbo_min", "knock",
-                                      "knock_min", "wastegate", "wastegate_min", "horn",
-                                      "fan", "jakebrake", "jakebrake_min", "shifting",
-                                      "brake", "reversing", "siren", "parking_brake",
-                                      "supercharger", "supercharger_min", "indicator",
-                                      "coupling", "uncoupling", "sound1", "tire_squeal",
-                                      "hydraulic_pump", "hydraulic_flow", "track_rattle",
-                                      "bucket_rattle", "bell", "door", "scanner", "music",
-                                      "whistle", "gun", "out_of_fuel", "others",
-                                      "crawler_mode_threshold", "engine_idle", "engine_rev"};
-            checkKeys(sv, "sound_volumes", k, 43);
-        }
-    }
-
-    static void validateVehicleConfig(const RcEngineSound::Config& cfg) {
-        if (cfg.transmission.numberOfGears < 1 || cfg.transmission.numberOfGears > 6) {
-            LOG_CFG_WARN("transmission: number_of_gears %d out of range (1-6)",
-                         cfg.transmission.numberOfGears);
-        }
     }
 
     static void parseDriveMotor(JsonVariantConst motor, HardwareConfig::DriveMotor& config) {
@@ -801,71 +758,56 @@ public:
         if (hw == nullptr || hw[0] == '\0') return 0xFF;
         uint8_t pin = PinMapper::resolve(hw);
         if (pin != 0xFF) return pin;
-        if ((strcasecmp(hw, "head_light") == 0 || strcasecmp(hw, "HEAD_LIGHT") == 0) && config.lights.headLight.configured) return config.lights.headLight.pin;
-        if ((strcasecmp(hw, "full_beam") == 0 || strcasecmp(hw, "FULL_BEAM") == 0 || strcasecmp(hw, "high_beam") == 0 || strcasecmp(hw, "HIGH_BEAM") == 0) && config.lights.fullBeam.configured) return config.lights.fullBeam.pin;
-        if ((strcasecmp(hw, "fog_lamp") == 0 || strcasecmp(hw, "FOG_LAMP") == 0 || strcasecmp(hw, "fog_light") == 0 || strcasecmp(hw, "FOG_LIGHT") == 0) && config.lights.fogLamp.configured) return config.lights.fogLamp.pin;
-        if ((strcasecmp(hw, "tail_light") == 0 || strcasecmp(hw, "TAIL_LIGHT") == 0) && config.lights.tailLight.configured) return config.lights.tailLight.pin;
-        if ((strcasecmp(hw, "brake_light") == 0 || strcasecmp(hw, "BRAKE_LIGHT") == 0) && config.lights.brakeLight.configured) return config.lights.brakeLight.pin;
-        if ((strcasecmp(hw, "cab_light") == 0 || strcasecmp(hw, "CAB_LIGHT") == 0) && config.lights.cabLight.configured) return config.lights.cabLight.pin;
-        if ((strcasecmp(hw, "step_light") == 0 || strcasecmp(hw, "STEP_LIGHT") == 0) && config.lights.stepLight.configured) return config.lights.stepLight.pin;
-        if ((strcasecmp(hw, "beacon") == 0 || strcasecmp(hw, "BEACON") == 0) && config.lights.beacon.configured) return config.lights.beacon.pin;
-        if ((strcasecmp(hw, "work_light") == 0 || strcasecmp(hw, "WORK_LIGHT") == 0 || strcasecmp(hw, "work_lamp") == 0 || strcasecmp(hw, "WORK_LAMP") == 0) && config.lights.workLight.configured) return config.lights.workLight.pin;
-        if ((strcasecmp(hw, "aux_light") == 0 || strcasecmp(hw, "AUX_LIGHT") == 0) && (config.lights.auxLight.configured || config.auxLight.configured)) return config.lights.auxLight.configured ? config.lights.auxLight.pin : config.auxLight.pin;
-        if ((strcasecmp(hw, "turn_light") == 0 || strcasecmp(hw, "TURN_LIGHT") == 0) && config.lights.turnLight.configured) return config.lights.turnLight.leftPin != 0xFF ? config.lights.turnLight.leftPin : config.lights.turnLight.rightPin;
+        if (strcasecmp(hw, "head_light") == 0 && config.lights.headLight.configured) return config.lights.headLight.pin;
+        if ((strcasecmp(hw, "full_beam") == 0 || strcasecmp(hw, "high_beam") == 0) && config.lights.fullBeam.configured) return config.lights.fullBeam.pin;
+        if ((strcasecmp(hw, "fog_lamp") == 0 || strcasecmp(hw, "fog_light") == 0) && config.lights.fogLamp.configured) return config.lights.fogLamp.pin;
+        if (strcasecmp(hw, "tail_light") == 0 && config.lights.tailLight.configured) return config.lights.tailLight.pin;
+        if (strcasecmp(hw, "brake_light") == 0 && config.lights.brakeLight.configured) return config.lights.brakeLight.pin;
+        if (strcasecmp(hw, "cab_light") == 0 && config.lights.cabLight.configured) return config.lights.cabLight.pin;
+        if (strcasecmp(hw, "step_light") == 0 && config.lights.stepLight.configured) return config.lights.stepLight.pin;
+        if (strcasecmp(hw, "beacon") == 0 && config.lights.beacon.configured) return config.lights.beacon.pin;
+        if ((strcasecmp(hw, "work_light") == 0 || strcasecmp(hw, "work_lamp") == 0) && config.lights.workLight.configured) return config.lights.workLight.pin;
+        if (strcasecmp(hw, "aux_light") == 0 && (config.lights.auxLight.configured || config.auxLight.configured)) return config.lights.auxLight.configured ? config.lights.auxLight.pin : config.auxLight.pin;
+        if (strcasecmp(hw, "turn_light") == 0 && config.lights.turnLight.configured) return config.lights.turnLight.leftPin != 0xFF ? config.lights.turnLight.leftPin : config.lights.turnLight.rightPin;
         return 0xFF;
+    }
+
+    static void parseLight(JsonVariantConst light, HardwareConfig::Lights::Light& config, const char* name, uint8_t defaultBrightness = 60) {
+        if (light.isNull()) return;
+        config.pinCount = 0;
+        if (light["hardware"].is<JsonArrayConst>()) {
+            for (JsonVariantConst p : light["hardware"].as<JsonArrayConst>()) {
+                const char* hw = p.as<const char*>();
+                if (hw && config.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
+                    warnUnresolvedHardware(name, hw);
+                    uint8_t pin = PinMapper::resolve(hw);
+                    if (pin != 0xFF) config.pins[config.pinCount++] = pin;
+                }
+            }
+        } else {
+            const char* hw = light["hardware"] | "";
+            if (hw[0] != '\0') {
+                warnUnresolvedHardware(name, hw);
+                uint8_t pin = PinMapper::resolve(hw);
+                if (pin != 0xFF && config.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
+                    config.pins[config.pinCount++] = pin;
+                }
+            }
+        }
+        config.brightness = light["brightness_max"] | defaultBrightness;
+        config.pin = (config.pinCount > 0) ? config.pins[0] : 0xFF;
+        config.configured = (config.pinCount > 0);
     }
 
     static void parseLights(JsonObjectConst lights, HardwareConfig::Lights& config) {
         if (lights.isNull()) return;
 
-        JsonVariantConst head = lights["head_light"] | lights["HEAD_LIGHT"];
-        if (!head.isNull()) {
-            const char* hw = head["hardware"] | head["HARDWARE"] | "";
-            warnUnresolvedHardware("head_light", hw);
-            config.headLight.pin = PinMapper::resolve(hw);
-            config.headLight.brightness = head["brightness_max"] | head["BRIGHTNESS_MAX"] | 60;
-            config.headLight.configured = config.headLight.pin != 0xFF;
-        }
+        parseLight(lights["head_light"] | lights["HEAD_LIGHT"], config.headLight, "head_light", 60);
+        parseLight(lights["full_beam"] | lights["FULL_BEAM"] | lights["high_beam"] | lights["HIGH_BEAM"], config.fullBeam, "full_beam", 100);
+        parseLight(lights["fog_lamp"] | lights["FOG_LAMP"] | lights["fog_light"] | lights["FOG_LIGHT"], config.fogLamp, "fog_lamp", 60);
+        parseLight(lights["tail_light"] | lights["TAIL_LIGHT"], config.tailLight, "tail_light", 60);
+        parseLight(lights["brake_light"] | lights["BRAKE_LIGHT"], config.brakeLight, "brake_light", 100);
 
-        JsonVariantConst full = lights["full_beam"] | lights["FULL_BEAM"] | lights["high_beam"] | lights["HIGH_BEAM"];
-        if (!full.isNull()) {
-            const char* hw = full["hardware"] | full["HARDWARE"] | "";
-            warnUnresolvedHardware("full_beam", hw);
-            config.fullBeam.pin = PinMapper::resolve(hw);
-            config.fullBeam.brightness = full["brightness_max"] | full["BRIGHTNESS_MAX"] | 100;
-            config.fullBeam.configured = config.fullBeam.pin != 0xFF;
-        }
-
-        JsonVariantConst fog = lights["fog_lamp"] | lights["FOG_LAMP"] | lights["fog_light"] | lights["FOG_LIGHT"];
-        if (!fog.isNull()) {
-            const char* hw = fog["hardware"] | fog["HARDWARE"] | "";
-            warnUnresolvedHardware("fog_lamp", hw);
-            config.fogLamp.pin = PinMapper::resolve(hw);
-            config.fogLamp.brightness = fog["brightness_max"] | fog["BRIGHTNESS_MAX"] | 60;
-            config.fogLamp.configured = config.fogLamp.pin != 0xFF;
-        }
-
-        JsonVariantConst tail = lights["tail_light"] | lights["TAIL_LIGHT"];
-        if (!tail.isNull()) {
-            const char* hw = tail["hardware"] | tail["HARDWARE"] | "";
-            warnUnresolvedHardware("tail_light", hw);
-            config.tailLight.pin = PinMapper::resolve(hw);
-            config.tailLight.brightness = tail["brightness_max"] | tail["BRIGHTNESS_MAX"] | 60;
-            config.tailLight.configured = config.tailLight.pin != 0xFF;
-        }
-
-        JsonVariantConst brake = lights["brake_light"] | lights["BRAKE_LIGHT"];
-        if (!brake.isNull()) {
-            const char* hw = brake["hardware"] | brake["HARDWARE"] | "";
-            warnUnresolvedHardware("brake_light", hw);
-            config.brakeLight.pin = PinMapper::resolve(hw);
-            config.brakeLight.brightness = 100;
-            config.brakeLight.configured = config.brakeLight.pin != 0xFF;
-        }
-
-        // Ditch light: TWO outputs flashing alternately (left/right). Same shape
-        // as turn_light — two pins + alternation interval. Toggled from the app
-        // (loco light selector item F, bit 5); the firmware counter-phases them.
         JsonVariantConst ditch = lights["ditch_light"] | lights["DITCH_LIGHT"];
         if (!ditch.isNull()) {
             JsonVariantConst ditchL = ditch["left"] | ditch["LEFT"];
@@ -881,23 +823,8 @@ public:
             config.ditchLight.configured = config.ditchLight.leftPin != 0xFF || config.ditchLight.rightPin != 0xFF;
         }
 
-        JsonVariantConst step = lights["step_light"] | lights["STEP_LIGHT"];
-        if (!step.isNull()) {
-            const char* hw = step["hardware"] | step["HARDWARE"] | "";
-            warnUnresolvedHardware("step_light", hw);
-            config.stepLight.pin = PinMapper::resolve(hw);
-            config.stepLight.brightness = step["brightness_max"] | step["BRIGHTNESS_MAX"] | 30;
-            config.stepLight.configured = config.stepLight.pin != 0xFF;
-        }
-
-        JsonVariantConst cab = lights["cab_light"] | lights["CAB_LIGHT"];
-        if (!cab.isNull()) {
-            const char* hw = cab["hardware"] | cab["HARDWARE"] | "";
-            warnUnresolvedHardware("cab_light", hw);
-            config.cabLight.pin = PinMapper::resolve(hw);
-            config.cabLight.brightness = cab["brightness_max"] | cab["BRIGHTNESS_MAX"] | 40;
-            config.cabLight.configured = config.cabLight.pin != 0xFF;
-        }
+        parseLight(lights["step_light"] | lights["STEP_LIGHT"], config.stepLight, "step_light", 30);
+        parseLight(lights["cab_light"] | lights["CAB_LIGHT"], config.cabLight, "cab_light", 40);
 
         JsonVariantConst turn = lights["turn_light"] | lights["TURN_LIGHT"];
         if (!turn.isNull()) {
@@ -917,52 +844,39 @@ public:
 
         JsonVariantConst reversing = lights["reversing_light"] | lights["REVERSING_LIGHT"];
         if (!reversing.isNull()) {
-            const char* hw = reversing["hardware"] | reversing["HARDWARE"] | "";
-            config.reversingLight.pin = PinMapper::resolve(hw);
-            bool alias = false;
-            if (config.reversingLight.pin == 0xFF) {
-                if ((strcasecmp(hw, "head_light") == 0 || strcasecmp(hw, "HEAD_LIGHT") == 0) && config.headLight.configured) { config.reversingLight.pin = config.headLight.pin; alias = true; }
-                else if ((strcasecmp(hw, "tail_light") == 0 || strcasecmp(hw, "TAIL_LIGHT") == 0) && config.tailLight.configured) { config.reversingLight.pin = config.tailLight.pin; alias = true; }
-                else if ((strcasecmp(hw, "brake_light") == 0 || strcasecmp(hw, "BRAKE_LIGHT") == 0) && config.brakeLight.configured) { config.reversingLight.pin = config.brakeLight.pin; alias = true; }
-            }
-            if (!alias && hw[0] != '\0' && config.reversingLight.pin == 0xFF) {
-                LOG_CFG_WARN("reversing_light: hardware '%s' not recognized — output not configured", hw);
+            config.reversingLight.pinCount = 0;
+            if (reversing["hardware"].is<JsonArrayConst>()) {
+                for (JsonVariantConst p : reversing["hardware"].as<JsonArrayConst>()) {
+                    const char* hw = p.as<const char*>();
+                    if (hw && config.reversingLight.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
+                        uint8_t pin = PinMapper::resolve(hw);
+                        if (pin != 0xFF) config.reversingLight.pins[config.reversingLight.pinCount++] = pin;
+                    }
+                }
+            } else {
+                const char* hw = reversing["hardware"] | reversing["HARDWARE"] | "";
+                uint8_t pin = PinMapper::resolve(hw);
+                if (pin == 0xFF) {
+                    if ((strcasecmp(hw, "head_light") == 0 || strcasecmp(hw, "HEAD_LIGHT") == 0) && config.headLight.configured) pin = config.headLight.pin;
+                    else if ((strcasecmp(hw, "tail_light") == 0 || strcasecmp(hw, "TAIL_LIGHT") == 0) && config.tailLight.configured) pin = config.tailLight.pin;
+                    else if ((strcasecmp(hw, "brake_light") == 0 || strcasecmp(hw, "BRAKE_LIGHT") == 0) && config.brakeLight.configured) pin = config.brakeLight.pin;
+                }
+                if (pin != 0xFF) {
+                    config.reversingLight.pins[config.reversingLight.pinCount++] = pin;
+                } else if (hw[0] != '\0') {
+                    LOG_CFG_WARN("reversing_light: hardware '%s' not recognized — output not configured", hw);
+                }
             }
             config.reversingLight.brightness = 100;
-            config.reversingLight.configured = config.reversingLight.pin != 0xFF;
+            config.reversingLight.pin = (config.reversingLight.pinCount > 0) ? config.reversingLight.pins[0] : 0xFF;
+            config.reversingLight.configured = (config.reversingLight.pinCount > 0);
         }
 
-        JsonVariantConst beacon = lights["beacon"] | lights["BEACON"];
-        if (!beacon.isNull()) {
-            const char* hw = beacon["hardware"] | beacon["HARDWARE"] | "";
-            warnUnresolvedHardware("beacon", hw);
-            config.beacon.pin = PinMapper::resolve(hw);
-            config.beacon.brightness = beacon["brightness_max"] | beacon["BRIGHTNESS_MAX"] | 100;
-            config.beacon.configured = config.beacon.pin != 0xFF;
-        }
-
-        JsonVariantConst work = lights["work_light"] | lights["WORK_LIGHT"] | lights["work_lamp"] | lights["WORK_LAMP"];
-        if (!work.isNull()) {
-            const char* hw = work["hardware"] | work["HARDWARE"] | "";
-            warnUnresolvedHardware("work_light", hw);
-            config.workLight.pin = PinMapper::resolve(hw);
-            config.workLight.brightness = work["brightness_max"] | work["BRIGHTNESS_MAX"] | 80;
-            config.workLight.configured = config.workLight.pin != 0xFF;
-        }
-
-        JsonVariantConst auxL = lights["aux_light"] | lights["AUX_LIGHT"];
-        if (!auxL.isNull()) {
-            const char* hw = auxL["hardware"] | auxL["HARDWARE"] | "";
-            warnUnresolvedHardware("aux_light", hw);
-            config.auxLight.pin = PinMapper::resolve(hw);
-            config.auxLight.brightness = auxL["brightness_max"] | auxL["BRIGHTNESS_MAX"] | 60;
-            config.auxLight.configured = config.auxLight.pin != 0xFF;
-        }
+        parseLight(lights["beacon"] | lights["BEACON"], config.beacon, "beacon", 100);
+        parseLight(lights["work_light"] | lights["WORK_LIGHT"] | lights["work_lamp"] | lights["WORK_LAMP"], config.workLight, "work_light", 80);
+        parseLight(lights["aux_light"] | lights["AUX_LIGHT"], config.auxLight, "aux_light", 60);
     }
 
-    // Aux motor: drive_motor shape (hardware/frequency/direction/duty) plus a
-    // `type` purpose field. The hardware token determines the electrical kind
-    // (DRIVER_* → H-bridge, S* → servo/ESC PPM) exactly as for drive_motor.
     static void parseAuxMotor(JsonVariantConst motor, HardwareConfig::AuxMotor& config) {
         if (motor.isNull()) return;
         const char* hw = motor["hardware"] | motor["HARDWARE"] | "";
@@ -990,8 +904,6 @@ public:
         config.motor.duty.min = dutyObj["min"] | dutyObj["MIN"] | 20;
         config.motor.duty.max = dutyObj["max"] | dutyObj["MAX"] | 90;
 
-        // Purpose (type): mixer | tipper. trailer_dcc is reserved in the enum but
-        // not implemented — warn and leave the channel unconfigured (degraded).
         const char* type = motor["type"] | motor["TYPE"] | "mixer";
         if (strcasecmp(type, "mixer") == 0) {
             config.purpose = HardwareConfig::AuxMotor::MIXER;
@@ -999,7 +911,6 @@ public:
             config.purpose = HardwareConfig::AuxMotor::TIPPER;
         } else if (strcasecmp(type, "trailer_dcc") == 0) {
             config.purpose = HardwareConfig::AuxMotor::TRAILER_DCC;
-            // Deferred: warn and degrade — no channel is initialized.
             config.motor.type = HardwareConfig::DriveMotor::NONE;
             LOG_CFG_WARN("aux_motor: type 'trailer_dcc' not yet implemented — aux channel not configured");
         } else {
@@ -1011,11 +922,42 @@ public:
 
     static void parseAuxLight(JsonVariantConst light, HardwareConfig::AuxLight& config) {
         if (light.isNull()) return;
-        const char* hw = light["hardware"] | light["HARDWARE"] | "";
-        warnUnresolvedHardware("aux_light", hw);
-        config.pin = PinMapper::resolve(hw);
+        config.pinCount = 0;
+        if (light["hardware"].is<JsonArrayConst>()) {
+            for (JsonVariantConst p : light["hardware"].as<JsonArrayConst>()) {
+                const char* hw = p.as<const char*>();
+                if (hw && config.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
+                    warnUnresolvedHardware("aux_light", hw);
+                    uint8_t pin = PinMapper::resolve(hw);
+                    if (pin != 0xFF) config.pins[config.pinCount++] = pin;
+                }
+            }
+        } else {
+            const char* hw = light["hardware"] | light["HARDWARE"] | "";
+            if (hw[0] != '\0') {
+                warnUnresolvedHardware("aux_light", hw);
+                uint8_t pin = PinMapper::resolve(hw);
+                if (pin != 0xFF && config.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
+                    config.pins[config.pinCount++] = pin;
+                }
+            }
+        }
         config.brightness = light["brightness_max"] | light["BRIGHTNESS_MAX"] | 60;
-        config.configured = config.pin != 0xFF;
+        config.pin = (config.pinCount > 0) ? config.pins[0] : 0xFF;
+        config.configured = (config.pinCount > 0);
+    }
+
+    static void checkUnknownVehicleKeys(JsonObjectConst doc) {
+        static const char* top[] = {"vehicle", "engine", "sound_volumes",
+                                    "transmission", "features", "loop_points",
+                                    "mix_weights"};
+        checkKeys(doc, "vehicle", top, 7);
+
+        JsonObjectConst veh = doc["vehicle"] | doc["VEHICLE"];
+        if (!veh.isNull()) {
+            static const char* k[] = {"name", "description", "sound_set", "type"};
+            checkKeys(veh, "vehicle", k, 4);
+        }
     }
 
     static void parseEngine(JsonDocument& doc, RcEngineSound::Config& cfg) {
@@ -1158,9 +1100,16 @@ public:
         cfg.sound.engineMixWeight = mw["engine"] | mw["ENGINE"] | 100;
         cfg.sound.effectMixWeight = mw["effects"] | mw["EFFECTS"] | 100;
     }
+
+    static void validateVehicleConfig(const RcEngineSound::Config& cfg) {
+        if (cfg.transmission.numberOfGears < 1 || cfg.transmission.numberOfGears > 6) {
+            LOG_CFG_WARN("transmission: number_of_gears %d out of range (1-6)",
+                         cfg.transmission.numberOfGears);
+        }
+    }
 };
 
-const char* ConfigParser::soundTypeNames[] = {
+inline const char* ConfigParser::soundTypeNames[] = {
     "idle", "rev", "start", "knock", "turbo", "wastegate", "horn",
     "jakebrake", "fan", "siren", "airbrake", "parkingbrake",
     "shifting", "reversing", "indicator", "coupling", "supercharger",
@@ -1169,7 +1118,7 @@ const char* ConfigParser::soundTypeNames[] = {
     "bell", "door", "scanner", "music", "whistle", "gun", "outoffuel", "others"
 };
 
-const char* ConfigParser::genericNames[] = {
+inline const char* ConfigParser::genericNames[] = {
     "idle-ScaniaV8.json", "rev-ScaniaV8.json", "start-ScaniaV8.json",
     "knock-ScaniaV8.json", "Turbo-whistle.json", "1000HpScaniaV8-wastegate.json",
     "ScaniaV8train-horn.json",

@@ -170,49 +170,49 @@
                         "itemCount": 8,
                         "items": [
                             {
-                                "onLabel": null,
+                                "onLabel": "HEAD",
                                 "onIcon": "lightbulb",
                                 "offLabel": null,
                                 "offIcon": null
                             },
                             {
-                                "onLabel": null,
+                                "onLabel": "REAR",
                                 "onIcon": "headlights",
                                 "offLabel": null,
                                 "offIcon": null
                             },
                             {
-                                "onLabel": null,
+                                "onLabel": "FOG",
                                 "onIcon": "snowflake",
                                 "offLabel": null,
                                 "offIcon": null
                             },
                             {
-                                "onLabel": null,
+                                "onLabel": "HAZARD",
                                 "onIcon": "warning",
                                 "offLabel": null,
                                 "offIcon": null
                             },
                             {
-                                "onLabel": null,
+                                "onLabel": "BEACON",
                                 "onIcon": "siren",
                                 "offLabel": null,
                                 "offIcon": null
                             },
                             {
-                                "onLabel": null,
+                                "onLabel": "CAB",
                                 "onIcon": "car-simple",
                                 "offLabel": null,
                                 "offIcon": null
                             },
                             {
-                                "onLabel": null,
+                                "onLabel": "WORK",
                                 "onIcon": "wrench",
                                 "offLabel": null,
                                 "offIcon": null
                             },
                             {
-                                "onLabel": null,
+                                "onLabel": "AUX",
                                 "onIcon": "x",
                                 "offLabel": null,
                                 "offIcon": null
@@ -524,57 +524,45 @@
                     ],
                     "size": [
                         24,
-                        130
+                        96
                     ],
                     "haptic": true,
                     "variant": "multiSelect",
                     "properties": {
-                        "itemCount": 8,
+                        "itemCount": 6,
                         "items": [
                             {
-                                "onLabel": null,
-                                "onIcon": "arrow-up",
+                                "onLabel": "LIGHT",
+                                "onIcon": "lightbulb",
                                 "offLabel": null,
                                 "offIcon": null
                             },
                             {
-                                "onLabel": null,
-                                "onIcon": "arrow-down",
-                                "offLabel": null,
-                                "offIcon": null
-                            },
-                            {
-                                "onLabel": null,
-                                "onIcon": "snowflake",
-                                "offLabel": null,
-                                "offIcon": null
-                            },
-                            {
-                                "onLabel": null,
-                                "onIcon": "crosshair",
-                                "offLabel": null,
-                                "offIcon": null
-                            },
-                            {
-                                "onLabel": null,
+                                "onLabel": "DITCH",
                                 "onIcon": "siren",
                                 "offLabel": null,
                                 "offIcon": null
                             },
                             {
-                                "onLabel": null,
+                                "onLabel": "CAB",
                                 "onIcon": "cable-car",
                                 "offLabel": null,
                                 "offIcon": null
                             },
                             {
-                                "onLabel": null,
+                                "onLabel": "STEP",
                                 "onIcon": "tablet",
                                 "offLabel": null,
                                 "offIcon": null
                             },
                             {
-                                "onLabel": null,
+                                "onLabel": "AUX",
+                                "onIcon": "crosshair",
+                                "offLabel": null,
+                                "offIcon": null
+                            },
+                            {
+                                "onLabel": "AUX",
                                 "onIcon": "x",
                                 "offLabel": null,
                                 "offIcon": null
@@ -596,7 +584,7 @@
                     },
                     "position": [
                         31,
-                        175,
+                        172,
                         0
                     ],
                     "size": [

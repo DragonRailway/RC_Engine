@@ -55,9 +55,9 @@ RK_Slider throttle_slider(67, 105, 114, 20, 0);  // slider: pos=(67,105) size=20
 
 RK_SlideSwitch dir_switch(67, 173, 18, 32, 0);  // switch: pos=(67,173) size=32x18 label="dir_switch"
 
-RK_MultipleSelect loco_light(31, 97, 130, 24, 0);  // multiple: pos=(31,97) size=24x130 label="loco_light"
+RK_MultipleSelect loco_light(31, 97, 96, 24, 0);  // multiple: pos=(31,97) size=24x96 label="loco_light"
 
-RK_PushButton bell_button(31, 175, 20, 0, 0);  // button: pos=(31,175) size=?x20 label="bell_button"
+RK_PushButton bell_button(31, 172, 20, 0, 0);  // button: pos=(31,172) size=?x20 label="bell_button"
 
 RK_ToggleButton engine_button(67, 41, 20, 0, 0);  // button: pos=(67,41) size=?x20 label="engine_button"
 
@@ -73,8 +73,8 @@ static inline void initRadioKit() {
   RadioKit.config.type        = "Locomotive";
   RadioKit.config.theme       = "dragon";
   RadioKit.config.baudrate    = 1000000;
-  RadioKit.config.fs_url       = RK_FS_URL;
-  RadioKit.config.ota_url      = RK_OTA_URL;
+  RadioKit.config.fs_url       = "https://github.com/DragonRailway/RC_Engine/tree/main/configs";
+  RadioKit.config.ota_url      = "https://github.com/DragonRailway/RC_Engine";
 
   steering_wheel.rk.label = "steering_wheel";
   steering_wheel.setLabelHidden(true);
@@ -91,14 +91,14 @@ static inline void initRadioKit() {
   brake_pedal.rk.centering = RK_SPRING_MIN;
   truck_light.rk.label = "truck_light";
   truck_light.setLabelHidden(true);
-  truck_light.rk.items[0] = {"", "lightbulb", 0};
-  truck_light.rk.items[1] = {"", "headlights", 1};
-  truck_light.rk.items[2] = {"", "snowflake", 2};
-  truck_light.rk.items[3] = {"", "warning", 3};
-  truck_light.rk.items[4] = {"", "siren", 4};
-  truck_light.rk.items[5] = {"", "car-simple", 5};
-  truck_light.rk.items[6] = {"", "wrench", 6};
-  truck_light.rk.items[7] = {"", "x", 7};
+  truck_light.rk.items[0] = {"HEAD", "lightbulb", 0};
+  truck_light.rk.items[1] = {"REAR", "headlights", 1};
+  truck_light.rk.items[2] = {"FOG", "snowflake", 2};
+  truck_light.rk.items[3] = {"HAZARD", "warning", 3};
+  truck_light.rk.items[4] = {"BEACON", "siren", 4};
+  truck_light.rk.items[5] = {"CAB", "car-simple", 5};
+  truck_light.rk.items[6] = {"WORK", "wrench", 6};
+  truck_light.rk.items[7] = {"AUX", "x", 7};
   truck_light.rk.itemCount = 8;
   start_button.rk.label = "start_button";
   start_button.setLabelHidden(true);
@@ -132,6 +132,7 @@ static inline void initRadioKit() {
   throttle_slider.rk.label = "throttle_slider";
   throttle_slider.setLabelHidden(true);
   throttle_slider.rk.centering = RK_SPRING_NONE;
+  throttle_slider.rk.value = -100;
   dir_switch.setPage(1);
   dir_switch.rk.label = "dir_switch";
   dir_switch.setLabelHidden(true);
@@ -140,15 +141,13 @@ static inline void initRadioKit() {
   loco_light.setPage(1);
   loco_light.rk.label = "loco_light";
   loco_light.setLabelHidden(true);
-  loco_light.rk.items[0] = {"", "arrow-up", 0};
-  loco_light.rk.items[1] = {"", "arrow-down", 1};
-  loco_light.rk.items[2] = {"", "snowflake", 2};
-  loco_light.rk.items[3] = {"", "crosshair", 3};
-  loco_light.rk.items[4] = {"", "siren", 4};
-  loco_light.rk.items[5] = {"", "cable-car", 5};
-  loco_light.rk.items[6] = {"", "tablet", 6};
-  loco_light.rk.items[7] = {"", "x", 7};
-  loco_light.rk.itemCount = 8;
+  loco_light.rk.items[0] = {"LIGHT", "lightbulb", 0};
+  loco_light.rk.items[1] = {"DITCH", "siren", 1};
+  loco_light.rk.items[2] = {"CAB", "cable-car", 2};
+  loco_light.rk.items[3] = {"STEP", "tablet", 3};
+  loco_light.rk.items[4] = {"AUX", "crosshair", 4};
+  loco_light.rk.items[5] = {"AUX", "x", 5};
+  loco_light.rk.itemCount = 6;
   bell_button.setPage(1);
   bell_button.rk.label = "bell_button";
   bell_button.setLabelHidden(true);

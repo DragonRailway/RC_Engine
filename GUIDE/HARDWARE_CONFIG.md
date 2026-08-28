@@ -81,7 +81,16 @@ the same config keys mean the same thing on both boards, but the `hardware`
 
 ## 2. sound
 
-Master audio volume for the sound engine.
+Master audio volume and hardware activation gate for the sound engine.
+
+The `sound` section is strictly **opt-in**. If omitted from `hardware-<BOARD>.json`, audio hardware (I2S DMA and audio processing tasks) is completely disabled, claiming zero audio pins or background audio CPU time, and sound sample loading is bypassed.
+
+To activate audio hardware, **both** of the following conditions must be met:
+1. `sound` block is declared in `hardware-<BOARD>.json`.
+2. At least one valid sound sample file is present in the vehicle bundle.
+
+> [!NOTE]
+> The vehicle physics simulation (RPM, flywheel inertia, torque converter slip, and gear shifts) depends on `vehicle.json` and runs continuously to drive motor control regardless of whether audio output is enabled or disabled.
 
 The following parameters are available in the `sound` section:
 
@@ -256,14 +265,14 @@ The RadioKit control surface transmits lighting states via an 8-bit selection ma
 
 | Bit | Hex / Val | Road Vehicle / Truck (`truck_light`) | Locomotive (`loco_light`) | Automation & Mixing |
 | :---: | :---: | :--- | :--- | :--- |
-| **0** | `0x01` (1) | **Head Light** (`lights.head_light`) | **Headlight** (`lights.head_light`) | Truck fades `head_light` to 40%; Loco runs at 100%. `tail_light` automatically glows at 30% when active. |
-| **1** | `0x02` (2) | **High Beam** (`lights.full_beam`) | **Rear Marker / Full Beam** (`lights.tail_light` / `full_beam`) | Truck energizes dedicated `full_beam` (100%) or steps `head_light` to 100%. Loco powers marker/tail. |
-| **2** | `0x04` (4) | **Fog Lamp** (`lights.fog_lamp`) | **Fog / Marker Lamp** (`lights.fog_lamp`) | Independent forward fog illumination for trucks; auxiliary marker light for locomotives. |
-| **3** | `0x08` (8) | **Hazard Lights** (`lights.turn_light`) | **Ditch Lights** (`lights.ditch_light`) | **Truck**: Flashes left and right turn indicators synchronously.<br>**Loco**: Alternating dual ditch lights. |
-| **4** | `0x10` (16) | **Beacon Light** (`lights.beacon`) | **Beacon / Rotary Light** (`lights.beacon`) | Flashing roof strobe / rotating beacon pattern. |
-| **5** | `0x20` (32) | **Cab Light** (`lights.cab_light`) | **Cab Light** (`lights.cab_light`) | Interior cabin illumination. |
-| **6** | `0x40` (64) | **Work Light** (`lights.work_light`) | **Step / Ground Lights** (`lights.step_light`) | **Truck**: Working deck / rear floodlight.<br>**Loco**: Ground walkway step lights. |
-| **7** | `0x80` (128)| **Aux Light** (`lights.aux_light`) | **Aux Light** (`lights.aux_light`) | General auxiliary lighting output. |
+| **0** | `0x01` (1) | **Head Light** (`lights.head_light`) | **Directional Headlight / Tail** (`lights.head_light` / `tail_light`) | Truck fades `head_light` to 40%; Loco runs at 100% and hands over between forward head and reverse tail. |
+| **1** | `0x02` (2) | **High Beam** (`lights.full_beam`) | **Ditch Lights** (`lights.ditch_light`) | Truck: Dedicated `full_beam` or steps `head_light` to 100%. Loco: Alternating dual ditch lights cross-fade. |
+| **2** | `0x04` (4) | **Fog Lamp** (`lights.fog_lamp`) | **Cab Light** (`lights.cab_light`) | Truck: Independent forward fog. Loco: Interior cabin illumination. |
+| **3** | `0x08` (8) | **Hazard Lights** (`lights.turn_light`) | **Step / Ground Lights** (`lights.step_light`) | Truck: Flashes turn indicators synchronously. Loco: Ground walkway step lights. |
+| **4** | `0x10` (16) | **Beacon Light** (`lights.beacon`) | **Beacon / Rotary Light** (`lights.beacon` / `lights.fog_lamp`) | Truck: Roof strobe. Loco: Flashing beacon / auxiliary strobe. |
+| **5** | `0x20` (32) | **Cab Light** (`lights.cab_light`) | **Aux / Work Light** (`lights.aux_light` / `work_light`) | Truck: Cab light. Loco: Auxiliary lighting output. |
+| **6** | `0x40` (64) | **Work Light** (`lights.work_light`) | — | Truck: Working floodlight. |
+| **7** | `0x80` (128)| **Aux Light** (`lights.aux_light`) | — | Truck: Aux light. |
 
 ---
 

@@ -28,30 +28,30 @@
   },
   "lights": {
     "head_light": {
-      "hardware": "L1",
+      "hardware": ["L1"],
       "brightness_max": 60
     },
     "tail_light": {
-      "hardware": "L2",
+      "hardware": ["L2"],
       "brightness_max": 60
     },
     "reversing_light": {
       "hardware": "brake_light"
     },
-    "brake_light": {
-      "hardware": "L3"
+    "beacon": {
+      "hardware": ["L4"],
+      "brightness_max": 100
     },
-    "turn_light": {
-      "left": {
-        "hardware": "L4"
-      },
-      "right": {
-        "hardware": "L5"
-      },
-      "brightness_max": 60,
-      "type": "blink",
-      "interval_on": 300,
-      "interval_off": 300
+    "work_light": {
+      "hardware": ["L3"],
+      "brightness_max": 100
+    },
+    "aux_light": {
+      "hardware": ["L0"],
+      "brightness_max": 60
+    },
+    "brake_light": {
+      "hardware": ["L6"]
     }
   },
   "animation": {

@@ -48,15 +48,15 @@ static uint32_t pendingVcT = 0;
 // Must run after config load and before the app connects (RadioKit sends the
 // widget config on connect).
 static void applyAuxSliderProfile() {
-    if (hwConfig.auxMotor.purpose == HardwareConfig::AuxMotor::MIXER) {
-        aux_slider.rk.centering = RK_SPRING_NONE;
-        aux_slider.rk.detents = 5;
-    } else if (hwConfig.auxMotor.purpose == HardwareConfig::AuxMotor::TIPPER) {
-        aux_slider.rk.centering = RK_SPRING_CENTER;
-        aux_slider.rk.detents = 0;
+    if (hwConfig.auxMotorCount > 0) {
+        if (hwConfig.auxMotors[0].purpose == HardwareConfig::AuxMotor::MIXER) {
+            aux_slider.rk.centering = RK_SPRING_NONE;
+            aux_slider.rk.detents = 5;
+        } else if (hwConfig.auxMotors[0].purpose == HardwareConfig::AuxMotor::TIPPER) {
+            aux_slider.rk.centering = RK_SPRING_CENTER;
+            aux_slider.rk.detents = 0;
+        }
     }
-    // trailer_dcc / no aux_motor: leave the generated defaults (mixer-shaped);
-    // the channel itself is unconfigured with a parser warning.
 }
 
 static uint32_t fileWriteTime(const char* path) {
@@ -153,7 +153,7 @@ static bool reloadConfigs() {
 
     hwConfig = newHw;
     profile.config = newVc;
-    profile.config.sound.master = hwConfig.sound.volume;
+    profile.config.sound.master = hwConfig.sound.configured ? hwConfig.sound.volume : 0;
 
     HardwareInit::hotReload(hwConfig);
     VehicleController::init(&hwConfig, &engine, &profile);
@@ -162,14 +162,26 @@ static bool reloadConfigs() {
     applyAuxSliderProfile();
     applyDeviceMetadata(hwConfig, profile.config);
 
+    bool hasSoundHardware = hwConfig.sound.configured;
+    bool hasSoundAssets = false;
+
+    if (hasSoundHardware && (nameChanged || !wasConfigured)) {
+        hasSoundAssets = ConfigParser::loadSounds(profile.config, profile.sounds);
+    }
+
     if (nameChanged || !wasConfigured) {
-        ConfigParser::loadSounds(profile.config, profile.sounds);
         engine.begin(profile.sounds, profile.config);
+    }
+
+    if (hasSoundHardware && (hasSoundAssets || s_audioStarted)) {
         if (!s_audioStarted) {
             AudioOutput::begin(&engine);
             AudioOutput::start();
             s_audioStarted = true;
         }
+    } else if (!hasSoundHardware && s_audioStarted) {
+        AudioOutput::stop();
+        s_audioStarted = false;
     }
 
     if (!UiLogger::hasErrors()) {
@@ -183,15 +195,22 @@ static bool reloadConfigs() {
 void printConfig(const HardwareConfig& hw, const RcEngineSound::Config& vc) {
     Serial.println("\n── Hardware Config ──");
     if (hw.name[0] != '\0') Serial.printf("  Name: %s\n", hw.name);
-    if (hw.description[0] != '\0') Serial.printf("  Description: %s\n", hw.description);
-    Serial.printf("  Sound Volume: %d%%\n", hw.sound.volume);
-    Serial.printf("  Drive Motor: type=%d hwId=%d freq=%dHz dir=%d\n",
-                  hw.driveMotor.type, hw.driveMotor.hardwareId,
-                  hw.driveMotor.frequency, hw.driveMotor.direction);
-    Serial.printf("  Steering Servo: hwId=%d freq=%dHz L=%d R=%d C=%d\n",
-                  hw.steeringServo.hardwareId, hw.steeringServo.frequency,
-                  hw.steeringServo.endpoints.left, hw.steeringServo.endpoints.right,
-                  hw.steeringServo.endpoints.center);
+    if (hw.sound.configured) {
+        Serial.printf("  Sound: ENABLED (Volume: %d%%)\n", hw.sound.volume);
+    } else {
+        Serial.println("  Sound: DISABLED (not defined in hardware config)");
+    }
+    for (uint8_t i = 0; i < hw.driveMotorCount; i++) {
+        Serial.printf("  Drive Motor[%d]: type=%d hwId=%d freq=%dHz dir=%d\n",
+                      i, hw.driveMotors[i].type, hw.driveMotors[i].hardwareId,
+                      hw.driveMotors[i].frequency, hw.driveMotors[i].direction);
+    }
+    for (uint8_t i = 0; i < hw.steeringServoCount; i++) {
+        Serial.printf("  Steering Servo[%d]: hwId=%d freq=%dHz L=%d R=%d C=%d\n",
+                      i, hw.steeringServos[i].hardwareId, hw.steeringServos[i].frequency,
+                      hw.steeringServos[i].endpoints.left, hw.steeringServos[i].endpoints.right,
+                      hw.steeringServos[i].endpoints.center);
+    }
     Serial.printf("  Lights: head=%d tail=%d brake=%d turnL=%d turnR=%d\n",
                   hw.lights.headLight.pin, hw.lights.tailLight.pin,
                   hw.lights.brakeLight.pin, hw.lights.turnLight.leftPin,
@@ -246,22 +265,36 @@ void setup() {
     if (hwOk && vcOk) {
         printConfig(hwConfig, profile.config);
 
-        Serial.println("\n── Loading Sounds ──");
-        ConfigParser::loadSounds(profile.config, profile.sounds);
+        bool hasSoundAssets = false;
+        if (hwConfig.sound.configured) {
+            Serial.println("\n── Loading Sounds ──");
+            hasSoundAssets = ConfigParser::loadSounds(profile.config, profile.sounds);
+        } else {
+            Serial.println("\n── Audio Hardware: DISABLED (omitted from hardware config) ──");
+        }
 
         Serial.println("\n── Initializing Hardware ──");
         HardwareInit::init(hwConfig);
 
         Serial.println("\n── Initializing Vehicle Controller ──");
-        profile.config.sound.master = hwConfig.sound.volume;
+        profile.config.sound.master = hwConfig.sound.configured ? hwConfig.sound.volume : 0;
         VehicleController::init(&hwConfig, &engine, &profile);
 
-        Serial.println("\n── Starting Engine Sound ──");
+        Serial.println("\n── Starting Engine Simulation ──");
         engine.setConfig(profile.config);
         engine.begin(profile.sounds, profile.config);
-        AudioOutput::begin(&engine);
-        AudioOutput::start();
-        s_audioStarted = true;
+
+        if (hwConfig.sound.configured && hasSoundAssets) {
+            Serial.println("\n── Starting Audio Output Hardware ──");
+            AudioOutput::begin(&engine);
+            AudioOutput::start();
+            s_audioStarted = true;
+        } else {
+            if (hwConfig.sound.configured && !hasSoundAssets) {
+                Serial.println("[AudioOutput] Sound enabled in hardware but 0 sound assets loaded — Audio hardware disabled");
+            }
+            s_audioStarted = false;
+        }
 
         applyDeviceMetadata(hwConfig, profile.config);
         applyAuxSliderProfile();

@@ -3,60 +3,66 @@
     "volume": 80
   },
   "drivetrain": {
-    "drive_motor": {
-      "hardware": "DRIVER_A",
+    "drive_motors": [
+      {
+        "hardware": "DRIVER_A",
+        "frequency": 20000,
+        "direction": "forward",
+        "duty": {
+          "min": 20,
+          "max": 90
+        }
+      }
+    ],
+    "steering_servos": [
+      {
+        "hardware": "S1",
+        "frequency": 50,
+        "endpoints": {
+          "left": 1350,
+          "right": 1650,
+          "center": 1500
+        }
+      }
+    ]
+  },
+  "aux_motors": [
+    {
+      "hardware": "DRIVER_B",
       "frequency": 20000,
       "direction": "forward",
       "duty": {
         "min": 20,
         "max": 90
-      }
-    },
-    "steering_servo": {
-      "hardware": "S1",
-      "frequency": 50,
-      "endpoints": {
-        "left": 1350,
-        "right": 1650,
-        "center": 1500
-      }
+      },
+      "type": "mixer"
     }
-  },
-  "aux_motor": {
-    "hardware": "DRIVER_B",
-    "frequency": 20000,
-    "direction": "forward",
-    "duty": {
-      "min": 20,
-      "max": 90
-    },
-    "type": "mixer"
-  },
+  ],
   "aux_light": {
-    "hardware": "L0",
+    "hardware": ["L0"],
     "brightness_max": 60
   },
   "lights": {
     "head_light": {
-      "hardware": "L1",
+      "hardware": ["L1"],
       "brightness_max": 60
     },
     "full_beam": {
-      "hardware": "L6",
+      "hardware": ["L6"],
       "brightness_max": 100
     },
     "tail_light": {
-      "hardware": "L2",
+      "hardware": ["L2"],
       "brightness_max": 60
     },
     "brake_light": {
-      "hardware": "L3"
+      "hardware": ["L3"]
     },
     "reversing_light": {
-      "hardware": "L8"
+      "hardware": ["L8"]
     },
     "fog_lamp": {
-      "hardware": "L7",
+      "hardware": ["L7"],
       "brightness_max": 100
     },
     "turn_light": {

@@ -3,6 +3,11 @@
 #include <Arduino.h>
 
 struct HardwareConfig {
+    static constexpr uint8_t MAX_DRIVE_MOTORS    = 2;
+    static constexpr uint8_t MAX_STEERING_SERVOS = 2;
+    static constexpr uint8_t MAX_AUX_MOTORS       = 2;
+    static constexpr uint8_t MAX_PINS_PER_LIGHT  = 4;
+
     char name[32] = "";
     char description[128] = "";
 
@@ -23,7 +28,11 @@ struct HardwareConfig {
             uint8_t max = 100;
         } duty;
         bool    configured = false;
-    } driveMotor, leftMotor, rightMotor;
+    };
+
+    DriveMotor driveMotors[MAX_DRIVE_MOTORS];
+    uint8_t    driveMotorCount = 0;
+    DriveMotor leftMotor, rightMotor; // used when drivetrainType == SKID_STEER
 
     uint8_t steeringSensitivity = 80;
 
@@ -36,7 +45,10 @@ struct HardwareConfig {
             uint16_t center = 1500;
         } endpoints;
         bool    configured = false;
-    } steeringServo;
+    };
+
+    SteeringServo steeringServos[MAX_STEERING_SERVOS];
+    uint8_t       steeringServoCount = 0;
 
     // Animation tunables for the EasyKit easing/fade/blink engines. Global
     // defaults; absent from a hardware config, these values apply as-is.
@@ -50,9 +62,11 @@ struct HardwareConfig {
 
     struct Lights {
         struct Light {
-            uint8_t pin = 0;
+            uint8_t pins[MAX_PINS_PER_LIGHT] = {0};
+            uint8_t pinCount = 0;
             uint8_t brightness = 60;
             bool configured = false;
+            uint8_t pin = 0xFF; // primary pin (pins[0])
         };
 
         Light headLight;
@@ -88,21 +102,25 @@ struct HardwareConfig {
 
     } lights;
 
-    // Auxiliary outputs (work machines): aux_motor (mixer/tipper/trailer_dcc)
-    // and aux_light. Both are optional — absent from the hardware config, no aux
-    // channel is initialized. The hardware token decides the electrical kind
+    // Auxiliary outputs (work machines): aux_motors (mixer/tipper/trailer_dcc)
+    // and aux_light. Both are optional. The hardware token decides the electrical kind
     // (DRIVER_* → H-bridge, S* → servo/ESC PPM, L* → LED), exactly like
-    // drive_motor; `type` is the aux *purpose* (drive behavior), not the wiring.
+    // drive_motors; `type` is the aux *purpose* (drive behavior), not the wiring.
     struct AuxMotor {
         enum Purpose { NONE, MIXER, TIPPER, TRAILER_DCC } purpose = NONE;
         DriveMotor motor;   // electrical shape: hardware/frequency/direction/duty
         bool    configured = false;
-    } auxMotor;
+    };
+
+    AuxMotor auxMotors[MAX_AUX_MOTORS];
+    uint8_t  auxMotorCount = 0;
 
     struct AuxLight {
-        uint8_t pin = 0;
+        uint8_t pins[MAX_PINS_PER_LIGHT] = {0};
+        uint8_t pinCount = 0;
         uint8_t brightness = 60;
         bool configured = false;
+        uint8_t pin = 0xFF; // primary pin (pins[0])
     } auxLight;
 
     // Battery / power configuration. cellCount is the single source of truth for
