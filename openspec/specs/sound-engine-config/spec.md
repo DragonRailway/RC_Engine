@@ -1,29 +1,23 @@
-# Sound Engine Config Specification
+## ADDED Requirements
 
-## Purpose
-Defines requirements for sound engine vehicle profiles, sound set properties, and preset inheritance.
+### Requirement: Hardware Sound Opt-in and Asset Gate
+The firmware SHALL only initialize physical audio output hardware (`AudioOutput`) if the hardware configuration explicitly declares a `"sound"` block (`hwConfig.sound.configured == true`) AND at least one valid sound sample slot is successfully loaded into memory (`loadedCount > 0`).
 
-## Requirements
+#### Scenario: Sound enabled with valid assets and hardware config
+- **WHEN** `hardware-<BOARD>.json` defines `"sound"` with a non-zero volume and the vehicle bundle contains at least one resolvable sound sample file
+- **THEN** the firmware loads sound samples and initializes `AudioOutput` with I2S DMA streaming and audio task creation
 
+#### Scenario: Sound hardware disabled when omitted from hardware config
+- **WHEN** `hardware-<BOARD>.json` omits the `"sound"` block
+- **THEN** the firmware bypasses sound asset loading and does not initialize `AudioOutput`, claiming zero audio pins, zero DMA buffers, and zero audio tasks
 
-### Requirement: Sound set and preset properties
-The `vehicle` section of `/vehicle-config.json` SHALL support optional `"sound_set"` and `"preset"` string fields to specify the sound asset directory and inherited sound preset category.
+#### Scenario: Sound hardware disabled when no sound files are present
+- **WHEN** `hardware-<BOARD>.json` defines `"sound"` but the vehicle bundle and fallbacks contain zero resolvable sound sample files
+- **THEN** the firmware does not initialize `AudioOutput`, avoiding unnecessary I2S DMA and audio processing tasks
 
-#### Scenario: Sound set specified in vehicle config
-- **WHEN** `/vehicle-config.json` specifies `"sound_set": "ScaniaV8"` and `"preset": "heavy_truck"`
-- **THEN** the sound loader resolves PCM files using the 3-tier inheritance cascade
+### Requirement: Vehicle Engine Simulation Independence
+The vehicle physics and state simulation (`RcEngineSound` RPM calculation, flywheel inertia, transmission shifting, torque converter slip, and start/stop states) SHALL operate continuously regardless of whether audio output hardware is enabled or disabled.
 
-### Requirement: 3-tier hierarchical sound asset resolution
-The sound loader SHALL resolve PCM sample files for each sound slot using a 3-tier lookup order: `/sounds/vehicles/<sound_set>/<slot>.json` -> `/sounds/presets/<preset>/<slot>.json` -> `/sounds/generic/<slot>.json`.
-
-#### Scenario: Vehicle-specific sound found
-- **WHEN** a sound sample file exists at `/sounds/vehicles/<sound_set>/<slot>.json`
-- **THEN** the sound loader loads the PCM samples from that file
-
-#### Scenario: Preset fallback sound loaded
-- **WHEN** a sound sample file does not exist in the vehicle folder but exists at `/sounds/presets/<preset>/<slot>.json`
-- **THEN** the sound loader loads the PCM samples from the preset folder
-
-#### Scenario: Generic fallback sound loaded
-- **WHEN** a sound sample file exists in neither the vehicle nor preset folders, but exists at `/sounds/generic/<slot>.json`
-- **THEN** the sound loader loads the PCM samples from the generic folder
+#### Scenario: Physics simulation runs when sound is disabled
+- **WHEN** sound hardware is disabled due to missing `"sound"` in hardware config or absence of sound files
+- **THEN** `RcEngineSound` continues simulating engine state and RPM to drive throttle mapping and motor PWM in `VehicleController`

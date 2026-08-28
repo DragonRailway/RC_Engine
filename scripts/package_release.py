@@ -92,7 +92,7 @@ def package_release(target_envs=None, dist_dir=DEFAULT_DIST_DIR, skip_build=Fals
             raise FileNotFoundError(f"Binary outputs missing in {build_dir}. Ensure build succeeded.")
 
         chip = get_chip_for_env(env)
-        factory_dst = dist_dir / f"RC_Engine-{ver_str}-{chip}-{env}-factory.bin"
+        factory_dst = dist_dir / f"RC_Engine-{ver_str}-{chip}-{env}.bin"
         ota_dst = dist_dir / f"RC_Engine-{ver_str}-{chip}-{env}-ota.bin"
 
         shutil.copy2(factory_src, factory_dst)

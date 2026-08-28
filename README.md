@@ -1,6 +1,8 @@
 # RC Engine
 
-RC Engine is an ESP32-S3 controller and dynamic sound synthesizer for RC scale models, trucks, crawlers, tracked vehicles, and locomotives. It pairs with the **RadioKit** mobile app over Bluetooth Low Energy (BLE) to deliver physics-based engine simulation, multi-channel sound synthesis, lighting automation, and motor drive control.
+RC Engine is an ESP32-S3 controller and dynamic sound synthesizer for RC scale models, trucks, crawlers, tracked vehicles, and locomotives.
+
+It pairs with the **RadioKit** mobile app over Bluetooth Low Energy (BLE) to deliver physics-based engine simulation, multi-channel sound synthesis, lighting automation, and motor drive control.
 
 ---
 
@@ -35,32 +37,6 @@ RC Engine is an ESP32-S3 controller and dynamic sound synthesizer for RC scale m
 | **TRACKLINK V3** | 1/14–1/16 trucks, crawlers, locomotives | Dual high-power motor channels, servo rails, expanded lighting outputs, I2S audio |
 | **MIKRO V2** | 1/24–1/35 micro scale models | Compact footprint, dual motor driver, servo rail, integrated I2S amplifier, LED outputs |
 | **GTRACK** | Tracked machinery, excavators | Dual track motor channels, aux motor drivers, lighting rails, I2S audio |
-
----
-
-## Getting Started
-
-### Build and Flash Firmware
-
-```bash
-# Build firmware for a specific board
-pio run -e TRACKLINK_V3
-
-# Upload firmware over USB serial
-pio run -e TRACKLINK_V3 -t upload
-```
-
-### Deploy Filesystem Bundle
-
-The on-device LittleFS partition holds one hardware config and one vehicle sound bundle:
-
-```bash
-# Flash filesystem bundle to board
-python3 scripts/build_fs.py --board TRACKLINK_V3 --vehicle UnionPacific
-
-# Dry-run size verification
-python3 scripts/build_fs.py --board TRACKLINK_V3 --vehicle UnionPacific --dry-run
-```
 
 ---
 
