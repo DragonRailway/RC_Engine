@@ -1,93 +1,77 @@
-# 🚗 RC Engine
+# RC Engine
 
-**RC Engine** is an all-in-one smart controller and dynamic sound synthesizer designed for RC models, scale trucks, crawlers, heavy machinery, tracked vehicles, and model locomotives. Powered by the ESP32-S3 and controlled wirelessly via the **RadioKit** mobile app, RC Engine brings scale models to life with realistic engine physics, authentic acoustics, interactive lighting, and smooth drive control.
-
----
-
-## ✨ Highlights & Features
-
-### 🔊 Dynamic Physics-Based Sound Engine
-* **Real-time Engine Simulation:** Responsive RPM curves, authentic idle rumble, throttle revs, and load-sensitive acceleration.
-* **Realistic Mechanical FX:** Turbo spool & blow-off valves, diesel engine knock simulator, supercharger whine, tire squeal, and Jake brake (exhaust engine braking).
-* **Work Machine & Scale Details:** Excavator hydraulics, track squeaks, air brake hiss, reversing beepers, air horns, sirens, and train bells.
-* **70+ Pre-tuned Vehicle Soundpacks:** Instant access to profiles like Scania V8, Kenworth CAT 3408, Land Rover Defender, Caterpillar excavators & dumpers, Ford Mustang V8, Tatra 8x8, locomotives, and many more!
-
-### 🕹️ Complete Drive & Motion Control
-* **Flexible Drivetrains:** Supports standard single-motor ESCs, dual-motor differential drive for tracked tanks and excavators, and precision steering servos.
-* **Custom Steering & Throttle Curves:** Adjustable steering sensitivity, endpoint trimming, acceleration ramp rates, and automatic scale braking.
-* **Auxiliary Equipment Control:** Dedicated control profiles for dump truck tippers, cement mixer drums, cranes, and winches.
-
-### 💡 Scale Lighting System
-* **Automated & Manual Lights:** Headlights (low/high beam), 2-stage tail & brake lights, reversing lights, turn signals, and hazard flashers.
-* **Auxiliary & Work Lights:** Cab interior lights, ditch lights, and step lights.
-* **Custom LED Animations:** Realistic beacons, strobes, fade effects, and emergency lightbar patterns.
-
-### 📱 Wireless Control & Mobile App (RadioKit)
-* **Bluetooth Low Energy (BLE) Connectivity:** Low-latency, zero-lag touch controls directly from your smartphone or tablet.
-* **Tailored Cockpits:** Intuitive, switchable UI layouts tailored for road trucks, heavy machinery, and locomotives.
-* **Live Battery & Health Telemetry:** Real-time battery voltage monitoring with multi-cell LiPo alerts sent directly to your screen.
-
-### ⚡ On-the-Fly Configuration (Hot-Reload)
-* **No Re-flashing Needed:** Easily tune lights, motor endpoints, sound volumes, and physics parameters in human-readable JSON files that update instantly on the board.
+RC Engine is an ESP32-S3 controller and dynamic sound synthesizer for RC scale models, trucks, crawlers, tracked vehicles, and locomotives. It pairs with the **RadioKit** mobile app over Bluetooth Low Energy (BLE) to deliver physics-based engine simulation, multi-channel sound synthesis, lighting automation, and motor drive control.
 
 ---
 
-## 🛠️ Supported Hardware Boards
+## Features
 
-RC Engine comes ready-to-run on custom ESP32-S3 boards:
+### Vehicle Physics & Sound Engine
+- **Real-Time Engine Simulation**: RPM curves, flywheel inertia, automatic transmission torque-converter slip, and start/stop state management.
+- **Sound Effects**: Turbo spool, blow-off valves, diesel engine knock, Jake brake, air release, horns, sirens, and train bells.
+- **Pre-Tuned Profiles**: Over 70 sound profiles covering highway trucks, off-road scalers, heavy construction machinery, tanks, and diesel locomotives.
 
-| Board | Target Vehicles | Key Features |
-|---|---|---|
-| **MIKRO V2** | Micro & 1/24–1/35 scale models, custom scale builds | Ultra-compact footprint, dual motor driver, integrated I2S audio amp, multiple LED channels |
-| **TRACKLINK V3** | 1/14–1/16 scale trucks, tracked vehicles, crawlers | Dual high-power motor channels, servo outputs, expanded lighting rails, dedicated aux power |
+### Drive & Motion Control
+- **Drivetrain Modes**: Ackermann steering with servo endpoints or dual-motor differential skid-steer.
+- **Drive Actuation**: Direct H-bridge DC motors and hobby RC ESC support with configurable PWM frequencies and direction mapping.
+- **Auxiliary Machinery**: Control channels for dump truck tippers, cement mixers, winches, and excavator attachments.
+
+### Lighting Automation
+- **Scale Lighting Channels**: Directional headlights, high beams, 2-stage tail/brake lights, turn signals, and hazard flashers.
+- **Auxiliary & Cabin Lights**: Dedicated cabin, step, ground, and dual alternating ditch lights.
+- **Pattern Sequencer**: Configurable LED animations for beacons, strobes, and emergency lightbars.
+
+### Wireless Control & Hot-Reload
+- **RadioKit Mobile App**: Low-latency BLE control interface with tailored cockpit layouts for road trucks, machinery, and trains.
+- **Live Telemetry**: Real-time battery voltage monitoring and vehicle speed telemetry.
+- **LittleFS Config Bundles**: Hardware and vehicle parameters stored in JSON files that hot-reload without firmware re-flashing.
 
 ---
 
-## 🚀 Quick Start Guide
+## Supported Boards
 
-### 1. Flash the Board & Vehicle Pack
-Prepare your firmware and upload your favorite vehicle sound package to the board's internal storage using the build script:
+| Board | Target Vehicles | Key Peripherals |
+| :--- | :--- | :--- |
+| **TRACKLINK V3** | 1/14–1/16 trucks, crawlers, locomotives | Dual high-power motor channels, servo rails, expanded lighting outputs, I2S audio |
+| **MIKRO V2** | 1/24–1/35 micro scale models | Compact footprint, dual motor driver, servo rail, integrated I2S amplifier, LED outputs |
+| **GTRACK** | Tracked machinery, excavators | Dual track motor channels, aux motor drivers, lighting rails, I2S audio |
+
+---
+
+## Getting Started
+
+### Build and Flash Firmware
 
 ```bash
-# Example: Deploy to a TrackLink V3 with the Scania V8 soundpack
-python3 scripts/build_fs.py --board TRACKLINK_V3 --vehicle ScaniaV8
+# Build firmware for a specific board
+pio run -e TRACKLINK_V3
+
+# Upload firmware over USB serial
+pio run -e TRACKLINK_V3 -t upload
 ```
 
-### 2. Power On & Connect
-1. Connect your battery or power supply to the RC Engine board.
-2. Open the **RadioKit** app on your phone / tablet.
-3. Select your RC Engine board via Bluetooth (BLE) to open the interactive dashboard.
+### Deploy Filesystem Bundle
 
-### 3. Drive & Enjoy!
-* **Engine Start/Stop:** Tap the ignition button to start the engine sequence with realistic starter motor cranking and idle settle.
-* **Throttle & Steering:** Use responsive on-screen sliders or steering wheels, or pair your favorite physical Bluetooth game controller.
-* **Lighting Controls:** Toggle headlights, hazard lights, turn indicators, and beacons with dedicated dashboard buttons.
+The on-device LittleFS partition holds one hardware config and one vehicle sound bundle:
 
----
+```bash
+# Flash filesystem bundle to board
+python3 scripts/build_fs.py --board TRACKLINK_V3 --vehicle UnionPacific
 
-## 🎛️ Customizing Your Vehicle
-
-You can easily adapt RC Engine to match your specific model chassis, gearing, and scale accessories without touching the core firmware code.
-
-* **[Hardware Configuration Guide](GUIDE/HARDWARE_CONFIG.md)** — Learn how to configure motor types, servo directions, lighting pins, and battery voltage thresholds.
-* **[Vehicle Configuration Guide](GUIDE/VEHICLE_CONFIG.md)** — Learn how to fine-tune engine physics, gear shifting dynamics, Jake brake strength, and individual audio channel volumes.
+# Dry-run size verification
+python3 scripts/build_fs.py --board TRACKLINK_V3 --vehicle UnionPacific --dry-run
+```
 
 ---
 
-## 📂 Sound Profile Library Overview
+## Configuration Documentation
 
-RC Engine includes a rich library of sound configurations under `configs/vehicle_configs/`:
-
-* **Highway & Heavy Trucks:** Scania V8 (1000HP / 143), Kenworth W900A, Peterbilt Detroit Diesel, Mack SuperLiner, Mercedes Actros & SK, Volvo FH16.
-* **Offroad & Scalers:** Land Rover Defender (V8 / Td5 / LS3), Toyota Land Cruiser FJ40, Jeep Wrangler Rubicon 392, GMC Sierra, RAM Cummins.
-* **Heavy Machinery & Excavators:** Caterpillar 323 / D6, Benford Dumpers, Hitachi ZW370, Volvo L120H / EC550.
-* **Military & Utility:** Tatra 813, Ural 375 / 4320, Unimog U1000, GAZ-66, IS-3 Tank, Fire Trucks.
-* **Classic & Muscle Cars:** 1965 Ford Mustang V8, Chevy Nova Coupe V8, VW Beetle, Jaguar XJS, LaFerrari.
-* **Trains & Aviation:** Union Pacific Diesel Locomotives, Messerschmitt Bf 109.
+- **[Hardware Configuration Guide](GUIDE/HARDWARE_CONFIG.md)**: Pin assignments, motor driver types, servo endpoints, lighting channels, and battery monitoring.
+- **[Vehicle Configuration Guide](GUIDE/VEHICLE_CONFIG.md)**: Engine RPM limits, inertia ramping, transmission dynamics, and sound volume mixing.
 
 ---
 
-## 📄 License & Credits
+## Credits & License
 
-* **RCKIT Ecosystem:** RC_Engine is part of the **RCKIT** platform, powered by [RadioKit](https://github.com/) and [ESP32_EasyKit](https://github.com/).
-* **Sound Engine & Audio:** Engine sound synthesis concepts and baseline audio assets are adapted from this project [Rc_Engine_Sound_ESP32](https://github.com/TheDIYGuy999/Rc_Engine_Sound_ESP32) by **TheDIYGuy999**.
+- **RadioKit Ecosystem**: Built with [RadioKit](https://github.com/Radio-Kit/RadioKit) and [ESP32_EasyKit](https://github.com/DragonRailway/ESP32_EasyKit).
+- **Sound Engine**: Engine synthesis concepts and baseline audio structures adapted from [Rc_Engine_Sound_ESP32](https://github.com/TheDIYGuy999/Rc_Engine_Sound_ESP32) by TheDIYGuy999.
