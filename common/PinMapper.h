@@ -85,7 +85,7 @@ public:
             return {DRIVER::A::PWM1, DRIVER::A::PWM2, DRIVER::A::BEMF, DRIVER::COMMON_EN, true};
         }
         if (strcmp(name, "DRIVER_B") == 0) {
-            return {DRIVER::B::PWM, DRIVER::B::DIR, DRIVER::B::BEMF, DRIVER::COMMON_EN, false};
+            return {DRIVER::B::PWM1, DRIVER::B::PWM2, DRIVER::B::BEMF, DRIVER::COMMON_EN, true};
         }
 #elif defined(MIKRO_V2)
         if (strcmp(name, "DRIVER_A") == 0) {

@@ -24,8 +24,8 @@ struct DRIVER {
     static constexpr uint8_t BEMF = 4;
   };
   struct B {
-    static constexpr uint8_t DIR = 15;
-    static constexpr uint8_t PWM = 16;
+    static constexpr uint8_t PWM1 = 15;
+    static constexpr uint8_t PWM2 = 16;
     static constexpr uint8_t BEMF = 5;
   };
   static constexpr uint8_t COMMON_EN = 12;

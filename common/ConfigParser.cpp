@@ -1,4 +1,5 @@
 #include "ConfigParser.h"
+#include <RadioKitLib.h>
 
 // ── SpiRamAllocator (implementation detail) ─────────────────────────────────
 void* ConfigParser::SpiRamAllocator::allocate(size_t size) {
@@ -44,7 +45,8 @@ const char* ConfigParser::genericNames[] = {
 // ── Public API methods ──────────────────────────────────────────────────────
 
 bool ConfigParser::begin() {
-    if (!LittleFS.begin(true)) {
+    RKFs::begin();
+    if (!RKFs::isReady()) {
         Serial.println("[ConfigParser] LittleFS mount failed");
         return false;
     }

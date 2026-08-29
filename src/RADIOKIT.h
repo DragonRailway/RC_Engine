@@ -171,9 +171,8 @@ static inline void initRadioKit() {
   RadioKit.begin();
 
   RadioKit.startSerial(Serial);
-  RadioKit.startBLE();
-
   RadioKit.enableFS();
+  RadioKit.startBLE();
 }
 
 #endif // RADIOKIT_GENERATED_H

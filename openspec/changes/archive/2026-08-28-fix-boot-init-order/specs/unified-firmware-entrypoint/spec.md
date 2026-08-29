@@ -1,10 +1,4 @@
-# Unified Firmware Entrypoint Specification
-
-## Purpose
-Defines requirements for the main firmware entrypoint, initialization sequence, and service startup.
-
-## Requirements
-
+## MODIFIED Requirements
 
 ### Requirement: Unified Main Entrypoint
 The firmware SHALL have a single main entrypoint at `src/main.cpp` that initializes LittleFS, parses hardware and vehicle configurations, and starts audio and control services for any supported vehicle type. LittleFS SHALL be mounted through `RKFs::begin()` (not directly via `LittleFS.begin()`) so that the RadioKit filesystem mount state is tracked centrally. In the RadioKit init sequence, `enableFS()` SHALL be called before `startBLE()` to ensure the filesystem is ready before the BLE stack starts.
@@ -20,10 +14,3 @@ The firmware SHALL have a single main entrypoint at `src/main.cpp` that initiali
 #### Scenario: Single PlatformIO environment
 - **WHEN** building the project with `pio run`
 - **THEN** PlatformIO builds the unified firmware using `[env:TRACKLINK_V3]` targeting `src/main.cpp`
-
-### Requirement: Boot Failure Safety
-The firmware SHALL fail safely and halt operation if LittleFS fails to mount or required configuration files cannot be parsed.
-
-#### Scenario: Missing configuration file
-- **WHEN** `/vehicle-config.json` or the board hardware config is missing or corrupted at boot
-- **THEN** the firmware logs a fatal error over Serial at 2,000,000 baud and halts further execution without enabling PWM or audio outputs
