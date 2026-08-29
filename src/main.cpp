@@ -118,7 +118,10 @@ static void applyDeviceMetadata(const HardwareConfig& hw, const RcEngineSound::C
     if (pAdv && pAdv->isAdvertising()) {
         pAdv->stop();
         NimBLEAdvertisementData scanData;
-        scanData.setName(RadioKit.config.name);
+        // Prefix "RK_" so the app scan filter (startsWith('RK_')) matches.
+        static char bleName[RADIOKIT_MAX_NAME + 4];
+        snprintf(bleName, sizeof(bleName), "RK_%s", RadioKit.config.name);
+        scanData.setName(bleName);
         pAdv->setScanResponseData(scanData);
         pAdv->start();
     }
