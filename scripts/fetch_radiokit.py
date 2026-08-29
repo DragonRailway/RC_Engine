@@ -9,6 +9,7 @@ import tempfile
 
 try:
     from SCons.Script import Import
+
     Import("env")
     PROJECT_DIR = env.subst("$PROJECT_DIR")
 except Exception:
@@ -17,27 +18,45 @@ except Exception:
 LIB_RK_DIR = os.path.join(PROJECT_DIR, "lib", "rk-arduino")
 HEADER_CHECK = os.path.join(LIB_RK_DIR, "src", "RadioKitLib.h")
 REPO_URL = "https://github.com/Radio-Kit/RadioKit.git"
-BRANCH = "main"
+BRANCH = "multi-ui"
 
 
 def fetch_radiokit():
     if os.path.exists(HEADER_CHECK):
         return
 
-    print(f"\n[RadioKit Fetch] Fetching rk-arduino from {REPO_URL} (branch: {BRANCH})...")
+    print(
+        f"\n[RadioKit Fetch] Fetching rk-arduino from {REPO_URL} (branch: {BRANCH})..."
+    )
     os.makedirs(os.path.join(PROJECT_DIR, "lib"), exist_ok=True)
     temp_dir = tempfile.mkdtemp(prefix="radiokit_clone_")
 
     try:
         # Clone with sparse-checkout to download only rk-arduino
         cmd_clone = [
-            "git", "clone", "--depth", "1", "--filter=blob:none",
-            "--sparse", "-b", BRANCH, REPO_URL, temp_dir
+            "git",
+            "clone",
+            "--depth",
+            "1",
+            "--filter=blob:none",
+            "--sparse",
+            "-b",
+            BRANCH,
+            REPO_URL,
+            temp_dir,
         ]
-        subprocess.run(cmd_clone, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(
+            cmd_clone, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
 
         cmd_sparse = ["git", "sparse-checkout", "set", "rk-arduino"]
-        subprocess.run(cmd_sparse, cwd=temp_dir, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(
+            cmd_sparse,
+            cwd=temp_dir,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
 
         src_path = os.path.join(temp_dir, "rk-arduino")
         if not os.path.exists(src_path):
@@ -50,7 +69,9 @@ def fetch_radiokit():
         print(f"[RadioKit Fetch] Successfully staged rk-arduino into {LIB_RK_DIR}\n")
 
     except Exception as e:
-        print(f"[RadioKit Fetch] ERROR: Failed to fetch rk-arduino: {e}", file=sys.stderr)
+        print(
+            f"[RadioKit Fetch] ERROR: Failed to fetch rk-arduino: {e}", file=sys.stderr
+        )
         if os.path.exists(LIB_RK_DIR):
             shutil.rmtree(LIB_RK_DIR, ignore_errors=True)
         sys.exit(1)

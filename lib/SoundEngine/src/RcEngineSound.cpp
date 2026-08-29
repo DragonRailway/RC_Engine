@@ -38,6 +38,7 @@ RcEngineSound::~RcEngineSound() {
 }
 
 void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
+    sounds.clear();
     sounds = soundData;
     cfg = config;
     currentRpm = 0;
@@ -152,7 +153,6 @@ void RcEngineSound::startEngine() {
 void RcEngineSound::stopEngine() {
     if (state == RUNNING) {
         engineStopRequested = true;
-        printf("[DEBUG] stopEngine() called while RUNNING at millis=%lu\n", millis());
     }
 }
 
@@ -363,14 +363,18 @@ void RcEngineSound::update(int16_t throttle) {
 
     if (state == RUNNING) {
         // ── Jake brake auto-detection ──
-        bool throttleReleased = (effectiveTarget < currentRpm);
+        // Activation requires RPM to exceed effectiveTarget by >2% of maxRpm
+        // (prevents false triggers during automatic transmission gear transitions).
+        // Deactivation uses the simple inverse — no margin — so jake brake cannot
+        // latch in the active state when RPM settles back into the dead zone.
+        int32_t jakeMargin = cfg.engine.maxRpm / 50;
+        bool throttleReleased = (effectiveTarget + jakeMargin < currentRpm);
         bool aboveJakeThreshold = (currentRpmFixed > (uint16_t)(cfg.engine.maxRpm * cfg.engine.jakeBrakeMinRpm / 100));
-        bool throttleApplied = (effectiveTarget > currentRpm);
 
         if (throttleReleased && aboveJakeThreshold && cfg.sound.jakeBrake > 0) {
             jakeBrakeActive = true;
             engineMuted = true;
-        } else if (throttleApplied || currentRpmFixed <= (uint16_t)(cfg.engine.maxRpm * cfg.engine.jakeBrakeMinRpm / 100)) {
+        } else if (!throttleReleased || currentRpmFixed <= (uint16_t)(cfg.engine.maxRpm * cfg.engine.jakeBrakeMinRpm / 100)) {
             jakeBrakeActive = false;
             engineMuted = false;
         }

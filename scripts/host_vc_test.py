@@ -29,6 +29,8 @@ def main():
         f"-I{os.path.join(REPO_ROOT, 'lib', 'SoundEngine', 'src')}",
         VC_SRC,
         os.path.join(REPO_ROOT, "test", "host_vc", "host_easykit_stubs.cpp"),
+        os.path.join(REPO_ROOT, "common", "VehicleController.cpp"),
+        os.path.join(REPO_ROOT, "common", "HardwareInit.cpp"),
         os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "RcEngineSound.cpp"),
         os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "Widget.cpp"),
         os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "Button.cpp"),
