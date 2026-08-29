@@ -174,7 +174,6 @@ static inline void initRadioKit() {
   RadioKit.startBLE();
 
   RadioKit.enableFS();
-  RadioKit.enableOTA();
 }
 
 #endif // RADIOKIT_GENERATED_H
