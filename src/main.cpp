@@ -256,7 +256,7 @@ void setup() {
     initRadioKit();
     RadioKit.config.name = BOARD_DEFAULT_NAME;
     RadioKit.config.description = "RC Engine Controller";
-    RadioKit.begin();
+
 
     Serial.println("\n── Loading Configs ──");
     bool hwOk = ConfigParser::loadHardwareConfig(HW_CONFIG_PATH, hwConfig);
@@ -308,9 +308,10 @@ void setup() {
     }
 
     Serial.println("\n── Starting RadioKit Services ──");
-    RadioKit.startSerial(Serial);
-    RadioKit.startBLE();
-    RadioKit.enableFS();
+    // initRadioKit() already calls startSerial + startBLE + enableFS + enableOTA.
+    // Only re-start BLE if startSerial was called in between (to restore BLE as
+    // primary transport). Here initRadioKit() handles the full sequence, so no
+    // additional transport init is needed.
     UiLogger::onRadioKitStarted();
 
     Serial.println("\n── System Ready ──");
