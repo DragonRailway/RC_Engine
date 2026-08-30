@@ -5,8 +5,10 @@ User-facing guides for configuring the RC Engine firmware. Modeled after the
 style: one page per config area, every parameter documented with its type,
 default, allowed values, and notes.
 
-## Hardware config
+## Hardware & Board config
 
+- [Board Definition Guide](BOARD_DEFINITION.md) — how to define board pin layouts,
+  motor driver topologies, audio DACs, and add new boards in `boards/*.h`.
 - [Hardware Config Reference](HARDWARE_CONFIG.md) — the `hardware-<BOARD>.json`
   schema: every section, parameter, and default, plus per-board pin tables
   and a worked example.

@@ -122,12 +122,15 @@ public:
 
     static uint8_t s_blinkPin[4];
     static bool    s_blinkActive[4];
+    static constexpr uint8_t MAX_PHYSICAL_DRIVERS = 4;
 
-    static EasyMotor driveMotor;
+    static EasyMotor s_motorDrivers[MAX_PHYSICAL_DRIVERS];
     static EasyServo steeringServos[HardwareConfig::MAX_STEERING_SERVOS];
     static EasyServo escServo;
-    static EasyServo auxServo;
-    static EasyMotor auxMotor;
+    static EasyServo auxServos[HardwareConfig::MAX_AUX_MOTORS];
+
+    static EasyMotor* getDriverForId(uint8_t hardwareId);
+    static const char* getDriverName(uint8_t hardwareId);
 
     static EasyLED   headLeds[HardwareConfig::MAX_PINS_PER_LIGHT];
     static EasyLED   fullLeds[HardwareConfig::MAX_PINS_PER_LIGHT];

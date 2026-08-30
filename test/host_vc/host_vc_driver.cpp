@@ -440,7 +440,7 @@ int main() {
     HardwareConfig testHwAckermann;
     testHwAckermann.drivetrainType = HardwareConfig::ACKERMANN;
     testHwAckermann.steeringServoCount = 1;
-    testHwAckermann.steeringServos[0].hardwareId = PIN::S1;
+    testHwAckermann.steeringServos[0].hardwareId = 1; // S1 pin
     testHwAckermann.steeringServos[0].configured = true;
     testHwAckermann.steeringServos[0].frequency = 50;
     testHwAckermann.steeringServos[0].endpoints.left = 1350;
@@ -968,21 +968,27 @@ int main() {
     // ── Test 23: Locomotive Directional Lighting Handover & Asymmetric PWM Slew Limiter ──
     std::cout << "[Host VC Test] Test 23: Locomotive Directional Lighting & Asymmetric Incandescent Slew Limiter..." << std::endl;
     HardwareConfig locoHw;
-    locoHw.lights.headLight.pin = PIN::L1;
+    static constexpr uint8_t LOCO_PIN_L1 = 21;
+    static constexpr uint8_t LOCO_PIN_L2 = 22;
+    static constexpr uint8_t LOCO_PIN_L3 = 23;
+    static constexpr uint8_t LOCO_PIN_L4 = 24;
+    static constexpr uint8_t LOCO_PIN_L5 = 25;
+    static constexpr uint8_t LOCO_PIN_L6 = 26;
+    locoHw.lights.headLight.pin = LOCO_PIN_L1;
     locoHw.lights.headLight.brightness = 100;
     locoHw.lights.headLight.configured = true;
-    locoHw.lights.tailLight.pin = PIN::L2;
+    locoHw.lights.tailLight.pin = LOCO_PIN_L2;
     locoHw.lights.tailLight.brightness = 80;
     locoHw.lights.tailLight.configured = true;
-    locoHw.lights.cabLight.pin = PIN::L3;
+    locoHw.lights.cabLight.pin = LOCO_PIN_L3;
     locoHw.lights.cabLight.brightness = 60;
     locoHw.lights.cabLight.configured = true;
-    locoHw.lights.ditchLight.leftPin = PIN::L4;
-    locoHw.lights.ditchLight.rightPin = PIN::L5;
+    locoHw.lights.ditchLight.leftPin = LOCO_PIN_L4;
+    locoHw.lights.ditchLight.rightPin = LOCO_PIN_L5;
     locoHw.lights.ditchLight.brightness = 100;
     locoHw.lights.ditchLight.intervalMs = 500;
     locoHw.lights.ditchLight.configured = true;
-    locoHw.lights.stepLight.pin = PIN::L6;
+    locoHw.lights.stepLight.pin = LOCO_PIN_L6;
     locoHw.lights.stepLight.brightness = 50;
     locoHw.lights.stepLight.configured = true;
     locoHw.driveMotorCount = 1;
@@ -1052,16 +1058,16 @@ int main() {
     loco_light.rk.value = 0x01; // Bit 0 Headlight ON (target 100% full brightness)
     host_virtual_millis += 20;
     VehicleController::update();
-    float headDutyStart = HardwareInit::getLightDutyPercent(PIN::L1);
+    float headDutyStart = HardwareInit::getLightDutyPercent(LOCO_PIN_L1);
     assert(headDutyStart > 0.0f && headDutyStart <= 15.0f && "Headlight should start ramping up smoothly");
-    assert(HardwareInit::getLightDutyPercent(PIN::L2) == 0.0f && "Tail light must be extinguished in forward");
+    assert(HardwareInit::getLightDutyPercent(LOCO_PIN_L2) == 0.0f && "Tail light must be extinguished in forward");
 
     // Slew up over 200ms -> should reach 100%
     for (int t = 0; t < 15; t++) {
         host_virtual_millis += 20;
         VehicleController::update();
     }
-    float headDutyFinal = HardwareInit::getLightDutyPercent(PIN::L1);
+    float headDutyFinal = HardwareInit::getLightDutyPercent(LOCO_PIN_L1);
     assert(fabs(headDutyFinal - 100.0f) <= 1.0f && "Headlight should reach 100% after warm-up ramp");
 
     // 23.2 Reverse Directional Handover: stationary -> flip to Reverse (dir_switch = 0)
@@ -1071,20 +1077,20 @@ int main() {
         host_virtual_millis += 20;
         VehicleController::update();
     }
-    assert(fabs(HardwareInit::getLightDutyPercent(PIN::L2) - 80.0f) <= 1.0f && "Tail marker should reach 80% in reverse");
-    assert(HardwareInit::getLightDutyPercent(PIN::L1) == 0.0f && "Forward headlight must be extinguished in reverse");
+    assert(fabs(HardwareInit::getLightDutyPercent(LOCO_PIN_L2) - 80.0f) <= 1.0f && "Tail marker should reach 80% in reverse");
+    assert(HardwareInit::getLightDutyPercent(LOCO_PIN_L1) == 0.0f && "Forward headlight must be extinguished in reverse");
 
     // 23.3 Asymmetric Fade-Out Rate Verification (Fast Cool-down 1.0%/ms vs Warm-up 0.5%/ms)
     // Turn cab light ON (target 60%, Bit 2 / 0x04)
     loco_light.rk.value = 0x04; // Bit 2 Cab Light ON
     for (int t = 0; t < 10; t++) { host_virtual_millis += 20; VehicleController::update(); }
-    assert(fabs(HardwareInit::getLightDutyPercent(PIN::L3) - 60.0f) <= 1.0f && "Cab light on");
+    assert(fabs(HardwareInit::getLightDutyPercent(LOCO_PIN_L3) - 60.0f) <= 1.0f && "Cab light on");
 
     // Toggle OFF -> 30ms step -> should drop by ~30% duty (rate 1.0%/ms)
     loco_light.rk.value &= ~0x04;
     host_virtual_millis += 30;
     VehicleController::update();
-    float cabDutyAfter30ms = HardwareInit::getLightDutyPercent(PIN::L3);
+    float cabDutyAfter30ms = HardwareInit::getLightDutyPercent(LOCO_PIN_L3);
     assert(cabDutyAfter30ms < 35.0f && "Cab light should cool down rapidly (~1.0% per ms)");
 
     std::cout << "  PASS: Locomotive directional lighting and asymmetric PWM slew rates verified." << std::endl;
@@ -1094,29 +1100,29 @@ int main() {
     // 24.1 Ditch light inactive -> 0%
     loco_light.rk.value = 0x00;
     VehicleController::update();
-    assert(HardwareInit::getLightDutyPercent(PIN::L4) == 0.0f && "Ditch L off");
-    assert(HardwareInit::getLightDutyPercent(PIN::L5) == 0.0f && "Ditch R off");
+    assert(HardwareInit::getLightDutyPercent(LOCO_PIN_L4) == 0.0f && "Ditch L off");
+    assert(HardwareInit::getLightDutyPercent(LOCO_PIN_L5) == 0.0f && "Ditch R off");
 
     // 24.2 Activate via Bit 1 (0x02) -> should cross-fade
     loco_light.rk.value = 0x02;
     host_virtual_millis = 10000; // aligned
     VehicleController::update(); // t=0: L=0%, R=100%
-    float ditchL_0 = HardwareInit::getLightDutyPercent(PIN::L4);
-    float ditchR_0 = HardwareInit::getLightDutyPercent(PIN::L5);
+    float ditchL_0 = HardwareInit::getLightDutyPercent(LOCO_PIN_L4);
+    float ditchR_0 = HardwareInit::getLightDutyPercent(LOCO_PIN_L5);
     assert(fabs(ditchL_0 - 0.0f) <= 1.0f && fabs(ditchR_0 - 100.0f) <= 1.0f);
 
     // Halfway through half-period (t=250ms of 500ms): L=50%, R=50%
     host_virtual_millis = 10250;
     VehicleController::update();
-    float ditchL_250 = HardwareInit::getLightDutyPercent(PIN::L4);
-    float ditchR_250 = HardwareInit::getLightDutyPercent(PIN::L5);
+    float ditchL_250 = HardwareInit::getLightDutyPercent(LOCO_PIN_L4);
+    float ditchR_250 = HardwareInit::getLightDutyPercent(LOCO_PIN_L5);
     assert(fabs(ditchL_250 - 50.0f) < 2.0f && fabs(ditchR_250 - 50.0f) < 2.0f);
 
     // Peak (t=500ms): L=100%, R=0%
     host_virtual_millis = 10500;
     VehicleController::update();
-    float ditchL_500 = HardwareInit::getLightDutyPercent(PIN::L4);
-    float ditchR_500 = HardwareInit::getLightDutyPercent(PIN::L5);
+    float ditchL_500 = HardwareInit::getLightDutyPercent(LOCO_PIN_L4);
+    float ditchR_500 = HardwareInit::getLightDutyPercent(LOCO_PIN_L5);
     assert(fabs(ditchL_500 - 100.0f) <= 1.0f && fabs(ditchR_500 - 0.0f) <= 1.0f);
 
     // Turn Bit 1 OFF -> Ditch lights extinguished

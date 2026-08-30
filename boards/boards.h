@@ -4,14 +4,70 @@
 
 #pragma once
 
-#ifdef GTRACK
+#include "BoardTypes.h"
+#include "BoardBase.h"
+
+#if defined(GTRACK)
 #include "GTRACK.h"
-#endif
-
-#ifdef MIKRO_V2
+using CurrentBoard = Board_GTRACK;
+#elif defined(MIKRO_V2)
 #include "MIKRO_V2.h"
+using CurrentBoard = Board_MIKRO_V2;
+#elif defined(TRACKLINK_V3)
+#include "TRACKLINK_V3.h"
+using CurrentBoard = Board_TRACKLINK_V3;
+#else
+// Fallback for generic or host-test environments
+using CurrentBoard = BaseBoard;
 #endif
 
-#ifdef TRACKLINK_V3
-#include "TRACKLINK_V3.h"
-#endif
+// Backward-compatibility aliases for legacy AUDIO / POWER struct lookups
+using AUDIO = typename CurrentBoard::AUDIO;
+using POWER = typename CurrentBoard::POWER;
+
+class Board {
+public:
+    static constexpr const char* NAME = CurrentBoard::NAME;
+    using AUDIO = typename CurrentBoard::AUDIO;
+    using POWER = typename CurrentBoard::POWER;
+
+    static uint8_t resolve(const char* name) {
+        if (!name) return NO_PIN;
+        for (const auto& entry : CurrentBoard::PINS) {
+            if (strcmp(entry.name, name) == 0) {
+                return entry.pin;
+            }
+        }
+        return NO_PIN;
+    }
+
+    static DriverPins getDriver(const char* name) {
+        if (!name) return {0, 0, 0xFF, 0xFF, false};
+        for (const auto& entry : CurrentBoard::DRIVERS) {
+            if (strcmp(entry.name, name) == 0) {
+                return entry.pins;
+            }
+        }
+        return {0, 0, 0xFF, 0xFF, false};
+    }
+
+    static constexpr size_t driverCount() {
+        return sizeof(CurrentBoard::DRIVERS) / sizeof(DriverEntry);
+    }
+
+    static constexpr bool hasDrivers() {
+        return driverCount() > 0;
+    }
+
+    static constexpr bool hasAudio() {
+        return AUDIO::I2S_DIN != NO_PIN;
+    }
+
+    static constexpr bool hasPowerLatch() {
+        return POWER::POWER_ENABLE != NO_PIN;
+    }
+
+    static constexpr bool hasPowerButton() {
+        return POWER::POWER_BUTTON != NO_PIN;
+    }
+};

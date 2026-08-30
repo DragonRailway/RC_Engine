@@ -1,7 +1,7 @@
 """
 gen_boards_header.py
-PlatformIO script to auto-generate src/boards/boards.h
-from all *.h files in src/boards/ (excluding boards.h itself).
+PlatformIO script to auto-generate boards/boards.h
+from all *.h files in boards/ (excluding boards.h, BoardTypes.h, BoardBase.h).
 """
 import os
 import glob
@@ -13,16 +13,17 @@ try:
 except Exception:
     PROJECT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
+EXCLUDED_HEADERS = {"boards.h", "BoardTypes.h", "BoardBase.h"}
+
 def generate_boards_header(source, target, env):
     project_dir = env["PROJECT_DIR"]
     boards_dir = os.path.join(project_dir, "boards")
     boards_h = os.path.join(boards_dir, "boards.h")
 
-    # Find all .h files in boards_dir, excluding boards.h
+    # Find all board .h files
     board_files = sorted(glob.glob(os.path.join(boards_dir, "*.h")))
-    board_files = [f for f in board_files if os.path.basename(f) != "boards.h"]
+    board_files = [f for f in board_files if os.path.basename(f) not in EXCLUDED_HEADERS]
 
-    # Generate content
     lines = [
         "// boards/boards.h",
         "// Umbrella header to include all board files conditionally based on the defined board name",
@@ -30,17 +31,80 @@ def generate_boards_header(source, target, env):
         "",
         "#pragma once",
         "",
+        '#include "BoardTypes.h"',
+        '#include "BoardBase.h"',
+        "",
     ]
 
-    for board_file in board_files:
+    for i, board_file in enumerate(board_files):
         basename = os.path.basename(board_file)
         board_name = basename.replace(".h", "")
-        lines.append(f"#ifdef {board_name}")
+        prefix = "#if" if i == 0 else "#elif"
+        lines.append(f"{prefix} defined({board_name})")
         lines.append(f'#include "{basename}"')
+        lines.append(f"using CurrentBoard = Board_{board_name};")
+
+    if board_files:
+        lines.append("#else")
+        lines.append("// Fallback for generic or host-test environments")
+        lines.append("using CurrentBoard = BaseBoard;")
         lines.append("#endif")
         lines.append("")
 
-    # Write boards.h
+    lines.extend([
+        "// Backward-compatibility aliases for legacy AUDIO / POWER struct lookups",
+        "using AUDIO = typename CurrentBoard::AUDIO;",
+        "using POWER = typename CurrentBoard::POWER;",
+        "",
+        "class Board {",
+        "public:",
+        "    static constexpr const char* NAME = CurrentBoard::NAME;",
+        "    using AUDIO = typename CurrentBoard::AUDIO;",
+        "    using POWER = typename CurrentBoard::POWER;",
+        "",
+        "    static uint8_t resolve(const char* name) {",
+        "        if (!name) return NO_PIN;",
+        "        for (const auto& entry : CurrentBoard::PINS) {",
+        "            if (strcmp(entry.name, name) == 0) {",
+        "                return entry.pin;",
+        "            }",
+        "        }",
+        "        return NO_PIN;",
+        "    }",
+        "",
+        "    static DriverPins getDriver(const char* name) {",
+        "        if (!name) return {0, 0, 0xFF, 0xFF, false};",
+        "        for (const auto& entry : CurrentBoard::DRIVERS) {",
+        "            if (strcmp(entry.name, name) == 0) {",
+        "                return entry.pins;",
+        "            }",
+        "        }",
+        "        return {0, 0, 0xFF, 0xFF, false};",
+        "    }",
+        "",
+        "    static constexpr size_t driverCount() {",
+        "        return sizeof(CurrentBoard::DRIVERS) / sizeof(DriverEntry);",
+        "    }",
+        "",
+        "    static constexpr bool hasDrivers() {",
+        "        return driverCount() > 0;",
+        "    }",
+        "",
+        "    static constexpr bool hasAudio() {",
+        "        return AUDIO::I2S_DIN != NO_PIN;",
+        "    }",
+        "",
+        "    static constexpr bool hasPowerLatch() {",
+        "        return POWER::POWER_ENABLE != NO_PIN;",
+        "    }",
+        "",
+        "    static constexpr bool hasPowerButton() {",
+        "        return POWER::POWER_BUTTON != NO_PIN;",
+        "    }",
+        "};",
+        "",
+    ])
+
     with open(boards_h, "w") as f:
         f.write("\n".join(lines))
 
@@ -48,18 +112,15 @@ def generate_boards_header(source, target, env):
     if board_names:
         print(f"[gen_boards_header] Updated boards.h with {len(board_names)} board(s): {', '.join(board_names)}")
     else:
-        print("[gen_boards_header] WARNING: No board headers found in src/boards/")
+        print("[gen_boards_header] WARNING: No board headers found in boards/")
 
-# Execute immediately when script is loaded
+# Execute when script is run directly or imported
 project_dir = PROJECT_DIR
 boards_dir = os.path.join(project_dir, "boards")
 boards_h = os.path.join(boards_dir, "boards.h")
-
-# Find all .h files in boards_dir, excluding boards.h
 board_files = sorted(glob.glob(os.path.join(boards_dir, "*.h")))
-board_files = [f for f in board_files if os.path.basename(f) != "boards.h"]
+board_files = [f for f in board_files if os.path.basename(f) not in EXCLUDED_HEADERS]
 
-# Generate content
 lines = [
     "// boards/boards.h",
     "// Umbrella header to include all board files conditionally based on the defined board name",
@@ -67,22 +128,83 @@ lines = [
     "",
     "#pragma once",
     "",
+    '#include "BoardTypes.h"',
+    '#include "BoardBase.h"',
+    "",
 ]
 
-for board_file in board_files:
+for i, board_file in enumerate(board_files):
     basename = os.path.basename(board_file)
     board_name = basename.replace(".h", "")
-    lines.append(f"#ifdef {board_name}")
+    prefix = "#if" if i == 0 else "#elif"
+    lines.append(f"{prefix} defined({board_name})")
     lines.append(f'#include "{basename}"')
+    lines.append(f"using CurrentBoard = Board_{board_name};")
+
+if board_files:
+    lines.append("#else")
+    lines.append("// Fallback for generic or host-test environments")
+    lines.append("using CurrentBoard = BaseBoard;")
     lines.append("#endif")
     lines.append("")
 
-# Write boards.h
+lines.extend([
+    "// Backward-compatibility aliases for legacy AUDIO / POWER struct lookups",
+    "using AUDIO = typename CurrentBoard::AUDIO;",
+    "using POWER = typename CurrentBoard::POWER;",
+    "",
+    "class Board {",
+    "public:",
+    "    static constexpr const char* NAME = CurrentBoard::NAME;",
+    "    using AUDIO = typename CurrentBoard::AUDIO;",
+    "    using POWER = typename CurrentBoard::POWER;",
+    "",
+    "    static uint8_t resolve(const char* name) {",
+    "        if (!name) return NO_PIN;",
+    "        for (const auto& entry : CurrentBoard::PINS) {",
+    "            if (strcmp(entry.name, name) == 0) {",
+    "                return entry.pin;",
+    "            }",
+    "        }",
+    "        return NO_PIN;",
+    "    }",
+    "",
+    "    static DriverPins getDriver(const char* name) {",
+    "        if (!name) return {0, 0, 0xFF, 0xFF, false};",
+    "        for (const auto& entry : CurrentBoard::DRIVERS) {",
+    "            if (strcmp(entry.name, name) == 0) {",
+    "                return entry.pins;",
+    "            }",
+    "        }",
+    "        return {0, 0, 0xFF, 0xFF, false};",
+    "    }",
+    "",
+    "    static constexpr size_t driverCount() {",
+    "        return sizeof(CurrentBoard::DRIVERS) / sizeof(DriverEntry);",
+    "    }",
+    "",
+    "    static constexpr bool hasDrivers() {",
+    "        return driverCount() > 0;",
+    "    }",
+    "",
+    "    static constexpr bool hasAudio() {",
+    "        return AUDIO::I2S_DIN != NO_PIN;",
+    "    }",
+    "",
+    "    static constexpr bool hasPowerLatch() {",
+    "        return POWER::POWER_ENABLE != NO_PIN;",
+    "    }",
+    "",
+    "    static constexpr bool hasPowerButton() {",
+    "        return POWER::POWER_BUTTON != NO_PIN;",
+    "    }",
+    "};",
+    "",
+])
+
 with open(boards_h, "w") as f:
     f.write("\n".join(lines))
 
 board_names = [os.path.basename(f).replace(".h", "") for f in board_files]
 if board_names:
     print(f"[gen_boards_header] Updated boards.h with {len(board_names)} board(s): {', '.join(board_names)}")
-else:
-    print("[gen_boards_header] WARNING: No board headers found in src/boards/")

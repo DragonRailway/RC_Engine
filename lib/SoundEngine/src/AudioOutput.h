@@ -27,6 +27,11 @@ public:
         currentOffset = 0;
         offsetRamping = false;
 
+        if (AUDIO::I2S_DIN == 0xFF) {
+            Serial.println("[AudioOutput] Audio hardware disabled (no I2S DAC pins defined)");
+            return;
+        }
+
         i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
         chan_cfg.auto_clear = true;
 

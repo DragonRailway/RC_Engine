@@ -126,6 +126,7 @@ public:
     size_t println(unsigned int, int = DEC) { return 1; }
     size_t println(long, int = DEC) { return 1; }
     size_t println(unsigned long, int = DEC) { return 1; }
+    virtual void flush() {}
 };
 
 class Stream : public Print {

@@ -1,5 +1,7 @@
 #include "HardwareInit.h"
+#ifdef ESP32
 #include <esp_sleep.h>
+#endif
 
 // ─── Static member definitions ────────────────────────────────────────────────
 
@@ -56,11 +58,27 @@ uint8_t  HardwareInit::s_ditchBrightness = 100;
 uint8_t  HardwareInit::s_blinkPin[4] = { 0xFF, 0xFF, 0xFF, 0xFF };
 bool     HardwareInit::s_blinkActive[4] = { false, false, false, false };
 
-EasyMotor HardwareInit::driveMotor;
+EasyMotor HardwareInit::s_motorDrivers[HardwareInit::MAX_PHYSICAL_DRIVERS];
 EasyServo HardwareInit::steeringServos[HardwareConfig::MAX_STEERING_SERVOS];
 EasyServo HardwareInit::escServo;
-EasyServo HardwareInit::auxServo;
-EasyMotor HardwareInit::auxMotor;
+EasyServo HardwareInit::auxServos[HardwareConfig::MAX_AUX_MOTORS];
+
+EasyMotor* HardwareInit::getDriverForId(uint8_t hardwareId) {
+    if (hardwareId >= PinMapper::DRIVER_A && hardwareId <= PinMapper::DRIVER_D) {
+        return &s_motorDrivers[hardwareId - PinMapper::DRIVER_A];
+    }
+    return nullptr;
+}
+
+const char* HardwareInit::getDriverName(uint8_t hardwareId) {
+    switch (hardwareId) {
+        case PinMapper::DRIVER_A: return "DRIVER_A";
+        case PinMapper::DRIVER_B: return "DRIVER_B";
+        case PinMapper::DRIVER_C: return "DRIVER_C";
+        case PinMapper::DRIVER_D: return "DRIVER_D";
+        default: return "DRIVER_A";
+    }
+}
 
 EasyLED   HardwareInit::headLeds[HardwareConfig::MAX_PINS_PER_LIGHT];
 EasyLED   HardwareInit::fullLeds[HardwareConfig::MAX_PINS_PER_LIGHT];
@@ -103,8 +121,8 @@ void HardwareInit::init(const HardwareConfig& hw) {
     s_drivetrainType = hw.drivetrainType;
 
     if (hw.drivetrainType == HardwareConfig::SKID_STEER) {
-        initChannel(s_driveCh[0], hw.leftMotor, &driveMotor, &escServo);
-        initChannel(s_rightCh, hw.rightMotor, &auxMotor, &auxServo);
+        initChannel(s_driveCh[0], hw.leftMotor, getDriverForId(hw.leftMotor.hardwareId), &escServo);
+        initChannel(s_rightCh, hw.rightMotor, getDriverForId(hw.rightMotor.hardwareId), &auxServos[0]);
         s_driveChCount = 1;
         s_primaryBemfPin = s_driveCh[0].bemfPin;
     } else {
@@ -114,8 +132,8 @@ void HardwareInit::init(const HardwareConfig& hw) {
             effDriveCount = 1;
         }
         for (uint8_t i = 0; i < effDriveCount && i < HardwareConfig::MAX_DRIVE_MOTORS; i++) {
-            EasyMotor* drv = (hw.driveMotors[i].hardwareId == PinMapper::DRIVER_B) ? &auxMotor : &driveMotor;
-            EasyServo* esc = (i == 0) ? &escServo : &auxServo;
+            EasyMotor* drv = getDriverForId(hw.driveMotors[i].hardwareId);
+            EasyServo* esc = (i == 0) ? &escServo : (i - 1 < HardwareConfig::MAX_AUX_MOTORS ? &auxServos[i - 1] : nullptr);
             initChannel(s_driveCh[i], hw.driveMotors[i], drv, esc);
             if (s_driveCh[i].attached) {
                 s_driveChCount++;
@@ -146,12 +164,15 @@ void HardwareInit::stopAll() {
     }
     escServo.stop();
     escServo.detach();
-    auxServo.stop();
-    auxServo.detach();
+    for (uint8_t i = 0; i < HardwareConfig::MAX_AUX_MOTORS; i++) {
+        auxServos[i].stop();
+        auxServos[i].detach();
+    }
     stopLightAnimations();
 
-    driveMotor.end();
-    auxMotor.end();
+    for (uint8_t d = 0; d < MAX_PHYSICAL_DRIVERS; d++) {
+        s_motorDrivers[d].end();
+    }
 
     for (uint8_t p = 0; p < headPinCount; p++) headLeds[p].end();
     for (uint8_t p = 0; p < fullPinCount; p++) fullLeds[p].end();
@@ -182,7 +203,9 @@ void HardwareInit::update(uint16_t buttonHoldS, uint8_t indicatorPin) {
         steeringServos[i].update();
     }
     escServo.update();
-    auxServo.update();
+    for (uint8_t i = 0; i < HardwareConfig::MAX_AUX_MOTORS; i++) {
+        auxServos[i].update();
+    }
 
     for (uint8_t p = 0; p < headPinCount; p++) headLeds[p].update();
     for (uint8_t p = 0; p < fullPinCount; p++) fullLeds[p].update();
@@ -310,7 +333,9 @@ void HardwareInit::powerOff() {
     s_buttonClicked = false;
     // On battery-powered boards POWER_ENABLE LOW cuts MCU power immediately.
     // On USB-powered boards the MCU stays alive, so we must halt explicitly.
+#ifdef ESP32
     esp_deep_sleep(0);  // Sleep forever (wake via GPIO if configured)
+#endif
 }
 
 void HardwareInit::setSkidMotors(int16_t leftSpeed, int16_t rightSpeed) {
@@ -492,9 +517,14 @@ void HardwareInit::setAuxMotor(int16_t speed) {
             if (abs(eff) >= 5) us = (uint16_t)(1500 + (int32_t)eff * 500 / 100);
             if (us < 1000) us = 1000;
             if (us > 2000) us = 2000;
-            auxServo.writeMicroseconds(us);
+            if (i < HardwareConfig::MAX_AUX_MOTORS) {
+                auxServos[i].writeMicroseconds(us);
+            }
         } else if (aux.motor.type == HardwareConfig::DriveMotor::DRIVER) {
-            auxMotor.write(eff >= 0 ? (float)pct : -(float)pct);
+            EasyMotor* drv = getDriverForId(aux.motor.hardwareId);
+            if (drv) {
+                drv->write(eff >= 0 ? (float)pct : -(float)pct);
+            }
         }
     }
 }
@@ -548,16 +578,19 @@ void HardwareInit::initAuxOutputs(const HardwareConfig& hw) {
         s_auxConfigs[i] = hw.auxMotors[i];
         const auto& aux = hw.auxMotors[i];
         if (aux.motor.type == HardwareConfig::DriveMotor::DRIVER) {
-            const char* name = (aux.motor.hardwareId == PinMapper::DRIVER_A) ? "DRIVER_A" : "DRIVER_B";
+            const char* name = getDriverName(aux.motor.hardwareId);
             DriverPins pins = PinMapper::getDriver(name);
-            if (pins.dualPwm) {
-                auxMotor.begin(EasyMotor::DriverType::DRIVER_2PWM,
+            EasyMotor* drv = getDriverForId(aux.motor.hardwareId);
+            if (drv) {
+                if (pins.dualPwm) {
+                    drv->begin(EasyMotor::DriverType::DRIVER_2PWM,
                                pins.pwm1, pins.pwm2, pins.enable, false);
-            } else {
-                auxMotor.begin(EasyMotor::DriverType::DRIVER_1PWM_1DIR,
+                } else {
+                    drv->begin(EasyMotor::DriverType::DRIVER_1PWM_1DIR,
                                pins.pwm1, pins.pwm2, pins.enable, true);
+                }
+                drv->setFrequency(aux.motor.frequency);
             }
-            auxMotor.setFrequency(aux.motor.frequency);
         } else if (aux.motor.type == HardwareConfig::DriveMotor::ESC) {
             EasyKit::ServoConfig cfg;
             cfg.minUs = 1000;
@@ -565,7 +598,9 @@ void HardwareInit::initAuxOutputs(const HardwareConfig& hw) {
             cfg.centerUs = 1500;
             cfg.freq = (aux.motor.frequency >= 40 && aux.motor.frequency <= 900)
                            ? (uint16_t)aux.motor.frequency : 50;
-            auxServo.attach(aux.motor.hardwareId, cfg);
+            if (i < HardwareConfig::MAX_AUX_MOTORS) {
+                auxServos[i].attach(aux.motor.hardwareId, cfg);
+            }
         }
     }
 
@@ -638,21 +673,23 @@ void HardwareInit::initChannel(MotorChannel& ch, const HardwareConfig::DriveMoto
     ch.esc = esc;
 
     if (motor.type == HardwareConfig::DriveMotor::DRIVER) {
-        const char* name = (motor.hardwareId == PinMapper::DRIVER_A) ? "DRIVER_A" : "DRIVER_B";
+        const char* name = getDriverName(motor.hardwareId);
         DriverPins pins = PinMapper::getDriver(name);
         ch.bemfPin = pins.bemf;
 
-        if (pins.dualPwm) {
-            driver->begin(EasyMotor::DriverType::DRIVER_2PWM,
-                          pins.pwm1, pins.pwm2, pins.enable, false);
-        } else {
-            driver->begin(EasyMotor::DriverType::DRIVER_1PWM_1DIR,
-                          pins.pwm1, pins.pwm2, pins.enable, true);
+        if (driver) {
+            if (pins.dualPwm) {
+                driver->begin(EasyMotor::DriverType::DRIVER_2PWM,
+                              pins.pwm1, pins.pwm2, pins.enable, false);
+            } else {
+                driver->begin(EasyMotor::DriverType::DRIVER_1PWM_1DIR,
+                              pins.pwm1, pins.pwm2, pins.enable, true);
+            }
+            driver->setFrequency(motor.frequency);
+            ch.attached = true;
+            Serial.printf("[HardwareInit] Motor (driver): %s Freq=%dHz Duty=%d..%d%%\n",
+                          name, motor.frequency, motor.duty.min, motor.duty.max);
         }
-        driver->setFrequency(motor.frequency);
-        ch.attached = true;
-        Serial.printf("[HardwareInit] Motor (driver): %s Freq=%dHz Duty=%d..%d%%\n",
-                      name, motor.frequency, motor.duty.min, motor.duty.max);
     }
     else if (motor.type == HardwareConfig::DriveMotor::ESC) {
         EasyKit::ServoConfig cfg;

@@ -164,7 +164,7 @@
   "definitions": {
     "pin_name": {
       "type": "string",
-      "pattern": "^(L[0-8]|S[1-4]|DRIVER_[AB])$"
+      "pattern": "^(L[0-9]|S[1-8]|E[1-8]|A[1-8]|DRIVER_[A-D])$"
     },
     "pin_ref": {
       "type": "object",

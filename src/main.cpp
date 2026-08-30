@@ -165,7 +165,7 @@ static bool reloadConfigs() {
     applyAuxSliderProfile();
     applyDeviceMetadata(hwConfig, profile.config);
 
-    bool hasSoundHardware = hwConfig.sound.configured;
+    bool hasSoundHardware = Board::hasAudio() && hwConfig.sound.configured;
     bool hasSoundAssets = false;
 
     if (hasSoundHardware && (nameChanged || !wasConfigured)) {
@@ -198,7 +198,9 @@ static bool reloadConfigs() {
 void printConfig(const HardwareConfig& hw, const RcEngineSound::Config& vc) {
     Serial.println("\n── Hardware Config ──");
     if (hw.name[0] != '\0') Serial.printf("  Name: %s\n", hw.name);
-    if (hw.sound.configured) {
+    if (!Board::hasAudio()) {
+        Serial.println("  Sound: DISABLED (no audio hardware on board)");
+    } else if (hw.sound.configured) {
         Serial.printf("  Sound: ENABLED (Volume: %d%%)\n", hw.sound.volume);
     } else {
         Serial.println("  Sound: DISABLED (not defined in hardware config)");
