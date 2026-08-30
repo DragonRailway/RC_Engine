@@ -19,14 +19,16 @@
     UiLogger::logf("ERR: " fmt, ##__VA_ARGS__); \
 } while(0)
 
+#pragma pack(push, 1)
+struct PcmHeader {
+    char     magic[2];    // "RP" (0x52, 0x50)
+    uint16_t sampleRate;  // Little-Endian (default: 22050)
+    uint32_t sampleCount; // Little-Endian byte count of PCM data
+};
+#pragma pack(pop)
+
 class ConfigParser {
 public:
-    struct SpiRamAllocator : ArduinoJson::Allocator {
-        void* allocate(size_t size) override;
-        void deallocate(void* pointer) override;
-        void* reallocate(void* ptr, size_t new_size) override;
-    };
-
     static const char* soundTypeNames[];
     static const char* genericNames[];
 

@@ -8,6 +8,7 @@ class File {
 public:
     operator bool() const { return false; }
     uint32_t getLastWrite() { return 0; }
+    size_t read(uint8_t*, size_t) { return 0; }
     void close() {}
 };
 

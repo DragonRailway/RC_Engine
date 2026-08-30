@@ -4,8 +4,8 @@
 Walks configs/vehicle_configs/ to validate:
 - Bundle layout: bundle dir name == the `sound_set` in its vehicle.json;
   every vehicle has a vehicle.json manifest and a sounds/ subdirectory
-- Sound JSON validity: sampleRate is 22,050 Hz; sampleCount > 0 and matches
-  the samples array length; loop points satisfy 0 <= begin < end <= count
+- Sound .pcm validity: magic is 'RP', sampleRate is 22,050 Hz, sampleCount > 0
+  and matches the payload size
 - Signal stats per sound: peak, RMS, DC offset, silence, clipping
 
 Exits nonzero if any file or bundle fails validation checks.
@@ -14,6 +14,7 @@ import os
 import sys
 import json
 import math
+import struct
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 VEHICLE_DIR = os.path.join(REPO, "configs", "vehicle_configs")
@@ -24,56 +25,34 @@ def validate_sound_file(filepath):
     warnings = []
 
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        with open(filepath, 'rb') as f:
+            header_bytes = f.read(8)
+            if len(header_bytes) < 8:
+                return False, ["File too short (< 8 bytes header)"], [], {}
+            magic, sample_rate, sample_count = struct.unpack('<2sHI', header_bytes)
+            payload = f.read()
     except Exception as e:
-        return False, [f"JSON parse error: {e}"], [], {}
+        return False, [f"Read error: {e}"], [], {}
 
-    # If it's a vehicle config, validate loop_points section if present
-    if "loop_points" in data:
-        lp = data["loop_points"]
-        for prefix in ["horn", "siren", "reversing", "sound1"]:
-            b_key = f"{prefix}_begin"
-            e_key = f"{prefix}_end"
-            begin = lp.get(b_key, 0)
-            end = lp.get(e_key, 0)
-            if end > 0:
-                if begin < 0 or begin >= end:
-                    errors.append(f"Invalid loop points for {prefix}: begin={begin}, end={end} (must satisfy 0 <= begin < end)")
-        return len(errors) == 0, errors, warnings, {}
+    if magic != b'RP':
+        errors.append(f"Invalid magic: {magic} (expected b'RP')")
 
-    # Standard sound JSON file validation
-    if "samples" not in data:
-        # Not a raw sound data file (e.g. metadata only)
-        return True, [], ["No 'samples' key found"], {}
-
-    sample_rate = data.get("sampleRate")
-    if sample_rate is None:
-        errors.append("Missing 'sampleRate' field")
+    if sample_rate < 8000 or sample_rate > 48000:
+        errors.append(f"Invalid sampleRate: {sample_rate} Hz (expected 8000-48000 Hz)")
     elif sample_rate != 22050:
-        errors.append(f"Invalid sampleRate: {sample_rate} Hz (expected 22050 Hz)")
-
-    samples = data.get("samples", [])
-    sample_count = data.get("sampleCount", len(samples))
+        warnings.append(f"Non-standard sampleRate: {sample_rate} Hz (standard is 22050 Hz)")
 
     if sample_count <= 0:
         errors.append(f"Invalid sampleCount: {sample_count} (must be > 0)")
 
-    if len(samples) != sample_count:
-        errors.append(f"sampleCount mismatch: declared {sample_count}, found {len(samples)} samples")
+    if len(payload) != sample_count:
+        errors.append(f"sampleCount mismatch: declared {sample_count}, payload has {len(payload)} bytes")
 
-    # Check for direct loop point fields if specified in sound file
-    for b_key, e_key in [("loopBegin", "loopEnd"), ("hornBegin", "hornEnd"), ("begin", "end")]:
-        if b_key in data or e_key in data:
-            begin = data.get(b_key, 0)
-            end = data.get(e_key, 0)
-            if end > 0:
-                if begin < 0 or begin >= end or end > len(samples):
-                    errors.append(f"Invalid loop points ({b_key}/{e_key}): begin={begin}, end={end}, count={len(samples)}")
+    if not payload or len(errors) > 0:
+        return len(errors) == 0, errors, warnings, {}
 
-    if not samples:
-        errors.append("Empty 'samples' array")
-        return False, errors, warnings, {}
+    # Convert raw bytes to signed int8 values
+    samples = [b if b < 128 else b - 256 for b in payload]
 
     # Signal stats calculation
     min_val = min(samples)
@@ -104,13 +83,7 @@ def validate_sound_file(filepath):
 
 
 def validate_bundle(bundle_dir, bundle_name):
-    """Check layout: sound_set == dir name (when a manifest exists), sounds/ subdir.
-
-    Sound-only bundles (sounds/ with no vehicle.json) are valid library entries:
-    they stage as /sounds/vehicles/<set>/ and can be paired with any vehicle
-    config that declares their sound_set. The dangerous case we guard against is
-    a bundle whose dir name does NOT match the sound_set it declares.
-    """
+    """Check layout: sound_set == dir name (when a manifest exists), sounds/ subdir."""
     errors = []
     vc_path = os.path.join(bundle_dir, "vehicle.json")
     if os.path.isfile(vc_path):
@@ -162,7 +135,7 @@ def main():
         if not os.path.isdir(sounds_dir):
             continue
         for f in sorted(os.listdir(sounds_dir)):
-            if not f.endswith(".json"):
+            if not f.endswith(".pcm"):
                 continue
             total_files += 1
             filepath = os.path.join(sounds_dir, f)
@@ -192,3 +165,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

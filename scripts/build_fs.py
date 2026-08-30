@@ -10,7 +10,7 @@ fails with LFS_ERR_NOSPC (the full repo tree is ~132 MB vs an 896 KB partition).
 Layout mapping (repo -> board LittleFS):
   configs/hardware_configs/hardware-<BOARD>.json -> /hardware-<BOARD>.json
   configs/vehicle_configs/<V>/vehicle.json       -> /vehicle-config.json
-  configs/vehicle_configs/<V>/sounds/<slot>.json -> /sounds/vehicles/<V>/<slot>.json
+  configs/vehicle_configs/<V>/sounds/<slot>.pcm  -> /sounds/vehicles/<V>/<slot>.pcm
   configs/vehicle_configs/common/<preset>/...    -> /sounds/presets/<preset>/...
       (only for slots the vehicle bundle does NOT provide — tier-2 fallback)
 
@@ -229,15 +229,15 @@ def assemble(board, vehicle, pio_home, fs_size, dry_run=False, no_flash=False,
     shutil.copy2(hw_src, staging / f"hardware-{board}.json")
     # /vehicle-config.json
     shutil.copy2(vc_src, staging / "vehicle-config.json")
-    # /sounds/vehicles/<V>/<slot>.json
+    # /sounds/vehicles/<V>/<slot>.pcm
     (staging / "sounds" / "vehicles" / vehicle).mkdir(parents=True)
-    for slot in sorted(sounds_src.glob("*.json")):
+    for slot in sorted(sounds_src.glob("*.pcm")):
         shutil.copy2(slot, staging / "sounds" / "vehicles" / vehicle / slot.name)
 
     # Tier-2 type-based common fallbacks: only slots the vehicle bundle does NOT provide.
-    vehicle_slots = {s.name for s in sounds_src.glob("*.json")}
+    vehicle_slots = {s.name for s in sounds_src.glob("*.pcm")}
     common_type_dir = COMMON_DIR / vtype
-    fallbacks = [s for s in sorted(common_type_dir.glob("*.json")) if s.name not in vehicle_slots] if common_type_dir.is_dir() else []
+    fallbacks = [s for s in sorted(common_type_dir.glob("*.pcm")) if s.name not in vehicle_slots] if common_type_dir.is_dir() else []
     if fallbacks:
         (staging / "sounds" / "common" / vtype).mkdir(parents=True)
         for slot in fallbacks:

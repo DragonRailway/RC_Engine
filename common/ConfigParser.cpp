@@ -1,21 +1,6 @@
 #include "ConfigParser.h"
 #include <RadioKitLib.h>
 
-// ── SpiRamAllocator (implementation detail) ─────────────────────────────────
-void* ConfigParser::SpiRamAllocator::allocate(size_t size) {
-    void* p = ps_malloc(size);
-    return p ? p : malloc(size);
-}
-
-void ConfigParser::SpiRamAllocator::deallocate(void* pointer) {
-    free(pointer);
-}
-
-void* ConfigParser::SpiRamAllocator::reallocate(void* ptr, size_t new_size) {
-    void* p = ps_realloc(ptr, new_size);
-    return p ? p : realloc(ptr, new_size);
-}
-
 // ── Static member definitions ───────────────────────────────────────────────
 const char* ConfigParser::soundTypeNames[] = {
     "idle", "rev", "start", "knock", "turbo", "wastegate", "horn",
@@ -27,19 +12,19 @@ const char* ConfigParser::soundTypeNames[] = {
 };
 
 const char* ConfigParser::genericNames[] = {
-    "idle-ScaniaV8.json", "rev-ScaniaV8.json", "start-ScaniaV8.json",
-    "knock-ScaniaV8.json", "Turbo-whistle.json", "1000HpScaniaV8-wastegate.json",
-    "ScaniaV8train-horn.json",
-    "ScaniaV8-jakebrake.json", "fan-Generic.json", "siren-Dummy.json",
-    "airbrake-Truck2.json", "parkingbrake-Generic.json",
-    "ClunkingGearShifting.json", "reversing-TruckBeep.json",
-    "indicator-Generic.json", "coupling-generic.json", "supercharger.json",
-    "uncoupling-generic.json", "sound1-Dummy.json",
-    "squeal-Tire2.json", "hydraulicPump-Generic.json",
-    "hydraulicFlow-Generic.json", "trackrattle.json", "bucketrattle-Generic.json",
-    "bell-Dummy.json", "door.json", "scanner-kitt.json",
-    "music-Dummy.json", "whistle-Turbo.json", "gun-Dummy.json",
-    "outoffuel-Dummy.json", "others-Dummy.json"
+    "idle-ScaniaV8.pcm", "rev-ScaniaV8.pcm", "start-ScaniaV8.pcm",
+    "knock-ScaniaV8.pcm", "Turbo-whistle.pcm", "1000HpScaniaV8-wastegate.pcm",
+    "ScaniaV8train-horn.pcm",
+    "ScaniaV8-jakebrake.pcm", "fan-Generic.pcm", "siren-Dummy.pcm",
+    "airbrake-Truck2.pcm", "parkingbrake-Generic.pcm",
+    "ClunkingGearShifting.pcm", "reversing-TruckBeep.pcm",
+    "indicator-Generic.pcm", "coupling-generic.pcm", "supercharger.pcm",
+    "uncoupling-generic.pcm", "sound1-Dummy.pcm",
+    "squeal-Tire2.pcm", "hydraulicPump-Generic.pcm",
+    "hydraulicFlow-Generic.pcm", "trackrattle.pcm", "bucketrattle-Generic.pcm",
+    "bell-Dummy.pcm", "door.pcm", "scanner-kitt.pcm",
+    "music-Dummy.pcm", "whistle-Turbo.pcm", "gun-Dummy.pcm",
+    "outoffuel-Dummy.pcm", "others-Dummy.pcm"
 };
 
 // ── Public API methods ──────────────────────────────────────────────────────
@@ -330,30 +315,30 @@ bool ConfigParser::loadSounds(const RcEngineSound::Config& cfg, SoundData& sound
     for (int i = 0; i < SOUND_COUNT; i++) {
         const char* slot = soundTypeNames[i];
 
-        String p1 = "/sounds/vehicles/" + soundSet + "/" + String(slot) + ".json";
+        String p1 = "/sounds/vehicles/" + soundSet + "/" + String(slot) + ".pcm";
         soundData.slots[i] = loadSoundSlot(p1.c_str());
 
         if (!soundData.slots[i].samples) {
-            String p1_flat = "/sounds/" + soundSet + "-" + String(slot) + ".json";
+            String p1_flat = "/sounds/" + soundSet + "-" + String(slot) + ".pcm";
             soundData.slots[i] = loadSoundSlot(p1_flat.c_str());
         }
 
         if (!soundData.slots[i].samples) {
-            String p2 = "/sounds/common/" + String(typeStr) + "/" + String(slot) + ".json";
+            String p2 = "/sounds/common/" + String(typeStr) + "/" + String(slot) + ".pcm";
             soundData.slots[i] = loadSoundSlot(p2.c_str());
         }
         if (!soundData.slots[i].samples) {
-            String p2_alt = "/sounds/presets/" + String(typeStr) + "/" + String(slot) + ".json";
+            String p2_alt = "/sounds/presets/" + String(typeStr) + "/" + String(slot) + ".pcm";
             soundData.slots[i] = loadSoundSlot(p2_alt.c_str());
         }
 
         if (!soundData.slots[i].samples) {
-            String p3 = "/sounds/generic/" + String(slot) + ".json";
+            String p3 = "/sounds/generic/" + String(slot) + ".pcm";
             soundData.slots[i] = loadSoundSlot(p3.c_str());
         }
 
         if (!soundData.slots[i].samples) {
-            String p3_flat = String("/sounds/") + slot + ".json";
+            String p3_flat = String("/sounds/") + slot + ".pcm";
             soundData.slots[i] = loadSoundSlot(p3_flat.c_str());
         }
         if (!soundData.slots[i].samples) {
@@ -424,40 +409,41 @@ SoundSlot ConfigParser::loadSoundSlot(const char* path) {
     File file = LittleFS.open(path, "r");
     if (!file) return SoundSlot();
 
-    static SpiRamAllocator spiAlloc;
-    JsonDocument doc(&spiAlloc);
-    DeserializationError error = deserializeJson(doc, file);
-    file.close();
-
-    if (error) return SoundSlot();
-
-    uint32_t declaredCount = doc["sampleCount"] | 0;
-    uint16_t sampleRate = doc["sampleRate"] | 22050;
-    JsonArray samples = doc["samples"].as<JsonArray>();
-
-    if (declaredCount == 0 || !samples) return SoundSlot();
-
-    uint32_t sampleCount = samples.size();
-    if (sampleCount == 0) return SoundSlot();
-
-    int8_t* buffer = (int8_t*)ps_malloc(sampleCount);
-    if (!buffer) return SoundSlot();
-
-    uint32_t i = 0;
-    for (int val : samples) {
-        if (i >= sampleCount) break;
-        buffer[i++] = (int8_t)val;
+    PcmHeader hdr;
+    if (file.read((uint8_t*)&hdr, sizeof(hdr)) != sizeof(hdr)) {
+        file.close();
+        return SoundSlot();
     }
 
-    if (declaredCount != sampleCount) {
-        LOG_CFG_WARN("%s declares sampleCount=%u but has %u samples — using actual",
-                     path, declaredCount, sampleCount);
+    if (hdr.magic[0] != 'R' || hdr.magic[1] != 'P') {
+        LOG_CFG_WARN("%s: invalid PCM magic '%c%c' (expected 'RP')", path, hdr.magic[0], hdr.magic[1]);
+        file.close();
+        return SoundSlot();
+    }
+
+    if (hdr.sampleCount == 0) {
+        file.close();
+        return SoundSlot();
+    }
+
+    int8_t* buffer = (int8_t*)ps_malloc(hdr.sampleCount);
+    if (!buffer) {
+        LOG_CFG_ERR("%s: ps_malloc(%u) failed", path, hdr.sampleCount);
+        file.close();
+        return SoundSlot();
+    }
+
+    size_t bytesRead = file.read((uint8_t*)buffer, hdr.sampleCount);
+    file.close();
+
+    if (bytesRead != hdr.sampleCount) {
+        LOG_CFG_WARN("%s: expected %u samples, read %u bytes", path, hdr.sampleCount, (uint32_t)bytesRead);
     }
 
     SoundSlot slot;
     slot.samples = buffer;
-    slot.sampleCount = sampleCount;
-    slot.sampleRate = sampleRate;
+    slot.sampleCount = (uint32_t)bytesRead;
+    slot.sampleRate = hdr.sampleRate;
     return slot;
 }
 
