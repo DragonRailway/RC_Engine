@@ -35,7 +35,18 @@
           "minItems": 1,
           "maxItems": 2
         },
-        "steering_sensitivity": { "type": "integer", "minimum": 0, "maximum": 100, "default": 80 }
+        "steering_sensitivity": { "type": "integer", "minimum": 0, "maximum": 100, "default": 80 },
+        "auto_centering": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "base_rate": { "type": "number", "minimum": 0, "default": 0.0 },
+            "speed_rate": { "type": "number", "minimum": 0, "default": 1.5 },
+            "max_rate": { "type": "number", "minimum": 0, "default": 8.0 },
+            "hold_in_reverse": { "type": "boolean", "default": true }
+          }
+        }
       }
     },
     "aux_motors": {

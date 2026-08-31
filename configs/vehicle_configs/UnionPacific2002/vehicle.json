@@ -54,6 +54,7 @@
     "knock": 100,
     "wastegate": 0,
     "horn": 200,
+    "bell": 120,
     "siren": 0,
     "brake": 150,
     "parking_brake": 150,

@@ -50,6 +50,15 @@ struct HardwareConfig {
     SteeringServo steeringServos[MAX_STEERING_SERVOS];
     uint8_t       steeringServoCount = 0;
 
+    struct AutoCentering {
+        bool  enabled       = false;
+        float baseRate      = 0.0f;
+        float speedRate     = 1.5f;
+        float maxRate       = 8.0f;
+        bool  holdInReverse = true;
+        bool  configured    = false;
+    } autoCentering;
+
     // Animation tunables for the EasyKit easing/fade/blink engines. Global
     // defaults; absent from a hardware config, these values apply as-is.
     struct Animation {

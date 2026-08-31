@@ -24,7 +24,14 @@
           "center": 1500
         }
       }
-    ]
+    ],
+    "auto_centering": {
+      "enabled": true,
+      "base_rate": 0.0,
+      "speed_rate": 1.8,
+      "max_rate": 8.0,
+      "hold_in_reverse": true
+    }
   },
   "aux_motors": [
     {
@@ -48,8 +55,7 @@
       "brightness_max": 60
     },
     "full_beam": {
-      "hardware": ["L6"],
-      "brightness_max": 100
+      "hardware": ["L6"]
     },
     "tail_light": {
       "hardware": ["L2"],
@@ -62,8 +68,7 @@
       "hardware": ["L8"]
     },
     "fog_lamp": {
-      "hardware": ["L7"],
-      "brightness_max": 100
+      "hardware": ["L7"]
     },
     "turn_light": {
       "left": {

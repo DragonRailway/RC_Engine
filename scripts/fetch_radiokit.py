@@ -21,8 +21,8 @@ REPO_URL = "https://github.com/Radio-Kit/RadioKit.git"
 BRANCH = "multi-ui"
 
 
-def fetch_radiokit():
-    if os.path.exists(HEADER_CHECK):
+def fetch_radiokit(force=False):
+    if not force and os.path.exists(HEADER_CHECK):
         return
 
     print(
@@ -79,7 +79,8 @@ def fetch_radiokit():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-fetch_radiokit()
-
 if __name__ == "__main__":
-    pass
+    force_fetch = "--force" in sys.argv or "-f" in sys.argv or "--update" in sys.argv
+    fetch_radiokit(force=force_fetch)
+else:
+    fetch_radiokit()

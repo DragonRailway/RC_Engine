@@ -16,8 +16,9 @@ RcEngineSound::RcEngineSound() :
     lastGear(1),
     engineStopRequested(false),
     lastUpdateTime(0),
-    attenuatorMillis(0),
-    attenuator(1),
+    stopStartMillis(0),
+    stopDurationMs(1400),
+    stopVolume(100),
     stopPitchFactor(1.0f),
     crawlerMode(false),
     lastTrackRattleTime(0),
@@ -103,6 +104,12 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     voices[SOUND1].loopEnd = cfg.loopPoints.sound1End;
 
     // Configure default volumes
+    applyVoiceVolumes();
+
+    Serial.printf("[RcEngineSound] Initialized with %d voice slots\n", SOUND_COUNT);
+}
+
+void RcEngineSound::applyVoiceVolumes() {
     voices[IDLE].volume = cfg.sound.idle;
     voices[REV].volume = cfg.sound.rev;
     voices[TURBO].volume = cfg.sound.turbo;
@@ -134,8 +141,11 @@ void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     voices[GUN].volume = cfg.sound.gun;
     voices[OUT_OF_FUEL].volume = cfg.sound.outOfFuel;
     voices[OTHERS].volume = cfg.sound.others;
+}
 
-    Serial.printf("[RcEngineSound] Initialized with %d voice slots\n", SOUND_COUNT);
+void RcEngineSound::setConfig(const Config& config) {
+    cfg = config;
+    applyVoiceVolumes();
 }
 
 void RcEngineSound::begin(const SoundData& soundData) {
@@ -455,9 +465,10 @@ void RcEngineSound::update(int16_t throttle) {
         if (engineStopRequested && currentRpm < 30) {
             state = STOPPING;
             engineStopRequested = false;
-            attenuator = 1;
-            attenuatorMillis = now;
+            stopStartMillis = now;
+            stopDurationMs = cfg.engine.stopDuration > 0 ? cfg.engine.stopDuration : 1400;
             stopPitchFactor = pitchFactor;
+            stopVolume = 100;
         }
     } else if (state == OFF) {
         currentRpm = 0;
@@ -503,14 +514,25 @@ void RcEngineSound::update(int16_t throttle) {
     if (state == RUNNING) {
         pitchFactor = 1.0f + ((float)currentRpmFixed / (float)cfg.engine.maxRpm) * (cfg.engine.maxPitchFactor - 1.0f);
     } else if (state == STOPPING) {
-        if (now - attenuatorMillis > 80) {
-            stopPitchFactor -= 0.05f;
-            if (stopPitchFactor < 1.0f) stopPitchFactor = 1.0f;
-            attenuator++;
-            attenuatorMillis = now;
-        }
+        uint32_t elapsed = (now >= stopStartMillis) ? (now - stopStartMillis) : 0;
+        float progress = (stopDurationMs > 0) ? ((float)elapsed / (float)stopDurationMs) : 1.0f;
+        if (progress > 1.0f) progress = 1.0f;
+
+        const float minPitch = 0.18f;
+        float remaining = 1.0f - progress;
+        stopPitchFactor = minPitch + (1.0f - minPitch) * powf(remaining, 1.2f);
         pitchFactor = stopPitchFactor;
-        if (attenuator >= 40) {
+
+        stopVolume = (uint8_t)(remaining * 100.0f);
+
+        // Turbo whistle rapid fade over first 50% of stop duration
+        if (voices[TURBO].active && cfg.sound.turbo > 0) {
+            float turboRemaining = (progress < 0.5f) ? (1.0f - (progress * 2.0f)) : 0.0f;
+            voices[TURBO].volume = (uint8_t)(cfg.sound.turbo * turboRemaining);
+            if (turboRemaining <= 0.0f) voices[TURBO].active = false;
+        }
+
+        if (progress >= 1.0f || stopPitchFactor <= minPitch) {
             if (sounds.slots[PARKING_BRAKE].samples && sounds.slots[PARKING_BRAKE].sampleCount > 0) {
                 state = PARKING_BRAKE;
                 voices[PARKING_BRAKE].active = true;
@@ -525,34 +547,40 @@ void RcEngineSound::update(int16_t throttle) {
 
     // ── Idle/Rev cross-fade with throttle-dependent volume scaling ──
     int16_t idleProportion = 100;
-    if (state == RUNNING && !engineMuted) {
+    if ((state == RUNNING || state == STOPPING) && !engineMuted) {
         voices[IDLE].active = (sounds.slots[IDLE].samples && sounds.slots[IDLE].sampleCount > 0);
-        voices[REV].active = (sounds.slots[REV].samples && sounds.slots[REV].sampleCount > 0);
-        if (currentRpmFixed <= cfg.engine.revSwitchPoint) {
-            idleProportion = 100;
-        } else if (currentRpmFixed >= cfg.engine.idleEndPoint) {
-            idleProportion = 0;
+        voices[REV].active = (state == RUNNING) && (sounds.slots[REV].samples && sounds.slots[REV].sampleCount > 0);
+        if (state == STOPPING) {
+            voices[IDLE].volume = cfg.sound.idle;
+            voices[REV].volume = 0;
         } else {
-            idleProportion = map(currentRpmFixed, cfg.engine.revSwitchPoint, cfg.engine.idleEndPoint, 100, 0);
-            idleProportion = constrain(idleProportion, 0, 100);
+            if (currentRpmFixed <= cfg.engine.revSwitchPoint) {
+                idleProportion = 100;
+            } else if (currentRpmFixed >= cfg.engine.idleEndPoint) {
+                idleProportion = 0;
+            } else {
+                idleProportion = map(currentRpmFixed, cfg.engine.revSwitchPoint, cfg.engine.idleEndPoint, 100, 0);
+                idleProportion = constrain(idleProportion, 0, 100);
+            }
+
+            // Scale idle/rev volumes with throttle input (reference dynamic scaling)
+            int32_t minEngineScale = (cfg.sound.idleMin > 0) ? cfg.sound.idleMin : 50;
+            int32_t maxEngineScale = (cfg.sound.fullThrottle > 0) ? cfg.sound.fullThrottle : 150;
+            int32_t throttleVol = map(throttlePercent, 0, 100, minEngineScale, maxEngineScale);
+            voices[IDLE].volume = engineMuted ? 0 : (uint8_t)constrain((int32_t)cfg.sound.idle * throttleVol / 100 * idleProportion / 100, 0, 255);
+            voices[REV].volume  = engineMuted ? 0 : (uint8_t)constrain((int32_t)cfg.sound.rev  * throttleVol / 100 * (100 - idleProportion) / 100, 0, 255);
         }
     } else {
         voices[IDLE].active = false;
         voices[REV].active = false;
     }
-    // Scale idle/rev volumes with throttle input (reference dynamic scaling)
-    int32_t minEngineScale = (cfg.sound.idleMin > 0) ? cfg.sound.idleMin : 50;
-    int32_t maxEngineScale = (cfg.sound.fullThrottle > 0) ? cfg.sound.fullThrottle : 150;
-    int32_t throttleVol = map(throttlePercent, 0, 100, minEngineScale, maxEngineScale);
-    voices[IDLE].volume = engineMuted ? 0 : (uint8_t)constrain((int32_t)cfg.sound.idle * throttleVol / 100 * idleProportion / 100, 0, 255);
-    voices[REV].volume  = engineMuted ? 0 : (uint8_t)constrain((int32_t)cfg.sound.rev  * throttleVol / 100 * (100 - idleProportion) / 100, 0, 255);
 
     // ── Turbo volume & active state ──
     if (state == RUNNING && !engineMuted && sounds.slots[TURBO].samples && cfg.sound.turbo > 0) {
         voices[TURBO].active = true;
         int32_t turboScale = map(currentRpmFixed, 0, cfg.engine.maxRpm, 0, 100);
         voices[TURBO].volume = (uint8_t)(cfg.sound.turboMin + (int32_t)(cfg.sound.turbo - cfg.sound.turboMin) * constrain(turboScale, 0, 100) / 100);
-    } else {
+    } else if (state != STOPPING) {
         voices[TURBO].active = false;
         voices[TURBO].volume = 0;
     }
@@ -579,7 +607,7 @@ void RcEngineSound::update(int16_t throttle) {
     }
 
     // ── Knock trigger (based on idle loop position) ──
-    if (state == RUNNING && !engineMuted && sounds.slots[KNOCK].samples && cfg.sound.knock > 0 && cfg.engine.knockInterval > 0) {
+    if ((state == RUNNING || state == STOPPING) && !engineMuted && sounds.slots[KNOCK].samples && cfg.sound.knock > 0 && cfg.engine.knockInterval > 0) {
         uint32_t totalSamples = sounds.slots[IDLE].sampleCount;
         uint32_t knockIntervalSamples = (totalSamples > 0) ? (totalSamples / cfg.engine.knockInterval) : 0;
         if (knockIntervalSamples > 0) {
@@ -629,13 +657,16 @@ void RcEngineSound::update(int16_t throttle) {
         uint16_t minVol = cfg.sound.knockMin;  // Direct volume value, not percentage of knock
         uint16_t minSecondary = (uint16_t)(minVol * cfg.engine.knockAdaptiveVolume / 100);
 
+        uint16_t vol = (uint16_t)(isLoud ? minVol : minSecondary);
         if (currentRpmFixed > knockRpmThreshold) {
             uint16_t rpmScale = map(currentRpmFixed, knockRpmThreshold, cfg.engine.maxRpm,
                                    isLoud ? minVol : minSecondary, baseKnockVol);
-            voices[KNOCK].volume = (uint8_t)rpmScale;
-        } else {
-            voices[KNOCK].volume = (uint8_t)(isLoud ? minVol : minSecondary);
+            vol = rpmScale;
         }
+        if (state == STOPPING) {
+            vol = (vol * stopVolume) / 100;
+        }
+        voices[KNOCK].volume = (uint8_t)vol;
     }
 
     // ── Jake brake sound: active when jake braking ──
@@ -651,14 +682,14 @@ void RcEngineSound::renderBlock(int16_t* interleavedStereoBuffer, size_t frames)
     uint32_t currentStartPos;
     EngineState currentState;
     float currentPitchFactor;
-    uint8_t currentAttenuator;
+    uint8_t currentStopVolume;
 
     portENTER_CRITICAL(&voiceMutex);
     memcpy(snapshot, voices, sizeof(voices));
     currentStartPos = startPos;
     currentState = state;
     currentPitchFactor = pitchFactor;
-    currentAttenuator = attenuator;
+    currentStopVolume = stopVolume;
     portEXIT_CRITICAL(&voiceMutex);
 
     float engineStep = currentPitchFactor;
@@ -686,8 +717,8 @@ void RcEngineSound::renderBlock(int16_t* interleavedStereoBuffer, size_t frames)
             int8_t rawSample = readInterpolated(v.samples, v.count, v.position);
             int32_t scaled = (int32_t)rawSample * v.volume / 100;
 
-            if (currentState == STOPPING && v.pitchShifted && currentAttenuator > 0) {
-                scaled = scaled / currentAttenuator;
+            if (currentState == STOPPING && v.pitchShifted) {
+                scaled = (scaled * currentStopVolume) / 100;
             }
 
             v.step = step;

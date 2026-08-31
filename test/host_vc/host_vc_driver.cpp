@@ -1179,6 +1179,161 @@ int main() {
 
     std::cout << "  PASS: Locomotive reverser momentum interlock, braking, and delayed polarity verified." << std::endl;
 
+    // ── Test 26: Dynamic Steering Auto-Centering ──
+    std::cout << "[Host VC Test] Test 26: Dynamic Steering Auto-Centering..." << std::endl;
+
+    // Switch back to Truck profile & Ackermann hardware
+    HardwareConfig testHw26 = testHwAckermann;
+    testHw26.driveMotorCount = 1;
+    testHw26.driveMotors[0].type = HardwareConfig::DriveMotor::DRIVER;
+    testHw26.driveMotors[0].hardwareId = PinMapper::DRIVER_A;
+    testHw26.driveMotors[0].direction = HardwareConfig::DriveMotor::FORWARD;
+    testHw26.driveMotors[0].duty.min = 20;
+    testHw26.driveMotors[0].duty.max = 90;
+    testHw26.driveMotors[0].configured = true;
+
+    testHw26.autoCentering.enabled = true;
+    testHw26.autoCentering.baseRate = 0.0f;
+    testHw26.autoCentering.speedRate = 2.0f;
+    testHw26.autoCentering.maxRate = 10.0f;
+    testHw26.autoCentering.holdInReverse = true;
+    testHw26.autoCentering.configured = true;
+
+    HardwareInit::init(testHw26);
+    VehicleController::init(&testHw26, &engine, &profile);
+    truck_light.setItemMask(0xFF);
+    start_button.rk.state = true;
+    gear_switch.rk.value = 0; // Drive
+    brake_pedal.rk.value = -100; // No brake
+    gas_pedal.rk.value = -100; // Zero throttle
+    throttle_slider.rk.value = -100;
+    host_virtual_millis = 20000;
+
+    // Let engine start and settle
+    for (int t = 0; t < 60; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(engine.getState() == RcEngineSound::RUNNING);
+
+    // 26.2: Stationary (v = 0): turn wheel to 80, wait 300ms (touch inactive)
+    steering_wheel.rk.value = 80;
+    host_virtual_millis += 20;
+    VehicleController::update(); // registers touch input at t=now
+
+    // Advance 300ms without touching -> since motor speed is 0 and baseRate is 0, wheel should stay at 80
+    for (int t = 0; t < 15; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(steering_wheel.rk.value == 80 && "Stationary vehicle with baseRate=0 must hold steering angle");
+    assert(host_last_servo_us == 1620 && "Physical servo must stay at 80% right (~1620 us)");
+
+    // 26.3: Forward driving (v > 0): Apply throttle -> speed ramps up -> wheel decays towards 0
+    gas_pedal.rk.value = 80; // drive forward
+    throttle_slider.rk.value = 80;
+    for (int t = 0; t < 30; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(host_last_motor_speed > 30.0f && "Vehicle moving forward");
+    assert(steering_wheel.rk.value < 60 && "Steering wheel must decay towards center while driving forward");
+
+    // Continue driving until wheel fully centers to 0
+    for (int t = 0; t < 100; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(steering_wheel.rk.value == 0 && "Steering wheel must fully auto-center to 0");
+    assert(host_last_servo_us == 1500 && "Physical servo must return to center (1500 us)");
+
+    // 26.4: Active user interaction priority: while user touches/drags, auto-centering is suspended
+    steering_wheel.rk.value = -70;
+    for (int t = 0; t < 10; t++) {
+        // User moves wheel slightly every tick (active touch stream)
+        steering_wheel.rk.value = -70 + (t % 2);
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(abs(steering_wheel.rk.value) >= 69 && "Active touch must override auto-centering decay");
+
+    // 26.5: Reverse hold behavior: Bring vehicle to stop, then shift to Reverse (gear = 2)
+    gas_pedal.rk.value = -100;
+    throttle_slider.rk.value = -100;
+    for (int t = 0; t < 50; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(host_last_motor_speed == 0.0f && "Vehicle stopped");
+
+    gear_switch.rk.value = 2; // Reverse
+    steering_wheel.rk.value = 50;
+    host_virtual_millis += 20;
+    VehicleController::update(); // touch registered
+
+    // Wait for touch window (150ms)
+    for (int t = 0; t < 10; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    // Now drive backwards with throttle
+    gas_pedal.rk.value = 50;
+    throttle_slider.rk.value = 50;
+    for (int t = 0; t < 40; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(host_last_motor_speed < -20.0f && "Vehicle moving in reverse");
+    assert(steering_wheel.rk.value == 50 && "In reverse gear with hold_in_reverse=true, steering must not auto-center");
+
+    // 26.6: Skid-steer mode auto-centering
+    HardwareConfig skidHw = testHw26;
+    skidHw.drivetrainType = HardwareConfig::SKID_STEER;
+    skidHw.leftMotor.type = HardwareConfig::DriveMotor::DRIVER;
+    skidHw.leftMotor.hardwareId = PinMapper::DRIVER_A;
+    skidHw.leftMotor.direction = HardwareConfig::DriveMotor::FORWARD;
+    skidHw.leftMotor.duty.min = 20;
+    skidHw.leftMotor.duty.max = 90;
+    skidHw.leftMotor.configured = true;
+    skidHw.rightMotor.type = HardwareConfig::DriveMotor::DRIVER;
+    skidHw.rightMotor.hardwareId = PinMapper::DRIVER_B;
+    skidHw.rightMotor.direction = HardwareConfig::DriveMotor::FORWARD;
+    skidHw.rightMotor.duty.min = 20;
+    skidHw.rightMotor.duty.max = 90;
+    skidHw.rightMotor.configured = true;
+    skidHw.steeringSensitivity = 80;
+    skidHw.auxMotorCount = 0;
+    skidHw.autoCentering.enabled = true;
+    skidHw.autoCentering.baseRate = 0.0f;
+    skidHw.autoCentering.speedRate = 2.0f;
+    skidHw.autoCentering.maxRate = 10.0f;
+    skidHw.autoCentering.holdInReverse = true;
+    skidHw.autoCentering.configured = true;
+    HardwareInit::init(skidHw);
+    VehicleController::init(&skidHw, &engine, &profile);
+
+    gear_switch.rk.value = 0; // Drive
+    gas_pedal.rk.value = 80;
+    throttle_slider.rk.value = 80;
+    steering_wheel.rk.value = 60;
+    host_virtual_millis += 20;
+    VehicleController::update(); // touch registered
+
+    // Wait 150ms so touch becomes passive, then observe straight recovery
+    for (int t = 0; t < 10; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    // As vehicle drives forward, steering decays to 0, equalizing left & right tracks
+    for (int t = 0; t < 100; t++) {
+        host_virtual_millis += 20;
+        VehicleController::update();
+    }
+    assert(steering_wheel.rk.value == 0 && "Skid-steer steering must auto-center to 0");
+    assert(fabs(host_motor_writes[0] - host_motor_writes[1]) < 0.01f && "Tracks must have equal duty after auto-centering");
+
+    std::cout << "  PASS: Dynamic steering auto-centering across Ackermann, Skid-Steer, User Priority, and Reverse Hold verified." << std::endl;
+
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;
 }

@@ -57,6 +57,11 @@ float    VehicleController::s_currentMotorSpeed = 0.0f;
 uint32_t VehicleController::s_lastInertiaTime = 0;
 bool     VehicleController::s_prevMotorMoving = false;
 
+float    VehicleController::s_currentSteerAngle = 0.0f;
+int8_t   VehicleController::s_lastSteerInputVal = 0;
+uint32_t VehicleController::s_lastSteerTouchMs = 0;
+uint32_t VehicleController::s_lastSteerPhysicsMs = 0;
+
 bool     VehicleController::s_locoInitialized = false;
 bool     VehicleController::s_activeDirection = true;
 bool     VehicleController::s_reverserInterlocked = false;
@@ -157,6 +162,11 @@ void VehicleController::init(HardwareConfig* hw, RcEngineSound* engine, VehicleP
     HardwareInit::setAuxMotor(0);
     HardwareInit::setAuxLight(0);
 
+    s_currentSteerAngle = 0.0f;
+    s_lastSteerInputVal = 0;
+    s_lastSteerTouchMs = 0;
+    s_lastSteerPhysicsMs = 0;
+
     // ── Battery Cell Count: config-driven, voltage auto-detect as fallback ──
     float sumV = 0;
     for (int i = 0; i < 10; ++i) {
@@ -210,16 +220,20 @@ void VehicleController::init(HardwareConfig* hw, RcEngineSound* engine, VehicleP
     s_lastLightSlewMs = 0;
     s_ditchRunning = false;
 
-    // ── Vehicle type boot visibility ──
+    // ── Vehicle type boot visibility & UI page binding ──
     const RcEngineSound::VehicleType t = s_profile->config.type;
     if (t == RcEngineSound::VEHICLE_EXCAVATOR) {
         Serial.println("[VehicleController] Vehicle type: EXCAVATOR (control surface deferred — using truck widget set)");
+        RadioKit.setActivePage(0);
     } else if (t == RcEngineSound::VEHICLE_LOCOMOTIVE) {
         Serial.println("[VehicleController] Vehicle type: LOCOMOTIVE");
+        RadioKit.setActivePage(1);
     } else if (t == RcEngineSound::VEHICLE_UNKNOWN) {
         Serial.println("[VehicleController] Vehicle type: UNKNOWN (defaulting to truck widget set)");
+        RadioKit.setActivePage(0);
     } else {
         Serial.println("[VehicleController] Vehicle type: TRUCK");
+        RadioKit.setActivePage(0);
     }
 }
 
@@ -465,9 +479,6 @@ void VehicleController::update() {
         s_parkingBrakePrev = parkingBrake;
     }
 
-    // ── Motor & Steering ──
-    int16_t steerVal = isLoco ? 0 : steering_wheel.rk.value;
-
     if (!isLoco) {
         int16_t rawBrake = constrain(brake_pedal.rk.value, -100, 100);
         brakePct = (rawBrake + 100) / 2;
@@ -481,6 +492,10 @@ void VehicleController::update() {
     int16_t targetSpeed = reverse ? -motorThrottle : motorThrottle;
 
     int16_t motorSpeed = computeRampedMotorSpeed(targetSpeed, parkingBrake, gear, brakePct, eState);
+
+    // ── Steering (with Dynamic Auto-Centering) ──
+    int16_t rawSteer = isLoco ? 0 : steering_wheel.rk.value;
+    int16_t steerVal = updateDynamicSteering(rawSteer, motorSpeed, reverse, isLoco);
 
     if (s_hw->drivetrainType == HardwareConfig::SKID_STEER) {
         if (eState == RcEngineSound::RUNNING) {
@@ -809,6 +824,64 @@ int16_t VehicleController::computeRampedMotorSpeed(int16_t targetSpeed, bool par
     }
 
     return (int16_t)roundf(s_currentMotorSpeed);
+}
+
+int16_t VehicleController::updateDynamicSteering(int16_t rawSteer, int16_t motorSpeed, bool reverse, bool isLoco) {
+    if (isLoco) {
+        s_currentSteerAngle = 0.0f;
+        s_lastSteerInputVal = 0;
+        return 0;
+    }
+
+    uint32_t now = millis();
+    uint32_t dt = (s_lastSteerPhysicsMs == 0) ? 20 : (now - s_lastSteerPhysicsMs);
+    if (dt > 100) dt = 100;
+    s_lastSteerPhysicsMs = now;
+
+    int8_t currentInputVal = (int8_t)constrain(rawSteer, -100, 100);
+
+    // Track active user interaction: value changed from app or widget active flag
+    if (currentInputVal != s_lastSteerInputVal) {
+        s_lastSteerTouchMs = now;
+        s_lastSteerInputVal = currentInputVal;
+        s_currentSteerAngle = (float)currentInputVal;
+    }
+
+    bool isInteracting = (steering_wheel.rk.active) || (s_lastSteerTouchMs > 0 && (now - s_lastSteerTouchMs < 120));
+
+    if (!s_hw || !s_hw->autoCentering.enabled || isInteracting) {
+        s_currentSteerAngle = (float)currentInputVal;
+        return currentInputVal;
+    }
+
+    // Dynamic auto-centering calculation
+    const auto& ac = s_hw->autoCentering;
+    float absSpeed = fabs((float)motorSpeed);
+
+    float rate = ac.baseRate;
+    if (!(reverse && ac.holdInReverse)) {
+        rate += ac.speedRate * (absSpeed / 100.0f);
+    }
+    if (rate > ac.maxRate) rate = ac.maxRate;
+
+    float timeFactor = (float)dt / 20.0f; // normalized to 50Hz (20ms) loop
+    float step = rate * timeFactor;
+
+    if (s_currentSteerAngle > 0.0f) {
+        s_currentSteerAngle = max(0.0f, s_currentSteerAngle - step);
+    } else if (s_currentSteerAngle < 0.0f) {
+        s_currentSteerAngle = min(0.0f, s_currentSteerAngle + step);
+    }
+
+    int8_t decayedSteer = (int8_t)roundf(s_currentSteerAngle);
+
+    // Synchronize decayed position back to RadioKit widget to unwind UI wheel
+    if (steering_wheel.rk.value != decayedSteer) {
+        steering_wheel.rk.value = decayedSteer;
+        s_lastSteerInputVal = decayedSteer;
+    }
+
+    return (int16_t)decayedSteer;
 }
 
 void VehicleController::applyLightsWithAutomation(uint8_t bits, bool turnL, bool turnR, bool decelBrake, bool manualBrake, uint8_t headlightMode, bool autoReverseLight, bool fogLamp, bool isLoco) {

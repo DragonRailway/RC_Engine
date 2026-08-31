@@ -102,6 +102,12 @@ private:
     static uint32_t s_lastInertiaTime;
     static bool     s_prevMotorMoving;
 
+    // Dynamic Steering Auto-Centering
+    static float    s_currentSteerAngle;
+    static int8_t   s_lastSteerInputVal;
+    static uint32_t s_lastSteerTouchMs;
+    static uint32_t s_lastSteerPhysicsMs;
+
     // Locomotive Dynamics & Directional Lighting
     static bool     s_locoInitialized;
     static bool     s_activeDirection;
@@ -115,6 +121,7 @@ private:
     static bool     s_ditchRunning;
 
     static int16_t computeRampedMotorSpeed(int16_t targetSpeed, bool parkingBrake, uint8_t gear, int16_t brakePct, RcEngineSound::EngineState eState);
+    static int16_t updateDynamicSteering(int16_t rawSteer, int16_t motorSpeed, bool reverse, bool isLoco);
     static void applyLightsWithAutomation(uint8_t bits, bool turnL, bool turnR, bool decelBrake, bool manualBrake, uint8_t headlightMode, bool autoReverseLight, bool fogLamp, bool isLoco);
     static void updateTelemetry(int16_t motorSpeed, int16_t steerVal, int16_t throttlePct, uint8_t gear, bool brakePressed, bool turnL, bool turnR, uint8_t bits, float batV);
 };

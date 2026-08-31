@@ -4,11 +4,21 @@
 #ifndef RADIOKIT_GENERATED_H
 #define RADIOKIT_GENERATED_H
 
+#ifndef RK_ENABLE_OTA
 #define RK_ENABLE_OTA
+#endif
+#ifndef RK_ENABLE_FS
 #define RK_ENABLE_FS
+#endif
+#ifndef RK_FS_URL
 #define RK_FS_URL "https://github.com/DragonRailway/RC_Engine/tree/main/configs"
+#endif
+#ifndef RK_OTA_URL
 #define RK_OTA_URL "https://github.com/DragonRailway/RC_Engine"
+#endif
+#ifndef RK_ENABLE_BLE
 #define RK_ENABLE_BLE
+#endif
 
 #include <RadioKitLib.h>
 

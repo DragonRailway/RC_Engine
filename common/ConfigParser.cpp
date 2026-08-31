@@ -147,6 +147,16 @@ bool ConfigParser::loadHardwareConfig(const char* path, HardwareConfig& config) 
                     LOG_CFG_WARN("drivetrain: drive_motors missing or unconfigured — vehicle cannot drive!");
                 }
             }
+
+            JsonObjectConst autoCenterObj = dtObj["auto_centering"] | dtObj["AUTO_CENTERING"];
+            if (!autoCenterObj.isNull()) {
+                config.autoCentering.enabled = autoCenterObj["enabled"] | config.autoCentering.enabled;
+                config.autoCentering.baseRate = autoCenterObj["base_rate"] | config.autoCentering.baseRate;
+                config.autoCentering.speedRate = autoCenterObj["speed_rate"] | config.autoCentering.speedRate;
+                config.autoCentering.maxRate = autoCenterObj["max_rate"] | config.autoCentering.maxRate;
+                config.autoCentering.holdInReverse = autoCenterObj["hold_in_reverse"] | config.autoCentering.holdInReverse;
+                config.autoCentering.configured = true;
+            }
         }
     } else {
         LOG_CFG_WARN("drivetrain section missing — drive motor is unconfigured!");
@@ -490,8 +500,13 @@ void ConfigParser::checkUnknownHardwareKeys(JsonObjectConst doc) {
     if (!dt.isNull()) {
         static const char* k[] = {"drive_motors", "drive_motor", "steering_servos",
                                   "steering_servo", "left_motor", "right_motor",
-                                  "steering_sensitivity", "type"};
-        checkKeys(dt, "drivetrain", k, 8);
+                                  "steering_sensitivity", "type", "auto_centering"};
+        checkKeys(dt, "drivetrain", k, 9);
+        JsonObjectConst ac = dt["auto_centering"];
+        if (!ac.isNull()) {
+            static const char* ack[] = {"enabled", "base_rate", "speed_rate", "max_rate", "hold_in_reverse"};
+            checkKeys(ac, "auto_centering", ack, 5);
+        }
         if (dt["drive_motors"].is<JsonArrayConst>()) {
             for (JsonObjectConst m : dt["drive_motors"].as<JsonArrayConst>()) {
                 static const char* mk[] = {"hardware", "frequency", "direction", "duty"};
@@ -705,6 +720,12 @@ void ConfigParser::validateHardwareConfig(const HardwareConfig& cfg) {
     checkLight(cfg.lights.tailLight.configured, cfg.lights.tailLight.brightness, "tail_light");
     checkLight(cfg.lights.turnLight.configured, cfg.lights.turnLight.brightness, "turn_light");
     checkLight(cfg.lights.ditchLight.configured, cfg.lights.ditchLight.brightness, "ditch_light");
+
+    if (cfg.autoCentering.configured) {
+        if (cfg.autoCentering.baseRate < 0.0f || cfg.autoCentering.speedRate < 0.0f || cfg.autoCentering.maxRate < 0.0f) {
+            LOG_CFG_WARN("auto_centering: rates must be non-negative");
+        }
+    }
 }
 
 // ── Hardware-config parsers ─────────────────────────────────────────────────
@@ -995,6 +1016,11 @@ void ConfigParser::parseEngine(JsonDocument& doc, RcEngineSound::Config& cfg) {
     cfg.engine.jakeBrakeDecelRate = eng["jakebrake_decel_rate"] | eng["JAKEBRAKE_DECEL_RATE"] | 5;
 
     cfg.engine.superchargerStartPoint = eng["supercharger_start_point"] | eng["SUPERCHARGER_START_POINT"] | 10;
+
+    uint16_t defaultStop = (cfg.type == RcEngineSound::VEHICLE_LOCOMOTIVE) ? 2800 :
+                           (cfg.type == RcEngineSound::VEHICLE_EXCAVATOR)  ? 1800 : 1400;
+    cfg.engine.stopDuration = eng["stop_duration"] | eng["STOP_DURATION"] |
+                              eng["stop_duration_ms"] | eng["STOP_DURATION_MS"] | defaultStop;
 }
 
 void ConfigParser::parseSoundVolumes(JsonDocument& doc, RcEngineSound::Config& cfg) {
@@ -1032,7 +1058,7 @@ void ConfigParser::parseSoundVolumes(JsonDocument& doc, RcEngineSound::Config& c
     cfg.sound.hydraulicFlow = sv["hydraulic_flow"] | sv["HYDRAULIC_FLOW"] | 0;
     cfg.sound.trackRattle = sv["track_rattle"] | sv["TRACK_RATTLE"] | 0;
     cfg.sound.bucketRattle = sv["bucket_rattle"] | sv["BUCKET_RATTLE"] | 0;
-    cfg.sound.bell = sv["bell"] | sv["BELL"] | 0;
+    cfg.sound.bell = sv["bell"] | sv["BELL"] | (cfg.type == RcEngineSound::VEHICLE_LOCOMOTIVE ? 100 : 0);
     cfg.sound.door = sv["door"] | sv["DOOR"] | 0;
     cfg.sound.scanner = sv["scanner"] | sv["SCANNER"] | 0;
     cfg.sound.music = sv["music"] | sv["MUSIC"] | 0;

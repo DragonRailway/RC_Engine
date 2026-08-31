@@ -89,6 +89,7 @@ public:
             uint8_t jakeBrakeMinRpm = 60;
             uint8_t jakeBrakeDecelRate = 5;
             uint8_t superchargerStartPoint = 10;
+            uint16_t stopDuration = 1400;
         } engine;
 
         struct Sound {
@@ -173,7 +174,8 @@ public:
 
     void begin(const SoundData& soundData, const Config& config);
     void begin(const SoundData& soundData);
-    void setConfig(const Config& config) { cfg = config; }
+    void setConfig(const Config& config);
+    void applyVoiceVolumes();
 
     void update(int16_t throttle);
 
@@ -290,11 +292,12 @@ private:
     bool engineStopRequested = false;
     int16_t lastThrottle = 0;
 
-    // Timing
-    uint32_t lastUpdateTime;
-    uint32_t attenuatorMillis;
-    uint8_t attenuator;
-    float stopPitchFactor; // Pitch factor when stopping started
+    // Timing & Stop State
+    uint32_t lastUpdateTime = 0;
+    uint32_t stopStartMillis = 0;
+    uint16_t stopDurationMs = 1400;
+    uint8_t stopVolume = 100;
+    float stopPitchFactor = 1.0f;
 
     // Crawler mode
     bool crawlerMode = false;

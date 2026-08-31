@@ -1,9 +1,4 @@
-# Mandatory Drivetrain Config
-
-## Purpose
-Ensures hardware configuration schemas and parsers enforce valid drivetrain definitions and support auto-centering parameters across Ackermann and Skid-steer platforms.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Mandatory drivetrain property in hardware configuration schema
 

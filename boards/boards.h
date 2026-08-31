@@ -13,6 +13,9 @@ using CurrentBoard = Board_GTRACK;
 #elif defined(MIKRO_V2)
 #include "MIKRO_V2.h"
 using CurrentBoard = Board_MIKRO_V2;
+#elif defined(TRACKLINK_V2)
+#include "TRACKLINK_V2.h"
+using CurrentBoard = Board_TRACKLINK_V2;
 #elif defined(TRACKLINK_V3)
 #include "TRACKLINK_V3.h"
 using CurrentBoard = Board_TRACKLINK_V3;
