@@ -48,7 +48,7 @@ bool     VehicleController::s_rightIndSuppressed = false;
 bool     VehicleController::s_engineStartTogglePrev = false;
 bool     VehicleController::s_cutoffLightResetDone = false;
 bool     VehicleController::s_jakeBrakePrev = false;
-bool     VehicleController::s_indicatorPrev = false;
+HardwareInit::TurnMode VehicleController::s_turnModePrev = HardwareInit::TurnMode::OFF;
 uint32_t VehicleController::s_lastIndicatorClick = 0;
 uint8_t  VehicleController::s_gearPrev = 1;
 bool     VehicleController::s_parkingBrakePrev = false;
@@ -149,7 +149,8 @@ void VehicleController::init(HardwareConfig* hw, RcEngineSound* engine, VehicleP
     s_engineStartTogglePrev = false;
     s_cutoffLightResetDone = false;
     s_jakeBrakePrev = false;
-    s_indicatorPrev = false;
+    s_turnModePrev = HardwareInit::TurnMode::OFF;
+    s_lastIndicatorClick = 0;
     s_gearPrev = 1;             // default Park until the radio reports a selection
     s_parkingBrakePrev = false;
     aux_hydraulic1 = 0;
@@ -821,8 +822,8 @@ void VehicleController::update() {
 
     // ── Apply Lights with Automation ──
     applyLightsWithAutomation(bits,
-                             hazardActive || turnSignalL,
-                             hazardActive || turnSignalR,
+                             turnSignalL,
+                             turnSignalR,
                              decelBrakeActive,
                              brakePressed,
                              headlightMode,
@@ -830,23 +831,23 @@ void VehicleController::update() {
                              fogLamp,
                              isLoco);
 
-    // ── Indicator Click Sound ──
+    // ── Synchronized Indicator Audio Click Sound ──
     uint32_t now = millis();
-    bool indicatorActive = hazardActive || turnSignalL || turnSignalR;
-    if (indicatorActive) {
+    HardwareInit::TurnMode curTurnMode = HardwareInit::getTurnMode();
+    if (curTurnMode != HardwareInit::TurnMode::OFF) {
         uint16_t onMs = (s_hw && s_hw->lights.turnLight.intervalOn) ? s_hw->lights.turnLight.intervalOn : 500;
         uint16_t offMs = (s_hw && s_hw->lights.turnLight.intervalOff) ? s_hw->lights.turnLight.intervalOff : 500;
         uint32_t period = onMs + offMs;
         if (period == 0) period = 1000;
 
-        if (!s_indicatorPrev || (now - s_lastIndicatorClick >= period)) {
+        if (curTurnMode != s_turnModePrev || (now - s_lastIndicatorClick >= period)) {
             s_engine->triggerIndicator(true);
             s_lastIndicatorClick = now;
         }
-    } else if (s_indicatorPrev) {
+    } else if (s_turnModePrev != HardwareInit::TurnMode::OFF) {
         s_engine->triggerIndicator(false);
     }
-    s_indicatorPrev = indicatorActive;
+    s_turnModePrev = curTurnMode;
 
     // ── Telemetry & Serial Debug Stream ──
     if (now - s_lastTelemetry >= 1000) {
@@ -1134,8 +1135,8 @@ void VehicleController::applyLightsWithAutomation(uint8_t bits, bool turnL, bool
         HardwareInit::setAuxLight((bits & 0x80) ? s_hw->auxLight.brightness : 0);
     }
 
-    HardwareInit::setLightBlink(L.turnLight.leftPin,  turnL, L.turnLight.intervalOn, L.turnLight.intervalOff, L.turnLight.brightness);
-    HardwareInit::setLightBlink(L.turnLight.rightPin, turnR, L.turnLight.intervalOn, L.turnLight.intervalOff, L.turnLight.brightness);
+    bool hazardActive = (bits & 0x08) || s_inWarningPhase || !RadioKit.isConnected();
+    HardwareInit::setTurnSignals(turnL, turnR, hazardActive, L.turnLight.intervalOn, L.turnLight.intervalOff, L.turnLight.brightness);
 }
 
 void VehicleController::updateTelemetry(int16_t motorSpeed, int16_t steerVal, int16_t throttlePct, uint8_t gear, bool brakePressed, bool turnL, bool turnR, uint8_t bits, float batV) {

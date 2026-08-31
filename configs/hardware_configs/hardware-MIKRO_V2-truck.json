@@ -55,7 +55,7 @@
       "brightness_max": 60
     },
     "full_beam": {
-      "hardware": ["L6"]
+      "hardware": ["L8"]
     },
     "tail_light": {
       "hardware": ["L2"],
@@ -65,17 +65,17 @@
       "hardware": ["L3"]
     },
     "reversing_light": {
-      "hardware": ["L8"]
+      "hardware": ["L7"]
     },
     "fog_lamp": {
-      "hardware": ["L7"]
+      "hardware": ["L6"]
     },
     "turn_light": {
       "left": {
-        "hardware": "L4"
+        "hardware": "L5"
       },
       "right": {
-        "hardware": "L5"
+        "hardware": "L4"
       },
       "brightness_max": 60,
       "type": "blink",

@@ -54,6 +54,7 @@ float    HardwareInit::s_easingKIn = 0.2f;
 float    HardwareInit::s_easingKOut = 0.8f;
 uint16_t HardwareInit::s_fadeDurationMs = 250;
 uint8_t  HardwareInit::s_ditchBrightness = 100;
+HardwareInit::TurnMode HardwareInit::s_turnMode = HardwareInit::TurnMode::OFF;
 
 uint8_t  HardwareInit::s_blinkPin[4] = { 0xFF, 0xFF, 0xFF, 0xFF };
 bool     HardwareInit::s_blinkActive[4] = { false, false, false, false };
@@ -110,6 +111,7 @@ void HardwareInit::init(const HardwareConfig& hw) {
     s_easingKIn       = hw.animation.easingKIn;
     s_easingKOut      = hw.animation.easingKOut;
     s_fadeDurationMs  = hw.animation.fadeDurationMs;
+    s_turnMode        = TurnMode::OFF;
     resetBlinkTracking();
 
     for (uint8_t i = 0; i < HardwareConfig::MAX_DRIVE_MOTORS; i++) {
@@ -490,6 +492,76 @@ void HardwareInit::setLightFade(const HardwareConfig::Lights::Light& light, uint
     }
 }
 
+void HardwareInit::setTurnSignals(bool left, bool right, bool hazard, uint16_t onMs, uint16_t offMs, uint8_t brightness) {
+    if (turnLPin == 0xFF && turnRPin == 0xFF) return;
+
+    TurnMode targetMode = TurnMode::OFF;
+    if (hazard || (left && right)) {
+        targetMode = TurnMode::HAZARD;
+    } else if (left) {
+        targetMode = TurnMode::LEFT;
+    } else if (right) {
+        targetMode = TurnMode::RIGHT;
+    }
+
+    if (targetMode == s_turnMode) return;
+    s_turnMode = targetMode;
+
+    if (onMs == 0) onMs = 500;
+    if (offMs == 0) offMs = 500;
+    if (brightness == 0) brightness = 100;
+
+    switch (s_turnMode) {
+        case TurnMode::OFF:
+            if (turnLPin != 0xFF) {
+                turnLLed.stopBlink();
+                turnLLed.write(0.0f);
+            }
+            if (turnRPin != 0xFF) {
+                turnRLed.stopBlink();
+                turnRLed.write(0.0f);
+            }
+            break;
+
+        case TurnMode::LEFT:
+            if (turnRPin != 0xFF) {
+                turnRLed.stopBlink();
+                turnRLed.write(0.0f);
+            }
+            if (turnLPin != 0xFF) {
+                turnLLed.stopBlink();
+                turnLLed.startBlink(onMs, offMs, (float)brightness);
+            }
+            break;
+
+        case TurnMode::RIGHT:
+            if (turnLPin != 0xFF) {
+                turnLLed.stopBlink();
+                turnLLed.write(0.0f);
+            }
+            if (turnRPin != 0xFF) {
+                turnRLed.stopBlink();
+                turnRLed.startBlink(onMs, offMs, (float)brightness);
+            }
+            break;
+
+        case TurnMode::HAZARD:
+            if (turnLPin != 0xFF) {
+                turnLLed.stopBlink();
+            }
+            if (turnRPin != 0xFF) {
+                turnRLed.stopBlink();
+            }
+            if (turnLPin != 0xFF) {
+                turnLLed.startBlink(onMs, offMs, (float)brightness);
+            }
+            if (turnRPin != 0xFF) {
+                turnRLed.startBlink(onMs, offMs, (float)brightness);
+            }
+            break;
+    }
+}
+
 void HardwareInit::stopLightAnimations() {
     for (uint8_t p = 0; p < headPinCount; p++) headLeds[p].stop();
     for (uint8_t p = 0; p < fullPinCount; p++) fullLeds[p].stop();
@@ -508,6 +580,7 @@ void HardwareInit::stopLightAnimations() {
     ditchRLed.stop();
     s_ditchGroup.stop();
     s_ditchActive = false;
+    s_turnMode = TurnMode::OFF;
     resetBlinkTracking();
 }
 

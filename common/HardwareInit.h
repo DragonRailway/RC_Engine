@@ -71,6 +71,12 @@ public:
         return (uint8_t)led->getDutyPercent();
     }
 
+    enum class TurnMode { OFF, LEFT, RIGHT, HAZARD };
+
+    static void setTurnSignals(bool left, bool right, bool hazard, uint16_t onMs = 500, uint16_t offMs = 500, uint8_t brightness = 100);
+    static TurnMode getTurnMode() { return s_turnMode; }
+    static TurnMode s_turnMode;
+
     static void stopLightAnimations();
     static void setDitchLights(bool active, uint16_t intervalMs);
     static void setAuxMotor(int16_t speed);

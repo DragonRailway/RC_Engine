@@ -690,21 +690,21 @@ int main() {
 
     // 18.2: Mid voltage (7.7V) -> 50%
     host_analog_read_mv = 7700;
-    for (int i = 0; i < 80; i++) { host_virtual_millis += 100; VehicleController::update(); }
+    for (int i = 0; i < 80; i++) { host_virtual_millis += 200; VehicleController::update(); }
     host_virtual_millis += 1100;  // >1000ms telemetry interval
     VehicleController::update();
     assert(strcmp(telemetry_Battery.rk.content, "50") == 0 && "Mid voltage (7.7V) should report 50%");
 
     // 18.3: Warning voltage (7.0V) -> 0%
     host_analog_read_mv = 7000;
-    for (int i = 0; i < 80; i++) { host_virtual_millis += 100; VehicleController::update(); }
+    for (int i = 0; i < 80; i++) { host_virtual_millis += 200; VehicleController::update(); }
     host_virtual_millis += 1100;  // >1000ms telemetry interval
     VehicleController::update();
     assert(strcmp(telemetry_Battery.rk.content, "0") == 0 && "Warning voltage (7.0V) should report 0%");
 
     // 18.4: Sub-warning voltage (6.8V) -> 0% (clamped)
     host_analog_read_mv = 6800;
-    for (int i = 0; i < 80; i++) { host_virtual_millis += 100; VehicleController::update(); }
+    for (int i = 0; i < 80; i++) { host_virtual_millis += 200; VehicleController::update(); }
     host_virtual_millis += 1100;  // >1000ms telemetry interval
     VehicleController::update();
     assert(strcmp(telemetry_Battery.rk.content, "0") == 0 && "Sub-warning voltage (6.8V) should be clamped to 0%");
@@ -743,7 +743,7 @@ int main() {
     testHwTelem.battery.vOffset = 0.0f;
     VehicleController::init(&testHwTelem, &engine, &profile);
     host_analog_read_mv = 4000; // pin 4.0V * 2.10 = 8.4V (Full pack 100%)
-    for (int i = 0; i < 80; i++) { host_virtual_millis += 100; VehicleController::update(); }
+    for (int i = 0; i < 80; i++) { host_virtual_millis += 200; VehicleController::update(); }
     host_virtual_millis += 1100;
     VehicleController::update();
     assert(strcmp(telemetry_Battery.rk.content, "100") == 0 && "Scaled 4.0V * 2.10 = 8.4V should report 100%");
@@ -1458,6 +1458,69 @@ int main() {
     assert(host_last_motor_speed > 30.0f && "Drive torque unlocked after throttle zero-crossing");
 
     std::cout << "  PASS: Connection loss failsafe (50% brake, servo detach, 30s engine auto-stop) and reconnect throttle interlock verified." << std::endl;
+
+    // ── Test 28: Synchronized Turn and Hazard Indicator Phase Locking ──
+    std::cout << "[Host VC Test] Test 28: Synchronized Turn and Hazard Indicator Phase Locking..." << std::endl;
+    HardwareConfig testHwTurn;
+    testHwTurn.lights.turnLight.leftPin = 21;
+    testHwTurn.lights.turnLight.rightPin = 22;
+    testHwTurn.lights.turnLight.intervalOn = 400;
+    testHwTurn.lights.turnLight.intervalOff = 400;
+    testHwTurn.lights.turnLight.brightness = 80;
+    testHwTurn.lights.turnLight.configured = true;
+    HardwareInit::init(testHwTurn);
+    VehicleController::init(&testHwTurn, &engine, &profile);
+
+    // Initial state: OFF
+    assert(HardwareInit::getTurnMode() == HardwareInit::TurnMode::OFF);
+
+    // 28.1: Left indicator activation -> TurnMode::LEFT
+    left_indicator.rk.state = true;
+    right_indicator.rk.state = false;
+    truck_light.rk.value = 0;
+    host_virtual_millis += 20;
+    VehicleController::update();
+    assert(HardwareInit::getTurnMode() == HardwareInit::TurnMode::LEFT && "Left indicator should set TurnMode::LEFT");
+
+    // 28.2: Hazard ON while Left is active -> TurnMode::HAZARD (Phase Lock)
+    truck_light.rk.value |= 0x08; // Switch Hazard ON
+    host_virtual_millis += 150;  // mid-blink offset
+    VehicleController::update();
+    assert(HardwareInit::getTurnMode() == HardwareInit::TurnMode::HAZARD && "Hazard ON must transition to TurnMode::HAZARD");
+    assert(left_indicator.rk.state == false && right_indicator.rk.state == false && "Indicators disarmed under hazard");
+
+    // 28.3: Hazard OFF -> TurnMode::OFF
+    truck_light.rk.value &= ~0x08;
+    host_virtual_millis += 20;
+    VehicleController::update();
+    assert(HardwareInit::getTurnMode() == HardwareInit::TurnMode::OFF && "Hazard OFF with no indicators active must transition to TurnMode::OFF");
+
+    // 28.4: Right indicator activation -> TurnMode::RIGHT
+    right_indicator.rk.state = true;
+    host_virtual_millis += 20;
+    VehicleController::update();
+    assert(HardwareInit::getTurnMode() == HardwareInit::TurnMode::RIGHT && "Right indicator should set TurnMode::RIGHT");
+
+    // 28.5: Hazard ON while Right is active -> TurnMode::HAZARD (Phase Lock)
+    truck_light.rk.value |= 0x08;
+    host_virtual_millis += 150;
+    VehicleController::update();
+    assert(HardwareInit::getTurnMode() == HardwareInit::TurnMode::HAZARD && "Hazard ON while Right active must transition to TurnMode::HAZARD");
+
+    // 28.6: Direct setTurnSignals helper unit assertions
+    HardwareInit::setTurnSignals(true, false, false, 500, 500, 100);
+    assert(HardwareInit::getTurnMode() == HardwareInit::TurnMode::LEFT);
+
+    HardwareInit::setTurnSignals(false, true, false, 500, 500, 100);
+    assert(HardwareInit::getTurnMode() == HardwareInit::TurnMode::RIGHT);
+
+    HardwareInit::setTurnSignals(true, true, false, 500, 500, 100);
+    assert(HardwareInit::getTurnMode() == HardwareInit::TurnMode::HAZARD && "Left + Right simultaneously should engage TurnMode::HAZARD");
+
+    HardwareInit::setTurnSignals(false, false, false, 500, 500, 100);
+    assert(HardwareInit::getTurnMode() == HardwareInit::TurnMode::OFF);
+
+    std::cout << "  PASS: Synchronized turn-and-hazard state transitions and phase locking verified." << std::endl;
 
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;

@@ -92,7 +92,7 @@ private:
     static bool     s_engineStartTogglePrev;
     static bool     s_cutoffLightResetDone;
     static bool     s_jakeBrakePrev;
-    static bool     s_indicatorPrev;
+    static HardwareInit::TurnMode s_turnModePrev;
     static uint32_t s_lastIndicatorClick;
     static uint8_t  s_gearPrev;
     static bool     s_parkingBrakePrev;
