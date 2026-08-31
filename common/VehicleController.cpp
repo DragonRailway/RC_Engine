@@ -52,6 +52,9 @@ bool     VehicleController::s_indicatorPrev = false;
 uint32_t VehicleController::s_lastIndicatorClick = 0;
 uint8_t  VehicleController::s_gearPrev = 1;
 bool     VehicleController::s_parkingBrakePrev = false;
+bool     VehicleController::s_wasConnected = false;
+bool     VehicleController::s_reconnectThrottleInterlock = false;
+bool     VehicleController::s_disconnectEngineStopDone = false;
 
 float    VehicleController::s_currentMotorSpeed = 0.0f;
 uint32_t VehicleController::s_lastInertiaTime = 0;
@@ -200,6 +203,9 @@ void VehicleController::init(HardwareConfig* hw, RcEngineSound* engine, VehicleP
     s_batteryCutoff = false;
     s_disconnectStart = millis();
     s_inWarningPhase = false;
+    s_wasConnected = RadioKit.isConnected();
+    s_reconnectThrottleInterlock = false;
+    s_disconnectEngineStopDone = false;
 
     Serial.printf("[VehicleController] Battery warning: %.2fV (%.2fV/cell), cutoff: %.2fV (%.2fV/cell)\n",
                   s_warningVoltage, s_hw->battery.warningVoltage,
@@ -246,9 +252,25 @@ void VehicleController::update() {
         s_inWarningPhase = false;
     }
 
+    // ── Connection Status & Failsafe Transition Tracking ──
+    bool isConnected = RadioKit.isConnected();
+    if (isConnected && !s_wasConnected) {
+        s_reconnectThrottleInterlock = true;
+        HardwareInit::attachServos();
+        s_disconnectEngineStopDone = false;
+        Serial.println("[EVENT] Controller reconnected -> throttle interlock armed");
+    } else if (!isConnected && s_wasConnected) {
+        HardwareInit::detachServos();
+        HardwareInit::setAuxMotor(0);
+        HardwareInit::setPump(false);
+        s_disconnectEngineStopDone = false;
+        Serial.println("[EVENT] Controller disconnected -> failsafe engaged (50% brake, servos detached)");
+    }
+    s_wasConnected = isConnected;
+
     // ── 3-State Board Power & Disconnect Auto Power-Off ──
     bool isCharging = HardwareInit::isCharging();
-    if (isCharging && !RadioKit.isConnected()) {
+    if (isCharging && !isConnected) {
         s_disconnectStart = 0;
         s_inWarningPhase = false;
         HardwareInit::setAllMotors(0);
@@ -265,7 +287,7 @@ void VehicleController::update() {
                 HardwareInit::setLight(chgPin, 100);
             }
         }
-    } else if (RadioKit.isConnected()) {
+    } else if (isConnected) {
         s_disconnectStart = 0;
         s_inWarningPhase = false;
         if (!HardwareInit::isPowerLatched()) {
@@ -273,13 +295,23 @@ void VehicleController::update() {
         }
     } else {
         // Disconnected state
+        if (s_disconnectStart == 0) {
+            s_disconnectStart = millis();
+        }
+        uint32_t elapsed = millis() - s_disconnectStart;
+
+        // Auto-stop engine after 30s of disconnect
+        if (elapsed >= 30000 && !s_disconnectEngineStopDone) {
+            s_disconnectEngineStopDone = true;
+            if (s_engine->getState() != RcEngineSound::OFF) {
+                s_engine->stopEngine();
+                Serial.println("[EVENT] 30s disconnect reached -> engine auto-stop");
+            }
+        }
+
         uint32_t timeoutMs = (uint32_t)s_hw->power.disconnectTimeoutS * 1000U;
         uint32_t warningMs = (uint32_t)s_hw->power.warningWindowS * 1000U;
         if (timeoutMs > 0) {
-            if (s_disconnectStart == 0) {
-                s_disconnectStart = millis();
-            }
-            uint32_t elapsed = millis() - s_disconnectStart;
             if (elapsed >= timeoutMs) {
                 Serial.println("[VehicleController] Disconnect timeout reached -> powerOff()");
                 HardwareInit::powerOff();
@@ -366,12 +398,24 @@ void VehicleController::update() {
 
     // ── Throttle input ──
     int16_t throttlePct = 0;
-    if (isLoco) {
-        int16_t rawPedal = constrain((int16_t)throttle_slider.rk.value, -100, 100);
-        throttlePct = (rawPedal + 100) / 2;
+    if (isConnected) {
+        int16_t rawPedal = isLoco ? constrain((int16_t)throttle_slider.rk.value, (int16_t)-100, (int16_t)100)
+                                  : constrain(gas_pedal.rk.value, (int16_t)-100, (int16_t)100);
+        int16_t calculatedPct = (rawPedal + 100) / 2;
+
+        if (s_reconnectThrottleInterlock) {
+            if (rawPedal <= -90 || calculatedPct == 0) {
+                s_reconnectThrottleInterlock = false;
+                throttlePct = calculatedPct;
+                Serial.println("[EVENT] Reconnect throttle zero-crossing confirmed -> drive unlocked");
+            } else {
+                throttlePct = 0;
+            }
+        } else {
+            throttlePct = calculatedPct;
+        }
     } else {
-        int16_t rawPedal = constrain(gas_pedal.rk.value, -100, 100);
-        throttlePct = (rawPedal + 100) / 2;
+        throttlePct = 0;
     }
 
     // ── Engine Start / Power State Machine ──
@@ -383,39 +427,47 @@ void VehicleController::update() {
     uint8_t bits = isLoco ? loco_light.rk.value : truck_light.rk.value;
     bool engineStartToggle = isLoco ? engine_button.rk.state : start_button.rk.state;
 
-    // Auto Interlock on Engine Start / Stop
-    if (!isLoco) {
-        if (engineStartToggle && !s_engineStartTogglePrev) {
-            gear_switch.rk.value = 0;
-        } else if (!engineStartToggle && s_engineStartTogglePrev) {
-            gear_switch.rk.value = 1;
-        } else if (!engineStartToggle && gear_switch.rk.value != 1) {
-            gear_switch.rk.value = 1;
+    if (isConnected) {
+        // Auto Interlock on Engine Start / Stop
+        if (!isLoco) {
+            if (engineStartToggle && !s_engineStartTogglePrev) {
+                gear_switch.rk.value = 0;
+            } else if (!engineStartToggle && s_engineStartTogglePrev) {
+                gear_switch.rk.value = 1;
+            } else if (!engineStartToggle && gear_switch.rk.value != 1) {
+                gear_switch.rk.value = 1;
+            }
+        } else {
+            if (engineStartToggle && !s_engineStartTogglePrev) {
+                throttle_slider.rk.value = -100;
+            }
         }
-    } else {
-        if (engineStartToggle && !s_engineStartTogglePrev) {
-            throttle_slider.rk.value = -100;
-        }
-    }
 
-    if (eState == RcEngineSound::OFF) {
-        if (engineStartToggle) {
-            s_engine->startEngine();
+        if (eState == RcEngineSound::OFF) {
+            if (engineStartToggle) {
+                s_engine->startEngine();
+            }
+            HardwareInit::setAllMotors(0);
+            throttlePct = 0;
+        } else if (eState == RcEngineSound::STARTING) {
+            if (!engineStartToggle && s_engineStartTogglePrev) s_engine->stopEngine();
+            HardwareInit::setAllMotors(0);
+            throttlePct = 0;
+        } else if (eState == RcEngineSound::RUNNING) {
+            if (!engineStartToggle) {
+                if (s_engineStartTogglePrev) s_engine->stopEngine();
+                throttlePct = 0;
+            }
         }
-        HardwareInit::setAllMotors(0);
-        throttlePct = 0;
-    } else if (eState == RcEngineSound::STARTING) {
-        if (!engineStartToggle && s_engineStartTogglePrev) s_engine->stopEngine();
-        HardwareInit::setAllMotors(0);
-        throttlePct = 0;
-    } else if (eState == RcEngineSound::RUNNING) {
-        if (!engineStartToggle) {
-            if (s_engineStartTogglePrev) s_engine->stopEngine();
+
+        s_engineStartTogglePrev = engineStartToggle;
+    } else {
+        // When disconnected, throttle is 0 and engine stays at idle until 30s auto-stop
+        if (eState != RcEngineSound::RUNNING) {
+            HardwareInit::setAllMotors(0);
             throttlePct = 0;
         }
     }
-
-    s_engineStartTogglePrev = engineStartToggle;
 
     // ── Direction / Gear (type-driven) ──
     bool reverse;
@@ -460,14 +512,30 @@ void VehicleController::update() {
 
         reverse = !s_activeDirection;
     } else {
-        uint8_t g = gear_switch.rk.value;
-        if (g <= 2) gear = g;
-        reverse = (gear == 2);
-        parkingBrake = (gear == 1);
-        if (gear != s_gearPrev) {
-            if (eState == RcEngineSound::RUNNING) s_engine->triggerShifting(true);
-            Serial.printf("[EVENT] Gear -> %s\n", gear == 0 ? "D" : gear == 1 ? "P" : "R");
-            s_gearPrev = gear;
+        if (isConnected) {
+            uint8_t g = gear_switch.rk.value;
+            if (g <= 2) gear = g;
+            reverse = (gear == 2);
+            parkingBrake = (gear == 1);
+            if (gear != s_gearPrev) {
+                if (eState == RcEngineSound::RUNNING) s_engine->triggerShifting(true);
+                Serial.printf("[EVENT] Gear -> %s\n", gear == 0 ? "D" : gear == 1 ? "P" : "R");
+                s_gearPrev = gear;
+            }
+        } else {
+            // Disconnected failsafe: maintain motion until stopped, then lock in Park
+            reverse = (s_gearPrev == 2);
+            if (fabs(s_currentMotorSpeed) < 0.1f) {
+                gear = 1;
+                parkingBrake = true;
+                if (s_gearPrev != 1) {
+                    s_gearPrev = 1;
+                    Serial.println("[EVENT] Failsafe stop complete -> Engaged Park (P)");
+                }
+            } else {
+                gear = s_gearPrev;
+                parkingBrake = false;
+            }
         }
     }
     if (reverse != s_reversePrev) {
@@ -479,9 +547,14 @@ void VehicleController::update() {
         s_parkingBrakePrev = parkingBrake;
     }
 
-    if (!isLoco) {
-        int16_t rawBrake = constrain(brake_pedal.rk.value, -100, 100);
-        brakePct = (rawBrake + 100) / 2;
+    if (isConnected) {
+        if (!isLoco) {
+            int16_t rawBrake = constrain(brake_pedal.rk.value, -100, 100);
+            brakePct = (rawBrake + 100) / 2;
+        }
+    } else {
+        // 50% braking stop on disconnect
+        brakePct = 50;
     }
     int16_t motorThrottle = throttlePct;
     if (parkingBrake) {
@@ -494,7 +567,7 @@ void VehicleController::update() {
     int16_t motorSpeed = computeRampedMotorSpeed(targetSpeed, parkingBrake, gear, brakePct, eState);
 
     // ── Steering (with Dynamic Auto-Centering) ──
-    int16_t rawSteer = isLoco ? 0 : steering_wheel.rk.value;
+    int16_t rawSteer = (isLoco || !isConnected) ? 0 : steering_wheel.rk.value;
     int16_t steerVal = updateDynamicSteering(rawSteer, motorSpeed, reverse, isLoco);
 
     if (s_hw->drivetrainType == HardwareConfig::SKID_STEER) {
@@ -517,12 +590,17 @@ void VehicleController::update() {
         } else {
             HardwareInit::setMotor(0);
         }
-        HardwareInit::setServo(steerVal);
+        if (isConnected) {
+            HardwareInit::setServo(steerVal);
+        }
     }
 
     // ── Work Machine Aux Outputs ──
-    aux_hydraulic1 = isLoco ? 0 : aux_slider.rk.value;
+    aux_hydraulic1 = (isLoco || !isConnected) ? 0 : aux_slider.rk.value;
     HardwareInit::setAuxMotor(aux_hydraulic1);
+    if (!isConnected) {
+        HardwareInit::setPump(false);
+    }
 
     bool auxActive = (abs(aux_hydraulic1) > 10 || dump_bed_toggle);
     if (s_hw->auxLight.configured) {
@@ -592,7 +670,7 @@ void VehicleController::update() {
     }
 
     // ── Real Vehicle Turn Indicator Auto-Cancellation ──
-    bool hazardActive = isLoco ? ((bits & 0x80) != 0) : ((bits & 0x08) || s_inWarningPhase);
+    bool hazardActive = isLoco ? ((bits & 0x80) != 0 || !isConnected) : ((bits & 0x08) || s_inWarningPhase || !isConnected);
 
     if (!isLoco) {
         if (hazardActive) {

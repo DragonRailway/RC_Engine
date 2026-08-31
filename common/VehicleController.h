@@ -96,6 +96,9 @@ private:
     static uint32_t s_lastIndicatorClick;
     static uint8_t  s_gearPrev;
     static bool     s_parkingBrakePrev;
+    static bool     s_wasConnected;
+    static bool     s_reconnectThrottleInterlock;
+    static bool     s_disconnectEngineStopDone;
 
     // Drivetrain Virtual Mass Inertia Simulation
     static float    s_currentMotorSpeed;

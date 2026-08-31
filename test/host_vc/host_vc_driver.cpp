@@ -22,6 +22,7 @@ extern float host_motor_writes[8];
 extern size_t host_motor_write_count;
 extern int host_last_servo_us;
 extern bool host_radiokit_connected;
+extern bool host_servo_attached;
 
 int main() {
     std::cout << "[Host VC Test] Initializing VehicleController Host Harness..." << std::endl;
@@ -1373,6 +1374,90 @@ int main() {
     assert(fabs(host_motor_writes[0] - host_motor_writes[1]) < 0.01f && "Tracks must have equal duty after auto-centering");
 
     std::cout << "  PASS: Dynamic steering auto-centering across Ackermann, Skid-Steer, User Priority, and Reverse Hold verified." << std::endl;
+
+    // ── Test 27: Connection Loss Failsafe & Reconnect Throttle Interlock ──
+    std::cout << "[Host VC Test] Test 27: Connection Loss Failsafe & Reconnect Throttle Interlock..." << std::endl;
+    HardwareConfig testHw27 = testHw26;
+    testHw27.power.disconnectTimeoutS = 60;
+    testHw27.power.warningWindowS = 10;
+    HardwareInit::init(testHw27);
+    VehicleController::init(&testHw27, &engine, &profile);
+
+    // 27.1: Start engine, drive forward at 80% throttle, aux motor at 50%
+    host_radiokit_connected = true;
+    start_button.rk.state = true;
+    gear_switch.rk.value = 0; // Drive
+    brake_pedal.rk.value = -100;
+    gas_pedal.rk.value = 60; // 80% throttle
+    aux_slider.rk.value = 50;
+    steering_wheel.rk.value = 30;
+
+    for (int t = 0; t < 50; t++) {
+        host_virtual_millis += 20;
+        engine.update(0);
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        VehicleController::update();
+    }
+    assert(host_last_motor_speed > 50.0f && "Vehicle driving forward at speed");
+    assert(host_servo_attached == true && "Steering servo attached while connected");
+
+    // 27.2: Connection LOST -> Failsafe engages immediately
+    host_radiokit_connected = false;
+    host_virtual_millis += 20;
+    VehicleController::update();
+
+    // Servos must be detached (depowered)
+    assert(host_servo_attached == false && "Steering servos must be detached upon disconnect");
+
+    // 50% braking stop: vehicle must decelerate to 0 and shift to Park
+    for (int t = 0; t < 100; t++) {
+        host_virtual_millis += 20;
+        engine.update(0);
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        VehicleController::update();
+    }
+    assert(host_last_motor_speed == 0.0f && "Vehicle must come to a complete stop via 50% braking");
+    assert(engine.getState() == RcEngineSound::RUNNING && "Engine sound should remain running at idle for transient dropouts");
+
+    // 27.3: Sustained disconnect past 30s -> Sound engine auto-stop
+    host_virtual_millis += 31000;
+    VehicleController::update();
+    // Render out stopping sound samples to reach OFF (stopDuration is 1400ms, 100*20ms = 2000ms)
+    for (int t = 0; t < 100; t++) {
+        host_virtual_millis += 20;
+        engine.update(0);
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        VehicleController::update();
+    }
+    assert(engine.getState() == RcEngineSound::OFF && "Engine state must reach OFF");
+
+    // 27.4: Reconnection with throttle engaged -> Throttle-to-neutral interlock
+    host_radiokit_connected = true;
+    start_button.rk.state = true;
+    engine.startEngine(); // Engine restart on reconnect
+    gas_pedal.rk.value = 50; // User thumb still on gas pedal
+    host_virtual_millis += 20;
+    VehicleController::update();
+
+    assert(host_servo_attached == true && "Steering servos re-attached on reconnect");
+    assert(host_last_motor_speed == 0.0f && "Drive torque must stay locked at 0 while throttle interlock active");
+
+    // 27.5: User returns gas pedal to neutral (-100) -> Interlock unlocks
+    gas_pedal.rk.value = -100; // Neutral (0% throttle)
+    host_virtual_millis += 20;
+    VehicleController::update(); // Interlock clears
+
+    // Now apply throttle -> vehicle drives normally
+    gas_pedal.rk.value = 60; // 80% throttle
+    for (int t = 0; t < 50; t++) {
+        host_virtual_millis += 20;
+        engine.update(0);
+        for (int s = 0; s < 220; s++) engine.getNextSample();
+        VehicleController::update();
+    }
+    assert(host_last_motor_speed > 30.0f && "Drive torque unlocked after throttle zero-crossing");
+
+    std::cout << "  PASS: Connection loss failsafe (50% brake, servo detach, 30s engine auto-stop) and reconnect throttle interlock verified." << std::endl;
 
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;

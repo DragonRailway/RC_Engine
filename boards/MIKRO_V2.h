@@ -53,7 +53,7 @@ struct Board_MIKRO_V2 : BaseBoard {
     // ───────────────────────────────────────────
     // 4. POWER & BATTERY MANAGEMENT
     // ───────────────────────────────────────────
-    struct POWER {
+    struct POWER : BaseBoard::POWER {
         static constexpr uint8_t POWER_ENABLE       = 15;   // set high to enable board
         static constexpr uint8_t POWER_BUTTON       = 14;   // Detect power button press
         static constexpr uint8_t VOLTAGE_SENS       = 4;    // Voltage sense pin

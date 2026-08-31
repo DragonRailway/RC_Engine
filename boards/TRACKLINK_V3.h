@@ -59,7 +59,7 @@ struct Board_TRACKLINK_V3 : BaseBoard {
     // ───────────────────────────────────────────
     // 4. POWER & BATTERY MANAGEMENT
     // ───────────────────────────────────────────
-    struct POWER {
+    struct POWER : BaseBoard::POWER {
         static constexpr uint8_t POWER_ENABLE       = 33;   // set high to enable board
         static constexpr uint8_t POWER_BUTTON       = 48;   // Detect power button press
         static constexpr uint8_t VOLTAGE_SENS       = 2;    // Voltage sense pin

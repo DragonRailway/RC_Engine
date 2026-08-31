@@ -13,25 +13,7 @@
           "max": 90
         }
       }
-    ],
-    "steering_servos": [
-      {
-        "hardware": "S1",
-        "frequency": 50,
-        "endpoints": {
-          "left": 1000,
-          "right": 2000,
-          "center": 1500
-        }
-      }
-    ],
-    "auto_centering": {
-      "enabled": true,
-      "base_rate": 0.0,
-      "speed_rate": 1.8,
-      "max_rate": 8.0,
-      "hold_in_reverse": true
-    }
+    ]
   },
   "lights": {
     "head_light": {
@@ -50,17 +32,15 @@
       "hardware": ["L4"],
       "brightness_max": 30
     },
-    "turn_light": {
+    "ditch_light": {
       "left": {
-        "hardware": "L5"
-      },
-      "right": {
         "hardware": "L6"
       },
+      "right": {
+        "hardware": "L5"
+      },
       "brightness_max": 100,
-      "type": "blink",
-      "interval_on": 300,
-      "interval_off": 300
+      "interval_ms": 8
     }
   },
   "animation": {

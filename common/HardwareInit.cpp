@@ -405,6 +405,37 @@ void HardwareInit::setServo(int16_t position) {
     }
 }
 
+void HardwareInit::detachServos() {
+    for (uint8_t i = 0; i < s_steeringServoCount; i++) {
+        if (steeringServos[i].attached()) {
+            steeringServos[i].detach();
+        }
+    }
+    s_lastServoPos = -999;
+}
+
+void HardwareInit::attachServos() {
+    for (uint8_t i = 0; i < s_steeringServoCount; i++) {
+        if (!steeringServos[i].attached() && s_steeringConfigs[i].configured) {
+            const auto& servo = s_steeringConfigs[i];
+            EasyKit::ServoConfig cfg;
+            cfg.minUs = 500;
+            cfg.maxUs = 2500;
+            cfg.centerUs = servo.endpoints.center;
+            cfg.freq = (servo.frequency >= 40 && servo.frequency <= 400) ? servo.frequency : 50;
+            steeringServos[i].attach(servo.hardwareId, cfg);
+            steeringServos[i].writeMicroseconds(servo.endpoints.center);
+        }
+    }
+    s_lastServoPos = -999;
+}
+
+void HardwareInit::setPump(bool active) {
+    if (POWER::PUMP_ENABLE == 0xFF) return;
+    pinMode(POWER::PUMP_ENABLE, OUTPUT);
+    digitalWrite(POWER::PUMP_ENABLE, active ? HIGH : LOW);
+}
+
 void HardwareInit::setLight(uint8_t pin, uint8_t brightnessPct) {
     if (pin == 0xFF || pin == 0) return;
     EasyLED* led = findLight(pin);

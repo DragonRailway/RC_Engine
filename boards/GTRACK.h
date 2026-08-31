@@ -60,7 +60,7 @@ struct Board_GTRACK : BaseBoard {
     // ───────────────────────────────────────────
     // 4. POWER MANAGEMENT & ACCESSORIES
     // ───────────────────────────────────────────
-    struct POWER {
+    struct POWER : BaseBoard::POWER {
         static constexpr uint8_t POWER_ENABLE       = 35;   // PWR_EN: set HIGH to keep board ON
         static constexpr uint8_t POWER_BUTTON       = 36;   // PWR_BTN: digital read from MCU
         static constexpr uint8_t VOLTAGE_SENS       = 7;    // VSENS: voltage divider 20k/5.1k

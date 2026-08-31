@@ -52,19 +52,20 @@ void EasyMotor::coast() { host_last_motor_speed = 0.0f; }
 void EasyMotor::onPinStolen(uint8_t) {}
 
 // Dummy EasyServo
+bool host_servo_attached = true;
 EasyServo::EasyServo() {}
 EasyServo::~EasyServo() {}
-int EasyServo::attach(int pin) { return 0; }
-int EasyServo::attach(int pin, int minUs, int maxUs) { return 0; }
-EasyKit::Result EasyServo::attach(int pin, const EasyKit::ServoConfig& config) { return EasyKit::Result::OK; }
-void EasyServo::detach() {}
+int EasyServo::attach(int pin) { host_servo_attached = true; return 0; }
+int EasyServo::attach(int pin, int minUs, int maxUs) { host_servo_attached = true; return 0; }
+EasyKit::Result EasyServo::attach(int pin, const EasyKit::ServoConfig& config) { host_servo_attached = true; return EasyKit::Result::OK; }
+void EasyServo::detach() { host_servo_attached = false; }
 float EasyServo::write(float value, float speed, float kIn, float kOut) { return value; }
 void EasyServo::writeMicroseconds(int us) { host_last_servo_us = us; }
 void EasyServo::update() {}
 void EasyServo::stop() {}
 int EasyServo::read() const { return 90; }
 int EasyServo::readMicroseconds() const { return 1500; }
-bool EasyServo::attached() const { return true; }
+bool EasyServo::attached() const { return host_servo_attached; }
 void EasyServo::onPinStolen(uint8_t) {}
 
 // Dummy EasyLED

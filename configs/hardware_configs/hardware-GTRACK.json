@@ -1,55 +1,78 @@
 {
-    "name": "GTrack",
-    "description": "G-Track Ultimate Control Board",
-    "sound": {
-        "volume": 80
-    },
-    "drivetrain": {
-        "drive_motors": [
-            {
-                "hardware": "DRIVER_A",
-                "frequency": 24000,
-                "direction": "forward",
-                "duty": {
-                    "min": 0,
-                    "max": 100
-                }
-            }
-        ]
-    },
-    "lights": {
-        "head_light": {
-            "hardware": ["L1"],
-            "brightness_max": 100
-        },
-        "tail_light": {
-            "hardware": ["L2"],
-            "brightness_max": 100
-        },
-        "brake_light": {
-            "hardware": ["L3"]
-        },
-        "reversing_light": {
-            "hardware": ["L4"]
+  "sound": {
+    "volume": 80
+  },
+  "drivetrain": {
+    "drive_motors": [
+      {
+        "hardware": "DRIVER_A",
+        "frequency": 20000,
+        "direction": "forward",
+        "duty": {
+          "min": 20,
+          "max": 90
         }
+      },
+      {
+        "hardware": "DRIVER_B",
+        "frequency": 20000,
+        "direction": "forward",
+        "duty": {
+          "min": 20,
+          "max": 90
+        }
+      }
+    ]
+  },
+  "lights": {
+    "head_light": {
+      "hardware": ["L1"],
+      "brightness_max": 60
     },
-    "animation": {
-        "easing_speed_deg_s": 180,
-        "easing_k_in": 0.2,
-        "easing_k_out": 0.8,
-        "fade_duration_ms": 0
+    "tail_light": {
+      "hardware": ["L2"],
+      "brightness_max": 60
     },
-    "battery": {
-        "cell_count": 0,
-        "warning_voltage": 3.5,
-        "cutoff_voltage": 3.3,
-        "full_voltage": 4.2
+    "cab_light": {
+      "hardware": ["L3"],
+      "brightness_max": 40
     },
-    "power": {
-        "boot_latch_s": 1,
-        "button_hold_s": 4,
-        "disconnect_timeout_s": 60,
-        "warning_window_s": 10,
-        "cutoff_delay_s": 2
+    "step_light": {
+      "hardware": ["L4"],
+      "brightness_max": 30
+    },
+    "ditch_light": {
+      "left": {
+        "hardware": "L6"
+      },
+      "right": {
+        "hardware": "L5"
+      },
+      "brightness_max": 100,
+      "interval_ms": 8
     }
+  },
+  "animation": {
+    "easing_speed_deg_s": 180,
+    "easing_k_in": 0.2,
+    "easing_k_out": 0.8,
+    "fade_duration_ms": 0
+  },
+  "battery": {
+    "cell_count": 2,
+    "warning_voltage": 3.5,
+    "cutoff_voltage": 3.3,
+    "full_voltage": 4.2
+  },
+  "power": {
+    "boot_latch_s": 1,
+    "button_hold_s": 4,
+    "disconnect_timeout_s": 60,
+    "warning_window_s": 10,
+    "cutoff_delay_s": 2
+  },
+  "charging": {
+    "hardware": "head_light",
+    "mode": "solid"
+  }
 }
