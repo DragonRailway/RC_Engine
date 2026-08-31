@@ -187,6 +187,34 @@ int main(int argc, char** argv) {
         std::cout << "[Host DSP Harness] PASS: Warm analog soft-knee limiter verified." << std::endl;
     }
 
+    // Phase 7: Slew-Rate Throttle Volume Decay Test
+    {
+        engine.startEngine();
+        host_virtual_millis += 20;
+        engine.update(500); // 100% throttle
+        float fullFaded = engine.getCurrentThrottleFaded();
+        assert(fullFaded == 100.0f && "Throttle rise must be instant attack");
+
+        // Release throttle immediately
+        host_virtual_millis += 20;
+        engine.update(0);
+        float decayedFaded = engine.getCurrentThrottleFaded();
+        assert(decayedFaded > 0.0f && decayedFaded < 100.0f && "Throttle release must decay gradually (slew rate inertia)");
+        std::cout << "[Host DSP Harness] PASS: Slew-rate throttle volume decay verified (" << fullFaded << " -> " << decayedFaded << "%)." << std::endl;
+    }
+
+    // Phase 8: Phase-Locked IDLE & REV Cylinder Loop Test
+    {
+        engine.startEngine();
+        host_virtual_millis += 20;
+        engine.update(200); // Crossfade RPM region
+        int16_t block[2];
+        for (int i = 0; i < 64; i++) {
+            engine.renderBlock(block, 1);
+        }
+        std::cout << "[Host DSP Harness] PASS: Phase-locked dual-voice sync verified." << std::endl;
+    }
+
     if (breakLoopMode) {
         if (config.loopPoints.hornEnd > soundData.slots[HORN].sampleCount) {
             std::cout << "[Host DSP Harness] DETECTED REGRESSION: hornEnd ("

@@ -194,8 +194,13 @@ void RcEngineSound::triggerParkingBrake(bool active) {
 }
 
 void RcEngineSound::triggerJakeBrake(bool active) {
-    voices[JAKE_BRAKE].active = active;
-    if (active) voices[JAKE_BRAKE].position = 0;
+    jakeBrakeRequest = active;
+    if (active) {
+        jakeBrakeActive = true;
+        engineMuted = true;
+        voices[JAKE_BRAKE].active = true;
+        voices[JAKE_BRAKE].position = 0;
+    }
 }
 
 void RcEngineSound::triggerWastegate(bool active) {
@@ -322,8 +327,20 @@ void RcEngineSound::update(int16_t throttle) {
     int32_t targetRpm = abs(throttle);
     if (targetRpm > cfg.engine.maxRpm) targetRpm = cfg.engine.maxRpm;
 
-    // ── Throttle ratio (0-100%) for volume scaling ──
-    int32_t throttlePercent = map(targetRpm, 0, cfg.engine.maxRpm, 0, 100);
+    // ── Throttle ratio (0-100%) for volume scaling with slew-rate inertia ──
+    int32_t targetThrottlePct = map(targetRpm, 0, cfg.engine.maxRpm, 0, 100);
+    if ((float)targetThrottlePct > currentThrottleFaded) {
+        currentThrottleFaded = (float)targetThrottlePct;
+    } else {
+        float decelRate = max(1.0f, (float)cfg.engine.dec * 0.8f) * timeFactor;
+        currentThrottleFaded -= decelRate;
+        if (currentThrottleFaded < (float)targetThrottlePct) {
+            currentThrottleFaded = (float)targetThrottlePct;
+        }
+    }
+    int32_t throttlePercent = (int32_t)currentThrottleFaded;
+    if (throttlePercent < 0) throttlePercent = 0;
+    if (throttlePercent > 100) throttlePercent = 100;
 
     // ── Crawler Mode Detection ──
     crawlerMode = (cfg.sound.master <= cfg.sound.crawlerModeThreshold);
@@ -390,10 +407,11 @@ void RcEngineSound::update(int16_t throttle) {
         bool throttleReleased = ((float)effectiveTarget + (float)jakeMargin < currentRpm);
         bool aboveJakeThreshold = (currentRpmFixed > (uint16_t)(cfg.engine.maxRpm * cfg.engine.jakeBrakeMinRpm / 100));
 
-        if (throttleReleased && aboveJakeThreshold && cfg.sound.jakeBrake > 0) {
+        jakeBrakeRequest = (throttleReleased && aboveJakeThreshold && cfg.sound.jakeBrake > 0);
+        if (jakeBrakeRequest) {
             jakeBrakeActive = true;
             engineMuted = true;
-        } else if (!throttleReleased || currentRpmFixed <= (uint16_t)(cfg.engine.maxRpm * cfg.engine.jakeBrakeMinRpm / 100)) {
+        } else if (!sounds.slots[JAKE_BRAKE].samples || sounds.slots[JAKE_BRAKE].sampleCount == 0) {
             jakeBrakeActive = false;
             engineMuted = false;
         }
@@ -558,7 +576,7 @@ void RcEngineSound::update(int16_t throttle) {
 
     // ── Idle/Rev cross-fade with throttle-dependent volume scaling ──
     int16_t idleProportion = 100;
-    if ((state == RUNNING || state == STOPPING) && !engineMuted) {
+    if (state == RUNNING || state == STOPPING) {
         voices[IDLE].active = (sounds.slots[IDLE].samples && sounds.slots[IDLE].sampleCount > 0);
         voices[REV].active = (state == RUNNING) && (sounds.slots[REV].samples && sounds.slots[REV].sampleCount > 0);
         if (state == STOPPING) {
@@ -578,8 +596,10 @@ void RcEngineSound::update(int16_t throttle) {
             int32_t minEngineScale = (cfg.sound.idleMin > 0) ? cfg.sound.idleMin : 50;
             int32_t maxEngineScale = (cfg.sound.fullThrottle > 0) ? cfg.sound.fullThrottle : 150;
             int32_t throttleVol = map(throttlePercent, 0, 100, minEngineScale, maxEngineScale);
-            voices[IDLE].volume = engineMuted ? 0 : (uint8_t)constrain((int32_t)cfg.sound.idle * throttleVol / 100 * idleProportion / 100, 0, 255);
-            voices[REV].volume  = engineMuted ? 0 : (uint8_t)constrain((int32_t)cfg.sound.rev  * throttleVol / 100 * (100 - idleProportion) / 100, 0, 255);
+
+            float duckFactor = (jakeBrakeActive && cfg.sound.jakeBrake > 0) ? 0.20f : 1.0f;
+            voices[IDLE].volume = (uint8_t)constrain((int32_t)((float)cfg.sound.idle * (float)throttleVol / 100.0f * (float)idleProportion / 100.0f * (engineMuted ? 0.0f : 1.0f)), 0, 255);
+            voices[REV].volume  = (uint8_t)constrain((int32_t)((float)cfg.sound.rev  * (float)throttleVol / 100.0f * (float)(100 - idleProportion) / 100.0f * duckFactor), 0, 255);
         }
     } else {
         voices[IDLE].active = false;
@@ -762,6 +782,12 @@ void RcEngineSound::renderBlock(int16_t* interleavedStereoBuffer, size_t frames)
     for (size_t f = 0; f < frames; f++) {
         float mixAccum = 0.0f;
 
+        // Phase-lock REV to IDLE when both voices are active
+        if (voiceActive[IDLE] && voiceActive[REV] && snapshot[IDLE].count > 0 && snapshot[REV].count > 0) {
+            float phase = snapshot[IDLE].position / (float)snapshot[IDLE].count;
+            snapshot[REV].position = phase * (float)snapshot[REV].count;
+        }
+
         for (int i = 0; i < SOUND_COUNT; i++) {
             if (!voiceActive[i]) continue;
             VoiceState& v = snapshot[i];
@@ -770,7 +796,15 @@ void RcEngineSound::renderBlock(int16_t* interleavedStereoBuffer, size_t frames)
             mixAccum += rawSample * voiceGains[i];
 
             v.step = voiceSteps[i];
-            advanceVoice(v);
+            bool wrapped = advanceVoice(v);
+
+            // Cycle-quantized jake brake deactivation at sample loop completion
+            if (i == JAKE_BRAKE && wrapped && !jakeBrakeRequest) {
+                jakeBrakeActive = false;
+                engineMuted = false;
+                v.active = false;
+                voiceActive[JAKE_BRAKE] = false;
+            }
         }
 
         // Start sound processing

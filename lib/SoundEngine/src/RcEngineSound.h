@@ -300,6 +300,7 @@ public:
     uint16_t getRpm() const { return currentRpmFixed; }
     uint8_t getGear() const { return selectedGear; }
     float getPitchFactor() const { return pitchFactor; }
+    float getCurrentThrottleFaded() const { return currentThrottleFaded; }
 
     struct VoiceDebugInfo {
         uint8_t id;
@@ -367,7 +368,11 @@ private:
 
     // Jake brake state
     bool jakeBrakeActive = false;
+    bool jakeBrakeRequest = false;
     bool engineMuted = false;
+
+    // Slew-rate throttle volume inertia
+    float currentThrottleFaded = 0.0f;
 
     // Wastegate state
     bool wastegateTriggered = false;
@@ -399,9 +404,11 @@ private:
     portMUX_TYPE voiceMutex = portMUX_INITIALIZER_UNLOCKED;
 
     // Helper: advance voice position with loop region support
-    static inline void advanceVoice(VoiceState& v) {
+    static inline bool advanceVoice(VoiceState& v) {
         v.position += v.step;
+        bool wrapped = false;
         if (v.position >= (float)v.count) {
+            wrapped = true;
             if (v.loop && v.loopEnd > 0) {
                 // Loop within defined region
                 float regionLen = (float)(v.loopEnd - v.loopBegin);
@@ -421,6 +428,7 @@ private:
                 v.active = false;
             }
         }
+        return wrapped;
     }
 };
 
