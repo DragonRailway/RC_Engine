@@ -31,17 +31,21 @@ RcEngineSound engine;
 VehicleProfile profile;
 HardwareConfig hwConfig;
 
-// ── Config hot-reload state ──
-static uint32_t lastCfgCheck = 0;
-static uint32_t lastHwWrite = 0;
-static uint32_t lastVcWrite = 0;
-// Debounce: a config upload rewrites the file over several frames (RadioKit FS
-// upload: truncate -> chunks -> end). Triggering reload on the first mtime
-// change reads a partial/empty file. Wait for the mtime to be stable across
-// two consecutive polls before reloading.
-static bool     pendingReload = false;
-static uint32_t pendingHwT = 0;
-static uint32_t pendingVcT = 0;
+// ── Config hot-reload & Control task state ──
+static TaskHandle_t s_controlTaskHandle = nullptr;
+static volatile bool s_configReloadPending = false;
+
+static void controlTask(void* param) {
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+    const TickType_t xFrequency = pdMS_TO_TICKS(20); // Strict 50 Hz (20.0 ms) period
+
+    while (true) {
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+
+        VehicleController::update();
+        HardwareInit::update(hwConfig.power.buttonHoldS, hwConfig.power.indicatorPin);
+    }
+}
 
 // Aux slider control profile from aux_motor.type. mixer: 5 detents, no
 // self-centering (the user sets a speed/direction that keeps running); tipper:
@@ -59,14 +63,6 @@ static void applyAuxSliderProfile() {
             aux_slider.rk.detents = 0;
         }
     }
-}
-
-static uint32_t fileWriteTime(const char* path) {
-    File f = LittleFS.open(path, "r");
-    if (!f) return 0;
-    uint32_t t = (uint32_t)f.getLastWrite();
-    f.close();
-    return t;
 }
 
 #if defined(RK_ENABLE_BLE)
@@ -323,48 +319,29 @@ void setup() {
     // additional transport init is needed.
     UiLogger::onRadioKitStarted();
 
+    // Register RadioKit filesystem upload completion hook (0 polling overhead)
+    RKFs::setUploadCallback([](const char* path, bool success) {
+        if (success && path && (strstr(path, "hardware") != nullptr || strstr(path, "vehicle") != nullptr)) {
+            Serial.printf("[RadioKit] Config file upload complete (%s) -> scheduling reload\n", path);
+            s_configReloadPending = true;
+        }
+    });
+
+    // Start deterministic 50 Hz control task (Priority 2, Core 1)
+    xTaskCreatePinnedToCore(controlTask, "control", 8192, nullptr, 2, &s_controlTaskHandle, 1);
+
     Serial.println("\n── System Ready ──");
     Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
     Serial.printf("Free PSRAM: %d bytes\n", ESP.getFreePsram());
     Serial.println("\n=== Init Complete ===\n");
-
-    // Seed the hot-reload watcher so boot does not trigger a spurious reload
-    // (file write times are nonzero while lastHwWrite/lastVcWrite start at 0).
-    lastHwWrite = fileWriteTime(HW_CONFIG_PATH);
-    lastVcWrite = fileWriteTime("/vehicle-config.json");
 }
 
 void loop() {
     RadioKit.update();
-    VehicleController::update();
-    // Pump the EasyKit animation engines (servo easing, LED fades, blink
-    // patterns) so they advance non-blocking every iteration.
-    HardwareInit::update(hwConfig.power.buttonHoldS, hwConfig.power.indicatorPin);
 
-    // Watch for config changes saved via the RadioKit filesystem manager
-    uint32_t now = millis();
-    if (now - lastCfgCheck >= 2000) {
-        lastCfgCheck = now;
-        uint32_t hwT = fileWriteTime(HW_CONFIG_PATH);
-        uint32_t vcT = fileWriteTime("/vehicle-config.json");
-        bool changed = (hwT != lastHwWrite) || (vcT != lastVcWrite);
-        if (changed && !pendingReload) {
-            // First sighting of a change — remember it and wait one poll.
-            pendingReload = true;
-            pendingHwT = hwT;
-            pendingVcT = vcT;
-        } else if (pendingReload) {
-            if (hwT == pendingHwT && vcT == pendingVcT) {
-                // mtime stable across two polls — the upload has finished.
-                pendingReload = false;
-                lastHwWrite = hwT;
-                lastVcWrite = vcT;
-                reloadConfigs();
-            } else {
-                // Still being written — keep waiting.
-                pendingHwT = hwT;
-                pendingVcT = vcT;
-            }
-        }
+    // Event-driven configuration reload triggered upon upload completion
+    if (s_configReloadPending) {
+        s_configReloadPending = false;
+        reloadConfigs();
     }
 }

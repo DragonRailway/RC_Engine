@@ -305,8 +305,12 @@ void RcEngineSound::triggerOthers(bool active) {
 // ─── Advanced Engine State Machine ───────────────────────────────────────────
 void RcEngineSound::update(int16_t throttle) {
     uint32_t now = millis();
-    if (lastUpdateTime == 0) lastUpdateTime = now;
+    uint32_t dtMs = (lastUpdateTime > 0 && now >= lastUpdateTime) ? (now - lastUpdateTime) : 20;
+    if (dtMs > 100) dtMs = 100;
+    if (dtMs < 1) dtMs = 1;
     lastUpdateTime = now;
+    float dtSec = (float)dtMs / 1000.0f;
+    float timeFactor = dtSec / 0.02f; // Normalized to 20ms base tick
 
     int32_t targetRpm = abs(throttle);
     if (targetRpm > cfg.engine.maxRpm) targetRpm = cfg.engine.maxRpm;
@@ -318,7 +322,7 @@ void RcEngineSound::update(int16_t throttle) {
     crawlerMode = (cfg.sound.master <= cfg.sound.crawlerModeThreshold);
 
     // ── Engine Load Calculation (used for torque converter slip & dynamic sounds) ──
-    int32_t engineLoad = targetRpm - currentRpm;
+    int32_t engineLoad = targetRpm - (int32_t)currentRpm;
     if (engineLoad < 0) engineLoad = 0;
     if (engineLoad > 180) engineLoad = 180;
 
@@ -378,7 +382,7 @@ void RcEngineSound::update(int16_t throttle) {
         // Deactivation uses the simple inverse — no margin — so jake brake cannot
         // latch in the active state when RPM settles back into the dead zone.
         int32_t jakeMargin = cfg.engine.maxRpm / 50;
-        bool throttleReleased = (effectiveTarget + jakeMargin < currentRpm);
+        bool throttleReleased = ((float)effectiveTarget + (float)jakeMargin < currentRpm);
         bool aboveJakeThreshold = (currentRpmFixed > (uint16_t)(cfg.engine.maxRpm * cfg.engine.jakeBrakeMinRpm / 100));
 
         if (throttleReleased && aboveJakeThreshold && cfg.sound.jakeBrake > 0) {
@@ -391,30 +395,32 @@ void RcEngineSound::update(int16_t throttle) {
 
         // ── Jake brake RPM deceleration ──
         if (jakeBrakeActive) {
-            currentRpm -= cfg.engine.jakeBrakeDecelRate;
-            if (currentRpm < 0) currentRpm = 0;
+            float decelStep = (float)cfg.engine.jakeBrakeDecelRate * timeFactor;
+            currentRpm -= decelStep;
+            if (currentRpm < 0.0f) currentRpm = 0.0f;
         } else if (crawlerMode) {
-            currentRpm = effectiveTarget;
+            currentRpm = (float)effectiveTarget;
         } else {
-            // ── Normal RPM calculation with inertia ──
-            int32_t inertiaFactor = max((int32_t)1, (int32_t)(101 - cfg.engine.inertia));
-            int32_t diff = effectiveTarget - currentRpm;
+            // ── Normal RPM calculation with continuous float smoothing ──
+            float inertiaFactor = (float)max((int32_t)1, (int32_t)(101 - cfg.engine.inertia));
+            float diff = (float)effectiveTarget - currentRpm;
 
-            int32_t accelStep = cfg.engine.acc;
-            int32_t decelStep = cfg.engine.dec;
+            float accelStep = (float)cfg.engine.acc;
+            float decelStep = (float)cfg.engine.dec;
             if (cfg.transmission.type == TRANS_AUTOMATIC && selectedGear < 6) {
-                accelStep = cfg.transmission.gearRampTimes[selectedGear];
+                accelStep = (float)cfg.transmission.gearRampTimes[selectedGear];
                 decelStep = accelStep;
             }
 
-            if (diff > 0) {
-                int32_t step = max((int32_t)1, (int32_t)((diff * inertiaFactor) / 200 + accelStep));
-                currentRpm = min(currentRpm + step, effectiveTarget);
-            } else if (diff < 0) {
-                int32_t step = max((int32_t)1, (int32_t)(((-diff) * inertiaFactor) / 200 + decelStep));
-                currentRpm = max(currentRpm - step, effectiveTarget);
+            if (diff > 0.0f) {
+                float step = max(0.5f, ((diff * inertiaFactor) / 200.0f + accelStep) * timeFactor);
+                currentRpm = min((float)effectiveTarget, currentRpm + step);
+            } else if (diff < 0.0f) {
+                float step = max(0.5f, (((-diff) * inertiaFactor) / 200.0f + decelStep) * timeFactor);
+                currentRpm = max((float)effectiveTarget, currentRpm - step);
             }
         }
+        currentRpmFixed = (uint16_t)roundf(currentRpm);
 
         // ── Tire squeal: high throttle, low speed ──
         bool squealCondition = (throttle > (int32_t)(cfg.engine.maxRpm * cfg.features.tireSquealThreshold / 100) &&
@@ -790,9 +796,8 @@ void RcEngineSound::renderBlock(int16_t* interleavedStereoBuffer, size_t frames)
             }
         }
 
-        // Clamp to 16-bit signed PCM range [-32768, 32767]
-        int32_t outSample = (int32_t)roundf(mixAccum);
-        int16_t sample16 = (int16_t)constrain(outSample, -32768, 32767);
+        // Apply warm analog soft-knee saturation / limiting before 16-bit PCM output
+        int16_t sample16 = saturateSoftKnee(mixAccum);
 
         interleavedStereoBuffer[f * 2]     = sample16;
         interleavedStereoBuffer[f * 2 + 1] = sample16;

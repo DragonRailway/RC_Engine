@@ -271,6 +271,26 @@ public:
         return ((c3 * alpha + c2) * alpha + c1) * alpha + c0;
     }
 
+    // Rational soft-knee saturator / limiter:
+    // Transforms accumulated float amplitude [-inf, +inf] into 16-bit PCM [-32767, 32767].
+    // Linear (bit-exact) below 2/3 full scale (~ -3.5 dBFS), smoothly compressing asymptotically to 1.0.
+    static inline int16_t saturateSoftKnee(float mixAccum) {
+        float x = mixAccum / 32767.0f;
+        float ax = fabsf(x);
+        constexpr float T = 2.0f / 3.0f;       // Linear threshold (~0.6667)
+        constexpr float invRange = 1.0f / (1.0f - T); // 3.0
+        float y;
+        if (ax <= T) {
+            y = x;
+        } else {
+            float delta = ax - T;
+            float sat = T + delta / (1.0f + delta * invRange);
+            y = (x < 0.0f) ? -sat : sat;
+        }
+        int32_t outSample = (int32_t)roundf(y * 32767.0f);
+        return (int16_t)constrain(outSample, -32768, 32767);
+    }
+
     // Legacy/fallback wrapper: read sample with 4-point Hermite interpolation
     static inline int8_t readInterpolated(const int8_t* samples, uint32_t count, float position) {
         return (int8_t)readInterpolatedHermite4p(samples, count, position);
@@ -326,9 +346,9 @@ private:
     Config cfg;
 
     // RPM
-    int32_t currentRpm;
-    uint16_t currentRpmFixed;
-    float pitchFactor;
+    float currentRpm = 0.0f;
+    uint16_t currentRpmFixed = 0;
+    float pitchFactor = 1.0f;
 
     // Voice array
     VoiceState voices[SOUND_COUNT];

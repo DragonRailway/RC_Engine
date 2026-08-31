@@ -164,6 +164,29 @@ int main(int argc, char** argv) {
         std::cout << "[Host DSP Harness] PASS: 4-Point Hermite cubic spline polynomial precision verified." << std::endl;
     }
 
+    // Phase 7: Polynomial Cubic Soft-Knee Saturator Precision Test
+    {
+        // 1. Linear below 2/3 full scale (~21845):
+        int16_t lin0 = RcEngineSound::saturateSoftKnee(10000.0f);
+        assert(lin0 == 10000 && "Soft-knee must be bit-exact in linear region");
+
+        int16_t linNeg = RcEngineSound::saturateSoftKnee(-20000.0f);
+        assert(linNeg == -20000 && "Soft-knee must be bit-exact in negative linear region");
+
+        // 2. Smoothly saturating above 2/3 full scale:
+        int16_t satMid = RcEngineSound::saturateSoftKnee(26000.0f);
+        assert(satMid > 21845 && satMid < 26000 && "Soft-knee must compress above 2/3 full scale");
+
+        // 3. Clamping & asymptotic compression at extreme amplitudes:
+        int16_t satMax = RcEngineSound::saturateSoftKnee(100000.0f);
+        assert(satMax > 30000 && satMax <= 32767 && "Soft-knee must compress smoothly below ceiling");
+
+        int16_t satMin = RcEngineSound::saturateSoftKnee(-100000.0f);
+        assert(satMin < -30000 && satMin >= -32768 && "Soft-knee must compress smoothly below negative ceiling");
+
+        std::cout << "[Host DSP Harness] PASS: Warm analog soft-knee limiter verified." << std::endl;
+    }
+
     if (breakLoopMode) {
         if (config.loopPoints.hornEnd > soundData.slots[HORN].sampleCount) {
             std::cout << "[Host DSP Harness] DETECTED REGRESSION: hornEnd ("
