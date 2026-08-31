@@ -331,6 +331,7 @@ void setup() {
     xTaskCreatePinnedToCore(controlTask, "control", 8192, nullptr, 2, &s_controlTaskHandle, 1);
 
     Serial.println("\n── System Ready ──");
+    Serial.printf("CPU Frequency: %d MHz\n", getCpuFrequencyMhz());
     Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
     Serial.printf("Free PSRAM: %d bytes\n", ESP.getFreePsram());
     Serial.println("\n=== Init Complete ===\n");
