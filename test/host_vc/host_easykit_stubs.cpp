@@ -138,6 +138,7 @@ bool host_radiokit_connected = true;
 RadioKitClass::RadioKitClass() {}
 RadioKitClass RadioKit;
 void RadioKitClass::_registerWidget(RadioKit_Widget*) {}
+void RadioKitClass::setActivePage(uint8_t) {}
 void RadioKitClass::pushUpdate(uint8_t) {}
 void RadioKitClass::markConfDirty() {}
 void RadioKitClass::startSerial(Stream&) {}
@@ -147,3 +148,4 @@ bool RadioKitClass::enableFS() { return true; }
 void RadioKitClass::enableOTA() {}
 void RadioKitClass::update() {}
 bool RadioKitClass::isConnected() const { return host_radiokit_connected; }
+

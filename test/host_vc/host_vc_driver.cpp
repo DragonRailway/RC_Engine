@@ -707,6 +707,16 @@ int main() {
     VehicleController::update();
     assert(strcmp(telemetry_Speed.rk.content, "0") == 0 && "Park (P) gear should report 0 km/h");
 
+    // 18.6: Calibration factor & divider ratio scaling (e.g. 2S pack with divider ratio 2.0 and trim 1.05 -> scale 2.1)
+    testHwTelem.battery.vScale = 2.0f * 1.05f; // 2.10
+    testHwTelem.battery.vOffset = 0.0f;
+    VehicleController::init(&testHwTelem, &engine, &profile);
+    host_analog_read_mv = 4000; // pin 4.0V * 2.10 = 8.4V (Full pack 100%)
+    for (int i = 0; i < 80; i++) { host_virtual_millis += 100; VehicleController::update(); }
+    host_virtual_millis += 1100;
+    VehicleController::update();
+    assert(strcmp(telemetry_Battery.rk.content, "100") == 0 && "Scaled 4.0V * 2.10 = 8.4V should report 100%");
+
     std::cout << "  PASS: Warning-floor battery percentage and 0-200 km/h speed telemetry verified." << std::endl;
 
     std::cout << "[Host VC Test] Test 19: Staged Lifecycle and Metadata Priority Cascade..." << std::endl;

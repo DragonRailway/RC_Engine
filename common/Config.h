@@ -135,15 +135,15 @@ struct HardwareConfig {
     // Battery / power configuration. cellCount is the single source of truth for
     // the connected LiPo pack (1S, 2S, 3S, 4S). When cellCount is 0 the firmware
     // falls back to voltage-based auto-detection at boot (legacy behavior).
-    // vScale/vOffset calibrate the voltage sense ADC: when present in the config
-    // they override the compile-time VSCALE/VOFFSET macros (platformio.ini).
+    // vScale is computed from the active board's physical POWER::DIVIDER_RATIO
+    // multiplied by an optional calibration_factor (default 1.0).
     struct Battery {
         uint8_t cellCount = 0;        // 0 = auto-detect, otherwise fixed (1..4)
         float   warningVoltage = 3.5f;// low-voltage warning threshold per cell (V)
         float   cutoffVoltage = 3.3f; // low-voltage cutoff per cell (V)
         float   fullVoltage = 4.2f;   // fully-charged voltage per cell (V)
-        float   vScale = 1.0f;        // voltage sense scale (defaults to VSCALE)
-        float   vOffset = 0.0f;       // voltage sense offset (defaults to VOFFSET)
+        float   vScale = 1.0f;        // effective voltage sense scale (board DIVIDER_RATIO * trim)
+        float   vOffset = 0.0f;       // voltage sense offset (V)
         bool    configured = false;
     } battery;
 

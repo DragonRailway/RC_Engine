@@ -137,8 +137,9 @@
         "warning_voltage": { "type": "number", "minimum": 3.0, "maximum": 4.0, "default": 3.5 },
         "cutoff_voltage": { "type": "number", "minimum": 3.0, "maximum": 3.8, "default": 3.3 },
         "full_voltage": { "type": "number", "default": 4.2 },
-        "voltage_scale": { "type": "number", "default": 1.8 },
-        "voltage_offset": { "type": "number", "default": -0.2 }
+        "calibration_factor": { "type": "number", "minimum": 0.5, "maximum": 2.0, "default": 1.0 },
+        "voltage_scale": { "type": "number" },
+        "voltage_offset": { "type": "number", "default": 0.0 }
       }
     },
     "power": {

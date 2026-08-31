@@ -1,4 +1,5 @@
 #include "ConfigParser.h"
+#include "boards.h"
 #include <RadioKitLib.h>
 
 // ── Static member definitions ───────────────────────────────────────────────
@@ -214,14 +215,15 @@ bool ConfigParser::loadHardwareConfig(const char* path, HardwareConfig& config) 
         config.battery.fullVoltage = batObj["full_voltage"] | batObj["FULL_VOLTAGE"] | config.battery.fullVoltage;
 
         config.battery.cellCount = constrain(config.battery.cellCount, 0, 4);
-#ifndef VSCALE
-#define VSCALE 1.0f
-#endif
-#ifndef VOFFSET
-#define VOFFSET 0.0f
-#endif
-        config.battery.vScale = batObj["voltage_scale"] | batObj["VOLTAGE_SCALE"] | (float)VSCALE;
-        config.battery.vOffset = batObj["voltage_offset"] | batObj["VOLTAGE_OFFSET"] | (float)VOFFSET;
+        float baseScale = (float)Board::POWER::DIVIDER_RATIO;
+        if (baseScale <= 0.0f) baseScale = 1.0f;
+        float trim = batObj["calibration_factor"] | batObj["CALIBRATION_FACTOR"] | 1.0f;
+        if (!batObj["voltage_scale"].isNull() || !batObj["VOLTAGE_SCALE"].isNull()) {
+            config.battery.vScale = batObj["voltage_scale"] | batObj["VOLTAGE_SCALE"] | baseScale;
+        } else {
+            config.battery.vScale = baseScale * trim;
+        }
+        config.battery.vOffset = batObj["voltage_offset"] | batObj["VOLTAGE_OFFSET"] | 0.0f;
         config.battery.configured = true;
     }
 

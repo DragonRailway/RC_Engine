@@ -43,9 +43,7 @@
         "cell_count": 0,
         "warning_voltage": 3.5,
         "cutoff_voltage": 3.3,
-        "full_voltage": 4.2,
-        "voltage_scale": 4.92,
-        "voltage_offset": 0.0
+        "full_voltage": 4.2
     },
     "power": {
         "boot_latch_s": 1,

@@ -50,9 +50,12 @@ struct Board_TRACKLINK_V2 : BaseBoard {
     // 4. POWER & BATTERY MANAGEMENT
     // ───────────────────────────────────────────
     struct POWER {
-        static constexpr uint8_t POWER_ENABLE = 21; // set high to enable board
-        static constexpr uint8_t POWER_BUTTON = 38; // Detect power button press
-        static constexpr uint8_t VOLTAGE_SENS = 4;  // Voltage sense pin
-        static constexpr uint8_t CHARGE_SENS  = 48; // Charging status indicator
+        static constexpr uint8_t POWER_ENABLE       = 21;   // set high to enable board
+        static constexpr uint8_t POWER_BUTTON       = 38;   // Detect power button press
+        static constexpr uint8_t VOLTAGE_SENS       = 4;    // Voltage sense pin
+        static constexpr float   VOLTAGE_DIV_R_HIGH = 100.0f;
+        static constexpr float   VOLTAGE_DIV_R_LOW  = 100.0f;
+        static constexpr float   DIVIDER_RATIO      = computeVoltageDividerRatio(VOLTAGE_DIV_R_HIGH, VOLTAGE_DIV_R_LOW, VOLTAGE_SENS);
+        static constexpr uint8_t CHARGE_SENS        = 48;   // Charging status indicator
     };
 };
