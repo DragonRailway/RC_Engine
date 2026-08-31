@@ -334,7 +334,7 @@ void VehicleController::update() {
     // ── Battery Protection & Low Voltage Cutoff ──
     static uint32_t s_lastBatSample = 0;
     uint32_t nowMs = millis();
-    if (nowMs - s_lastBatSample >= 100) {
+    if (nowMs - s_lastBatSample >= 200) {
         s_lastBatSample = nowMs;
         if (POWER::VOLTAGE_SENS != 0xFF) {
             float pinV = analogReadMilliVolts(POWER::VOLTAGE_SENS) / 1000.0f;

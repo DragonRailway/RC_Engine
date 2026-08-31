@@ -118,23 +118,21 @@ public:
         Serial.printf("[AudioOutput] Selftest mode set to %d\n", mode);
     }
 
+    static volatile uint32_t totalBlocksRendered;
+    static uint32_t getBlockCount() { return totalBlocksRendered; }
+
     static TaskHandle_t audioTaskHandle;
 
     // Audio output task: generate samples (FPU-safe task context), apply offset
     // fade, write to I2S. Paced naturally by I2S DMA blocking.
     static void audioTask(void* param) {
         Serial.println("[AudioOutput] audioTask entered loop");
-        uint32_t blockCount = 0;
         while (true) {
             if (!active || !tx_handle || !engine) {
                 vTaskDelay(pdMS_TO_TICKS(10));
                 continue;
             }
-            blockCount++;
-            if (blockCount == 1 || blockCount % 344 == 0) { // ~once per second (22050/64 ≈ 344)
-                Serial.printf("[AudioOutput] alive: blocks=%u state=%d rpm=%u\n",
-                              blockCount, (int)engine->getState(), engine->getRpm());
-            }
+            totalBlocksRendered = totalBlocksRendered + 1;
 
             int64_t t_start = esp_timer_get_time();
 
@@ -217,6 +215,7 @@ public:
 
 RcEngineSound* AudioOutput::engine = nullptr;
 volatile bool AudioOutput::active = false;
+volatile uint32_t AudioOutput::totalBlocksRendered = 0;
 int16_t AudioOutput::buffer[BUFFER_SIZE * 2] = {};
 volatile uint32_t AudioOutput::bufferPos = 0;
 hw_timer_t* AudioOutput::timer = nullptr;

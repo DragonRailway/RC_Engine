@@ -41,7 +41,7 @@ RcEngineSound::~RcEngineSound() {
 void RcEngineSound::begin(const SoundData& soundData, const Config& config) {
     sounds.clear();
     sounds = soundData;
-    cfg = config;
+    setConfig(config);
     currentRpm = 0;
     currentRpmFixed = 0;
     virtualSpeed = 0;
@@ -145,6 +145,13 @@ void RcEngineSound::applyVoiceVolumes() {
 
 void RcEngineSound::setConfig(const Config& config) {
     cfg = config;
+    invMaxRpm = (cfg.engine.maxRpm > 0) ? (1.0f / (float)cfg.engine.maxRpm) : (1.0f / 500.0f);
+    pitchRange = cfg.engine.maxPitchFactor - 1.0f;
+    if (cfg.transmission.numberOfGears > 0) {
+        gearSize = cfg.engine.maxRpm / cfg.transmission.numberOfGears;
+    } else {
+        gearSize = 0;
+    }
     applyVoiceVolumes();
 }
 
@@ -329,7 +336,6 @@ void RcEngineSound::update(int16_t throttle) {
     // ── Automatic Transmission Simulation with Torque Converter Slip ──
     int32_t effectiveTarget = targetRpm;
     if (cfg.transmission.type == TRANS_AUTOMATIC && state == RUNNING) {
-        int32_t gearSize = cfg.engine.maxRpm / cfg.transmission.numberOfGears;
         if (gearSize > 0) {
             if (throttle > virtualSpeed) {
                 virtualSpeed += max((int32_t)4, (int32_t)(cfg.engine.acc * 4));
@@ -362,7 +368,6 @@ void RcEngineSound::update(int16_t throttle) {
 
     // ── Manual Transmission Shifting Trigger ──
     if (cfg.transmission.type == TRANS_MANUAL && state == RUNNING) {
-        int32_t gearSize = cfg.engine.maxRpm / cfg.transmission.numberOfGears;
         if (gearSize > 0) {
             uint8_t newGear = (uint8_t)(targetRpm / gearSize) + 1;
             if (newGear > cfg.transmission.numberOfGears) newGear = cfg.transmission.numberOfGears;
@@ -518,7 +523,7 @@ void RcEngineSound::update(int16_t throttle) {
 
     // ── Compute pitch factor from RPM ──
     if (state == RUNNING) {
-        pitchFactor = 1.0f + ((float)currentRpmFixed / (float)cfg.engine.maxRpm) * (cfg.engine.maxPitchFactor - 1.0f);
+        pitchFactor = 1.0f + (currentRpm * invMaxRpm) * pitchRange;
     } else if (state == STOPPING) {
         uint32_t elapsed = (now >= stopStartMillis) ? (now - stopStartMillis) : 0;
         float progress = (stopDurationMs > 0) ? ((float)elapsed / (float)stopDurationMs) : 1.0f;

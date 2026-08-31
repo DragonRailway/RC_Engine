@@ -350,6 +350,11 @@ private:
     uint16_t currentRpmFixed = 0;
     float pitchFactor = 1.0f;
 
+    // Precomputed reciprocal invariants (cached on setConfig)
+    float invMaxRpm = 1.0f / 500.0f;
+    float pitchRange = 0.4f;
+    int32_t gearSize = 0;
+
     // Voice array
     VoiceState voices[SOUND_COUNT];
 
