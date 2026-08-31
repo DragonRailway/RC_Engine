@@ -513,7 +513,37 @@ int main() {
     steering_wheel.rk.value = -25; // Steer opposite (Left < -15%) -> immediate cancel
     VehicleController::update();
     assert(right_indicator.rk.state == false && "Right indicator should cancel immediately on opposite steering");
-    std::cout << "  PASS: Turn indicator mutual exclusion and auto-cancellation verified." << std::endl;
+
+    // 15.4: Hazard Override (Hazard ON turns off active turn indicators and ignores new indicator activations)
+    steering_wheel.rk.value = 0;
+    left_indicator.rk.state = false;
+    right_indicator.rk.state = false;
+    truck_light.rk.value = 0;
+    VehicleController::update();
+
+    left_indicator.rk.state = true;
+    VehicleController::update();
+    assert(left_indicator.rk.state == true && "Left indicator should be ON before hazard");
+
+    truck_light.rk.value |= 0x08; // Switch Hazard ON
+    VehicleController::update();
+    assert(left_indicator.rk.state == false && right_indicator.rk.state == false && "Hazard ON must switch off indicators");
+
+    // Attempt to turn Right indicator ON while Hazard is active -> ignored
+    right_indicator.rk.state = true;
+    VehicleController::update();
+    assert(right_indicator.rk.state == false && left_indicator.rk.state == false && "Indicators ignored while Hazard active");
+
+    // Switch Hazard OFF -> indicators can be used again
+    truck_light.rk.value &= ~0x08;
+    VehicleController::update();
+    right_indicator.rk.state = true;
+    VehicleController::update();
+    assert(right_indicator.rk.state == true && "Right indicator should turn ON normally after hazard is turned OFF");
+    right_indicator.rk.state = false;
+    VehicleController::update();
+
+    std::cout << "  PASS: Turn indicator mutual exclusion, auto-cancellation, and hazard override verified." << std::endl;
 
     // ── Test 16: Transmission Start/Stop Interlock ──
     std::cout << "[Host VC Test] Test 16: Transmission Start/Stop Interlock..." << std::endl;

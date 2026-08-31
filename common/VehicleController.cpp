@@ -592,90 +592,109 @@ void VehicleController::update() {
     }
 
     // ── Real Vehicle Turn Indicator Auto-Cancellation ──
+    bool hazardActive = isLoco ? ((bits & 0x80) != 0) : ((bits & 0x08) || s_inWarningPhase);
+
     if (!isLoco) {
-        bool rawLeft = left_indicator.rk.state;
-        bool rawRight = right_indicator.rk.state;
-
-        if (!rawLeft) s_leftIndSuppressed = false;
-        if (!rawRight) s_rightIndSuppressed = false;
-
-        bool effLeft = rawLeft && !s_leftIndSuppressed;
-        bool effRight = rawRight && !s_rightIndSuppressed;
-
-        bool leftEdge = effLeft && !s_leftIndActive;
-        bool rightEdge = effRight && !s_rightIndActive;
-
-        if (rightEdge) {
-            if (s_leftIndActive || rawLeft) s_leftIndSuppressed = true;
+        if (hazardActive) {
+            // When hazard is active, turn indicators are immediately switched OFF, disarmed, and ignored
+            if (s_leftIndActive || s_rightIndActive) {
+                Serial.println("[EVENT] Turn indicator overridden by Hazard switch");
+            }
             s_leftIndActive = false;
-            s_leftTurnArmed = false;
-            s_rightTurnArmed = false;
-            s_rightTurnBaseline = steerVal;
-            s_rightTurnPeak = steerVal;
-            s_rightIndActive = true;
-            Serial.printf("[EVENT] Right indicator ON (Baseline: %d)\n", s_rightTurnBaseline);
-        } else if (leftEdge) {
-            if (s_rightIndActive || rawRight) s_rightIndSuppressed = true;
             s_rightIndActive = false;
-            s_rightTurnArmed = false;
             s_leftTurnArmed = false;
-            s_leftTurnBaseline = steerVal;
-            s_leftTurnPeak = steerVal;
-            s_leftIndActive = true;
-            Serial.printf("[EVENT] Left indicator ON (Baseline: %d)\n", s_leftTurnBaseline);
+            s_rightTurnArmed = false;
+            s_leftIndSuppressed = true;
+            s_rightIndSuppressed = true;
+            left_indicator.rk.state = false;
+            right_indicator.rk.state = false;
+            s_leftIndPrev = false;
+            s_rightIndPrev = false;
         } else {
-            if (!effLeft) {
+            bool rawLeft = left_indicator.rk.state;
+            bool rawRight = right_indicator.rk.state;
+
+            if (!rawLeft) s_leftIndSuppressed = false;
+            if (!rawRight) s_rightIndSuppressed = false;
+
+            bool effLeft = rawLeft && !s_leftIndSuppressed;
+            bool effRight = rawRight && !s_rightIndSuppressed;
+
+            bool leftEdge = effLeft && !s_leftIndActive;
+            bool rightEdge = effRight && !s_rightIndActive;
+
+            if (rightEdge) {
+                if (s_leftIndActive || rawLeft) s_leftIndSuppressed = true;
                 s_leftIndActive = false;
                 s_leftTurnArmed = false;
-            }
-            if (!effRight) {
+                s_rightTurnArmed = false;
+                s_rightTurnBaseline = steerVal;
+                s_rightTurnPeak = steerVal;
+                s_rightIndActive = true;
+                Serial.printf("[EVENT] Right indicator ON (Baseline: %d)\n", s_rightTurnBaseline);
+            } else if (leftEdge) {
+                if (s_rightIndActive || rawRight) s_rightIndSuppressed = true;
                 s_rightIndActive = false;
                 s_rightTurnArmed = false;
-            }
-        }
-
-        // Left turn indicator cancel logic
-        if (s_leftIndActive) {
-            int16_t delta = steerVal - s_leftTurnBaseline;
-            if (delta > 15 && steerVal > 10) {
-                s_leftIndActive = false;
-                s_leftIndSuppressed = true;
                 s_leftTurnArmed = false;
-                Serial.println("[EVENT] Left indicator auto-cancelled (opposite steering)");
-            } else if (delta <= -20) {
-                s_leftTurnArmed = true;
-                if (steerVal < s_leftTurnPeak) s_leftTurnPeak = steerVal;
-            } else if (s_leftTurnArmed && (steerVal >= s_leftTurnPeak + 15 || steerVal >= -5)) {
-                s_leftIndActive = false;
-                s_leftIndSuppressed = true;
-                s_leftTurnArmed = false;
-                Serial.println("[EVENT] Left indicator auto-cancelled (wheel returned to center)");
+                s_leftTurnBaseline = steerVal;
+                s_leftTurnPeak = steerVal;
+                s_leftIndActive = true;
+                Serial.printf("[EVENT] Left indicator ON (Baseline: %d)\n", s_leftTurnBaseline);
+            } else {
+                if (!effLeft) {
+                    s_leftIndActive = false;
+                    s_leftTurnArmed = false;
+                }
+                if (!effRight) {
+                    s_rightIndActive = false;
+                    s_rightTurnArmed = false;
+                }
             }
-        }
 
-        // Right turn indicator cancel logic
-        if (s_rightIndActive) {
-            int16_t delta = steerVal - s_rightTurnBaseline;
-            if (delta < -15 && steerVal < -10) {
-                s_rightIndActive = false;
-                s_rightIndSuppressed = true;
-                s_rightTurnArmed = false;
-                Serial.println("[EVENT] Right indicator auto-cancelled (opposite steering)");
-            } else if (delta >= 20) {
-                s_rightTurnArmed = true;
-                if (steerVal > s_rightTurnPeak) s_rightTurnPeak = steerVal;
-            } else if (s_rightTurnArmed && (steerVal <= s_rightTurnPeak - 15 || steerVal <= 5)) {
-                s_rightIndActive = false;
-                s_rightIndSuppressed = true;
-                s_rightTurnArmed = false;
-                Serial.println("[EVENT] Right indicator auto-cancelled (wheel returned to center)");
+            // Left turn indicator cancel logic
+            if (s_leftIndActive) {
+                int16_t delta = steerVal - s_leftTurnBaseline;
+                if (delta > 15 && steerVal > 10) {
+                    s_leftIndActive = false;
+                    s_leftIndSuppressed = true;
+                    s_leftTurnArmed = false;
+                    Serial.println("[EVENT] Left indicator auto-cancelled (opposite steering)");
+                } else if (delta <= -20) {
+                    s_leftTurnArmed = true;
+                    if (steerVal < s_leftTurnPeak) s_leftTurnPeak = steerVal;
+                } else if (s_leftTurnArmed && (steerVal >= s_leftTurnPeak + 15 || steerVal >= -5)) {
+                    s_leftIndActive = false;
+                    s_leftIndSuppressed = true;
+                    s_leftTurnArmed = false;
+                    Serial.println("[EVENT] Left indicator auto-cancelled (wheel returned to center)");
+                }
             }
-        }
 
-        left_indicator.rk.state = s_leftIndActive;
-        right_indicator.rk.state = s_rightIndActive;
-        s_leftIndPrev = rawLeft;
-        s_rightIndPrev = rawRight;
+            // Right turn indicator cancel logic
+            if (s_rightIndActive) {
+                int16_t delta = steerVal - s_rightTurnBaseline;
+                if (delta < -15 && steerVal < -10) {
+                    s_rightIndActive = false;
+                    s_rightIndSuppressed = true;
+                    s_rightTurnArmed = false;
+                    Serial.println("[EVENT] Right indicator auto-cancelled (opposite steering)");
+                } else if (delta >= 20) {
+                    s_rightTurnArmed = true;
+                    if (steerVal > s_rightTurnPeak) s_rightTurnPeak = steerVal;
+                } else if (s_rightTurnArmed && (steerVal <= s_rightTurnPeak - 15 || steerVal <= 5)) {
+                    s_rightIndActive = false;
+                    s_rightIndSuppressed = true;
+                    s_rightTurnArmed = false;
+                    Serial.println("[EVENT] Right indicator auto-cancelled (wheel returned to center)");
+                }
+            }
+
+            left_indicator.rk.state = s_leftIndActive;
+            right_indicator.rk.state = s_rightIndActive;
+            s_leftIndPrev = rawLeft;
+            s_rightIndPrev = rawRight;
+        }
     }
 
     bool turnSignalL = !isLoco && s_leftIndActive;
@@ -723,7 +742,6 @@ void VehicleController::update() {
     }
 
     // ── Apply Lights with Automation ──
-    bool hazardActive = isLoco ? ((bits & 0x80) != 0) : ((bits & 0x08) || s_inWarningPhase);
     applyLightsWithAutomation(bits,
                              hazardActive || turnSignalL,
                              hazardActive || turnSignalR,
