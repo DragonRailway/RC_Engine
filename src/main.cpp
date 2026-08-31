@@ -17,12 +17,14 @@
 // (e.g. voltage calibration, servo endpoints, battery) independently.
 #ifdef MIKRO_V2
 #define HW_CONFIG_PATH "/hardware-MIKRO_V2.json"
+#elif defined(TRACKLINK_V2)
+#define HW_CONFIG_PATH "/hardware-TRACKLINK_V2.json"
 #elif defined(TRACKLINK_V3)
 #define HW_CONFIG_PATH "/hardware-TRACKLINK_V3.json"
 #elif defined(GTRACK)
 #define HW_CONFIG_PATH "/hardware-GTRACK.json"
 #else
-#error "Unknown board: define MIKRO_V2, TRACKLINK_V3, or GTRACK in platformio.ini"
+#error "Unknown board: define MIKRO_V2, TRACKLINK_V2, TRACKLINK_V3, or GTRACK in platformio.ini"
 #endif
 
 RcEngineSound engine;
@@ -73,6 +75,8 @@ static uint32_t fileWriteTime(const char* path) {
 
 #ifdef MIKRO_V2
 #define BOARD_DEFAULT_NAME "MIKRO_V2"
+#elif defined(TRACKLINK_V2)
+#define BOARD_DEFAULT_NAME "TRACKLINK_V2"
 #elif defined(TRACKLINK_V3)
 #define BOARD_DEFAULT_NAME "TRACKLINK_V3"
 #elif defined(GTRACK)
