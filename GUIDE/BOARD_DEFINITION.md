@@ -157,7 +157,6 @@ struct POWER {
     static constexpr uint8_t VOLTAGE_SENS       = 4;    // Battery voltage ADC pin
     static constexpr float   VOLTAGE_DIV_R_HIGH = 100.0f; // High-side resistor (to VBAT)
     static constexpr float   VOLTAGE_DIV_R_LOW  = 100.0f; // Low-side resistor (to GND)
-    static constexpr float   DIVIDER_RATIO      = computeVoltageDividerRatio(VOLTAGE_DIV_R_HIGH, VOLTAGE_DIV_R_LOW, VOLTAGE_SENS);
     static constexpr uint8_t CHARGE_SENS        = 34;   // USB charging detect input
     static constexpr uint8_t SERVO_ENABLE       = 44;   // Optional: 5V buck / servo rail enable pin
     static constexpr uint8_t PUMP_ENABLE        = 43;   // Optional: High-side MOSFET power switch (pump)
@@ -331,7 +330,6 @@ struct Board_GTRACK : BaseBoard {
         static constexpr uint8_t VOLTAGE_SENS       = 7;
         static constexpr float   VOLTAGE_DIV_R_HIGH = 20.0f;
         static constexpr float   VOLTAGE_DIV_R_LOW  = 5.1f;
-        static constexpr float   DIVIDER_RATIO      = computeVoltageDividerRatio(VOLTAGE_DIV_R_HIGH, VOLTAGE_DIV_R_LOW, VOLTAGE_SENS);
         static constexpr uint8_t SERVO_ENABLE       = 44;
         static constexpr uint8_t PUMP_ENABLE        = 43;
     };

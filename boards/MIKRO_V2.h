@@ -59,7 +59,6 @@ struct Board_MIKRO_V2 : BaseBoard {
         static constexpr uint8_t VOLTAGE_SENS       = 4;    // Voltage sense pin
         static constexpr float   VOLTAGE_DIV_R_HIGH = 100.0f;
         static constexpr float   VOLTAGE_DIV_R_LOW  = 100.0f;
-        static constexpr float   DIVIDER_RATIO      = computeVoltageDividerRatio(VOLTAGE_DIV_R_HIGH, VOLTAGE_DIV_R_LOW, VOLTAGE_SENS);
         static constexpr uint8_t CHARGE_SENS        = 35;   // Charging status indicator
     };
 };

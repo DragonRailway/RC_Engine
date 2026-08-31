@@ -73,4 +73,8 @@ public:
     static constexpr bool hasPowerButton() {
         return POWER::POWER_BUTTON != NO_PIN;
     }
+
+    static constexpr float getVoltageDividerRatio() {
+        return BaseBoard::computeVoltageDividerRatio(POWER::VOLTAGE_DIV_R_HIGH, POWER::VOLTAGE_DIV_R_LOW, POWER::VOLTAGE_SENS);
+    }
 };

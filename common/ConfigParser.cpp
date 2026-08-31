@@ -215,7 +215,7 @@ bool ConfigParser::loadHardwareConfig(const char* path, HardwareConfig& config) 
         config.battery.fullVoltage = batObj["full_voltage"] | batObj["FULL_VOLTAGE"] | config.battery.fullVoltage;
 
         config.battery.cellCount = constrain(config.battery.cellCount, 0, 4);
-        float baseScale = (float)Board::POWER::DIVIDER_RATIO;
+        float baseScale = Board::getVoltageDividerRatio();
         if (baseScale <= 0.0f) baseScale = 1.0f;
         float trim = batObj["calibration_factor"] | batObj["CALIBRATION_FACTOR"] | 1.0f;
         if (!batObj["voltage_scale"].isNull() || !batObj["VOLTAGE_SCALE"].isNull()) {

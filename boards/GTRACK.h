@@ -66,7 +66,6 @@ struct Board_GTRACK : BaseBoard {
         static constexpr uint8_t VOLTAGE_SENS       = 7;    // VSENS: voltage divider 20k/5.1k
         static constexpr float   VOLTAGE_DIV_R_HIGH = 20.0f;
         static constexpr float   VOLTAGE_DIV_R_LOW  = 5.1f;
-        static constexpr float   DIVIDER_RATIO      = computeVoltageDividerRatio(VOLTAGE_DIV_R_HIGH, VOLTAGE_DIV_R_LOW, VOLTAGE_SENS);
         static constexpr uint8_t CHARGE_SENS        = 0xFF; // No dedicated charge sense pin
         static constexpr uint8_t SERVO_ENABLE       = 44;   // 5V_EN: pull LOW to disable 5V buck
         static constexpr uint8_t PUMP_ENABLE        = 43;   // OUT: High-side MOSFET for external loads

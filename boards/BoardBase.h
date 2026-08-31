@@ -33,7 +33,6 @@ struct BaseBoard {
         static constexpr uint8_t VOLTAGE_SENS       = 0xFF;
         static constexpr float   VOLTAGE_DIV_R_HIGH = 0.0f;
         static constexpr float   VOLTAGE_DIV_R_LOW  = 0.0f;
-        static constexpr float   DIVIDER_RATIO      = 0.0f;
         static constexpr uint8_t CHARGE_SENS        = 0xFF;
         static constexpr uint8_t SERVO_ENABLE       = 0xFF;
         static constexpr uint8_t PUMP_ENABLE        = 0xFF;
