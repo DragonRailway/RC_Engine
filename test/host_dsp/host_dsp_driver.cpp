@@ -147,6 +147,23 @@ int main(int argc, char** argv) {
     assert(revZCR > idleZCR && "Pitch scaling failed: Rev ZCR should be higher than Idle ZCR!");
     std::cout << "[Host DSP Harness] PASS: Pitch scales with RPM." << std::endl;
 
+    // Phase 6: Hermite 4-Point Spline Mathematical Precision Test
+    {
+        static const int8_t testSamples[8] = {0, 30, 80, 100, 70, 20, -40, -80};
+        // At exact integer positions, Hermite spline must match sample points exactly:
+        float s0 = RcEngineSound::readInterpolatedHermite4p(testSamples, 8, 2.0f, false);
+        assert(fabs(s0 - 80.0f) < 0.001f && "Hermite spline must match sample at integer pos 2.0");
+
+        float s1 = RcEngineSound::readInterpolatedHermite4p(testSamples, 8, 3.0f, false);
+        assert(fabs(s1 - 100.0f) < 0.001f && "Hermite spline must match sample at integer pos 3.0");
+
+        // At midpoint 2.5, Hermite polynomial must be continuous and between s[2] and s[3]:
+        float mid = RcEngineSound::readInterpolatedHermite4p(testSamples, 8, 2.5f, false);
+        assert(mid > 80.0f && mid < 105.0f && "Hermite spline smooth curve at midpoint");
+
+        std::cout << "[Host DSP Harness] PASS: 4-Point Hermite cubic spline polynomial precision verified." << std::endl;
+    }
+
     if (breakLoopMode) {
         if (config.loopPoints.hornEnd > soundData.slots[HORN].sampleCount) {
             std::cout << "[Host DSP Harness] DETECTED REGRESSION: hornEnd ("

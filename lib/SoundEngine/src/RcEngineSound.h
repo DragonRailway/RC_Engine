@@ -211,6 +211,71 @@ public:
     uint8_t getNextSample();
     void renderBlock(int16_t* interleavedStereoBuffer, size_t frames);
 
+    // Helper: read sample with 4-point Hermite (Catmull-Rom) cubic spline interpolation
+    static inline float readInterpolatedHermite4p(const int8_t* samples, uint32_t count, float position,
+                                                  bool loop = true, uint32_t loopBegin = 0, uint32_t loopEnd = 0) {
+        if (!samples || count == 0) return 0.0f;
+        if (count == 1) return (float)samples[0];
+
+        int32_t pos = (int32_t)position;
+        float alpha = position - (float)pos;
+        if (alpha < 0.0f) alpha = 0.0f;
+        else if (alpha > 1.0f) alpha = 1.0f;
+
+        int32_t i0, i1, i2, i3;
+        if (loop && loopEnd > loopBegin && loopEnd <= count) {
+            // Looping within region [loopBegin, loopEnd]
+            int32_t lStart = (int32_t)loopBegin;
+            int32_t lLen = (int32_t)(loopEnd - loopBegin);
+            if (pos < lStart) {
+                i1 = (pos >= 0) ? pos : 0;
+                i0 = (i1 > 0) ? i1 - 1 : 0;
+                i2 = (i1 + 1 < (int32_t)count) ? i1 + 1 : i1;
+                i3 = (i1 + 2 < (int32_t)count) ? i1 + 2 : i2;
+            } else {
+                int32_t offset = (pos - lStart) % lLen;
+                if (offset < 0) offset += lLen;
+                i1 = lStart + offset;
+                i0 = lStart + ((offset - 1 + lLen) % lLen);
+                i2 = lStart + ((offset + 1) % lLen);
+                i3 = lStart + ((offset + 2) % lLen);
+            }
+        } else if (loop) {
+            // Full buffer loop
+            int32_t c = (int32_t)count;
+            int32_t p = (pos % c + c) % c;
+            i1 = p;
+            i0 = (p - 1 + c) % c;
+            i2 = (p + 1) % c;
+            i3 = (p + 2) % c;
+        } else {
+            // One-shot: clamp to boundaries
+            int32_t maxIdx = (int32_t)count - 1;
+            i1 = (pos < 0) ? 0 : (pos > maxIdx ? maxIdx : pos);
+            i0 = (i1 > 0) ? i1 - 1 : 0;
+            i2 = (i1 + 1 <= maxIdx) ? i1 + 1 : maxIdx;
+            i3 = (i1 + 2 <= maxIdx) ? i1 + 2 : maxIdx;
+        }
+
+        float s0 = (float)samples[i0];
+        float s1 = (float)samples[i1];
+        float s2 = (float)samples[i2];
+        float s3 = (float)samples[i3];
+
+        // 4-point, 3rd-order Catmull-Rom / Hermite Spline in Horner form
+        float c0 = s1;
+        float c1 = 0.5f * (s2 - s0);
+        float c2 = s0 - 2.5f * s1 + 2.0f * s2 - 0.5f * s3;
+        float c3 = 0.5f * (s3 - s0) + 1.5f * (s1 - s2);
+
+        return ((c3 * alpha + c2) * alpha + c1) * alpha + c0;
+    }
+
+    // Legacy/fallback wrapper: read sample with 4-point Hermite interpolation
+    static inline int8_t readInterpolated(const int8_t* samples, uint32_t count, float position) {
+        return (int8_t)readInterpolatedHermite4p(samples, count, position);
+    }
+
     EngineState getState() const { return state; }
     uint16_t getRpm() const { return currentRpmFixed; }
     uint8_t getGear() const { return selectedGear; }
@@ -307,18 +372,6 @@ private:
 
     // Thread safety: mutex for ISR/main loop voice state access
     portMUX_TYPE voiceMutex = portMUX_INITIALIZER_UNLOCKED;
-
-    // Helper: read sample with linear interpolation at fractional position
-    static inline int8_t readInterpolated(const int8_t* samples, uint32_t count, float position) {
-        if (!samples || count == 0) return 0;
-        uint32_t pos = (uint32_t)position;
-        float frac = position - pos;
-        if (pos >= count) pos = count - 1;
-        uint32_t next = (pos + 1 < count) ? pos + 1 : 0;
-        int32_t s0 = samples[pos];
-        int32_t s1 = samples[next];
-        return (int8_t)(s0 + (int32_t)((s1 - s0) * frac));
-    }
 
     // Helper: advance voice position with loop region support
     static inline void advanceVoice(VoiceState& v) {

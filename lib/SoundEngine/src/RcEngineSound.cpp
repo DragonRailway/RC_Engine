@@ -696,67 +696,78 @@ void RcEngineSound::renderBlock(int16_t* interleavedStereoBuffer, size_t frames)
     if (currentState == STARTING) engineStep = 1.0f;
     if (currentState == PARKING_BRAKE || currentState == OFF) engineStep = 0.0f;
 
+    // Precalculate floating-point master, group mix weights, and per-voice gains
+    float masterScale = (float)cfg.sound.master * 256.0f / 100.0f;
+    float engineMixScale = (float)cfg.sound.engineMixWeight / 100.0f;
+    float effectMixScale = (float)cfg.sound.effectMixWeight / 100.0f;
+    float stopVolScale = (currentState == STOPPING) ? ((float)currentStopVolume / 100.0f) : 1.0f;
+
+    float voiceGains[SOUND_COUNT] = {0.0f};
+    bool voiceActive[SOUND_COUNT] = {false};
+    float voiceSteps[SOUND_COUNT] = {1.0f};
+
+    for (int i = 0; i < SOUND_COUNT; i++) {
+        const VoiceState& v = snapshot[i];
+        if (!v.active || !v.samples || v.count == 0) continue;
+        if (currentState == PARKING_BRAKE && i != PARKING_BRAKE) continue;
+        if (currentState == OFF) {
+            // When engine is OFF, only standalone user effects can play
+            if (i != HORN && i != SIREN && i != INDICATOR && i != BELL && 
+                i != DOOR && i != SCANNER && i != MUSIC && i != WHISTLE && 
+                i != GUN && i != COUPLING && i != UNCOUPLING) {
+                continue;
+            }
+        }
+
+        voiceActive[i] = true;
+        voiceSteps[i] = v.pitchShifted ? engineStep : 1.0f;
+
+        float groupMult = 1.0f;
+        float mixWeight = v.pitchShifted ? engineMixScale : effectMixScale;
+
+        if (v.pitchShifted) {
+            if (i == TURBO || i == FAN || i == SUPERCHARGER) groupMult = 0.2f;
+            else if (i == HYDRAULIC_PUMP || i == TRACK_RATTLE) groupMult = 1.0f;
+            else groupMult = 0.8f; // IDLE, REV, JAKE_BRAKE
+        } else {
+            if (i == HORN || i == SIREN) groupMult = 0.8f;
+            else if (i == KNOCK || i == WASTEGATE || i == BRAKE || 
+                     i == PARKING_BRAKE || i == SHIFTING || i == REVERSING || 
+                     i == COUPLING || i == UNCOUPLING) groupMult = 0.2f;
+            else if (i == INDICATOR) groupMult = 0.1f;
+            else groupMult = 1.0f;
+        }
+
+        float vVol = (float)v.volume / 100.0f;
+        if (currentState == STOPPING && v.pitchShifted) {
+            vVol *= stopVolScale;
+        }
+
+        voiceGains[i] = vVol * groupMult * mixWeight * masterScale;
+    }
+
+    float startGain = ((float)cfg.sound.start / 100.0f) * 0.8f * engineMixScale * masterScale;
+
     for (size_t f = 0; f < frames; f++) {
-        int32_t engineMix = 0;
-        int32_t effectMix = 0;
+        float mixAccum = 0.0f;
 
         for (int i = 0; i < SOUND_COUNT; i++) {
+            if (!voiceActive[i]) continue;
             VoiceState& v = snapshot[i];
-            if (!v.active || !v.samples || v.count == 0) continue;
-            if (currentState == PARKING_BRAKE && i != PARKING_BRAKE) continue;
-            if (currentState == OFF) {
-                // When engine is OFF, only standalone user effects can play
-                if (i != HORN && i != SIREN && i != INDICATOR && i != BELL && 
-                    i != DOOR && i != SCANNER && i != MUSIC && i != WHISTLE && 
-                    i != GUN && i != COUPLING && i != UNCOUPLING) {
-                    continue;
-                }
-            }
 
-            float step = v.pitchShifted ? engineStep : 1.0f;
-            int8_t rawSample = readInterpolated(v.samples, v.count, v.position);
-            int32_t scaled = (int32_t)rawSample * v.volume / 100;
+            float rawSample = readInterpolatedHermite4p(v.samples, v.count, v.position, v.loop, v.loopBegin, v.loopEnd);
+            mixAccum += rawSample * voiceGains[i];
 
-            if (currentState == STOPPING && v.pitchShifted) {
-                scaled = (scaled * currentStopVolume) / 100;
-            }
-
-            v.step = step;
+            v.step = voiceSteps[i];
             advanceVoice(v);
-
-            // Group-specific gain multipliers matching reference project:
-            if (v.pitchShifted) {
-                if (i == TURBO || i == FAN || i == SUPERCHARGER) {
-                    engineMix += scaled * 2 / 10;
-                } else if (i == HYDRAULIC_PUMP || i == TRACK_RATTLE) {
-                    engineMix += scaled;
-                } else {
-                    // IDLE, REV, JAKE_BRAKE
-                    engineMix += scaled * 8 / 10;
-                }
-            } else {
-                if (i == HORN || i == SIREN) {
-                    effectMix += scaled * 8 / 10;
-                } else if (i == KNOCK || i == WASTEGATE || i == BRAKE || 
-                           i == PARKING_BRAKE || i == SHIFTING || i == REVERSING || 
-                           i == COUPLING || i == UNCOUPLING) {
-                    effectMix += scaled * 2 / 10;
-                } else if (i == INDICATOR) {
-                    effectMix += scaled / 10;
-                } else {
-                    // SOUND1, TIRE_SQUEAL, HYDRAULIC_FLOW, BUCKET_RATTLE, BELL, DOOR, SCANNER, MUSIC, WHISTLE, GUN, OUT_OF_FUEL, OTHERS
-                    effectMix += scaled;
-                }
-            }
         }
 
         // Start sound processing
         if (currentState == STARTING) {
             if (sounds.slots[START].samples && sounds.slots[START].sampleCount > 0) {
                 if (currentStartPos < sounds.slots[START].sampleCount) {
-                    int8_t startSample = sounds.slots[START].samples[currentStartPos];
-                    int32_t scaled = (int32_t)startSample * cfg.sound.start / 100 * 8 / 10;
-                    engineMix += scaled;
+                    float startSample = (float)sounds.slots[START].samples[currentStartPos];
+                    mixAccum += startSample * startGain;
                     currentStartPos++;
                 }
                 if (currentStartPos >= sounds.slots[START].sampleCount) {
@@ -779,12 +790,9 @@ void RcEngineSound::renderBlock(int16_t* interleavedStereoBuffer, size_t frames)
             }
         }
 
-        // Voice mix weights
-        int32_t mixed = (engineMix * cfg.sound.engineMixWeight / 100) + (effectMix * cfg.sound.effectMixWeight / 100);
-
-        // Apply master volume and scale up to 16-bit signed PCM (-32768..32767)
-        int32_t out16 = (mixed * cfg.sound.master / 100) << 8;
-        int16_t sample16 = (int16_t)constrain(out16, -32768, 32767);
+        // Clamp to 16-bit signed PCM range [-32768, 32767]
+        int32_t outSample = (int32_t)roundf(mixAccum);
+        int16_t sample16 = (int16_t)constrain(outSample, -32768, 32767);
 
         interleavedStereoBuffer[f * 2]     = sample16;
         interleavedStereoBuffer[f * 2 + 1] = sample16;
