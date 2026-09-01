@@ -168,13 +168,13 @@ void HardwareInit::hotReload(const HardwareConfig& hw) {
 void HardwareInit::stopAll() {
     for (uint8_t i = 0; i < HardwareConfig::MAX_STEERING_SERVOS; i++) {
         steeringServos[i].stop();
-        steeringServos[i].detach();
+        steeringServos[i].sleep();
     }
     escServo.stop();
-    escServo.detach();
+    escServo.sleep();
     for (uint8_t i = 0; i < HardwareConfig::MAX_AUX_MOTORS; i++) {
         auxServos[i].stop();
-        auxServos[i].detach();
+        auxServos[i].sleep();
     }
     stopLightAnimations();
 
@@ -413,26 +413,29 @@ void HardwareInit::setServo(int16_t position) {
     }
 }
 
-void HardwareInit::detachServos() {
+void HardwareInit::sleepServos() {
     for (uint8_t i = 0; i < s_steeringServoCount; i++) {
         if (steeringServos[i].attached()) {
-            steeringServos[i].detach();
+            steeringServos[i].sleep();
+        }
+    }
+    for (uint8_t i = 0; i < HardwareConfig::MAX_AUX_MOTORS; i++) {
+        if (auxServos[i].attached()) {
+            auxServos[i].sleep();
         }
     }
     s_lastServoPos = -999;
 }
 
-void HardwareInit::attachServos() {
+void HardwareInit::wakeServos() {
     for (uint8_t i = 0; i < s_steeringServoCount; i++) {
-        if (!steeringServos[i].attached() && s_steeringConfigs[i].configured) {
-            const auto& servo = s_steeringConfigs[i];
-            EasyKit::ServoConfig cfg;
-            cfg.minUs = 500;
-            cfg.maxUs = 2500;
-            cfg.centerUs = servo.endpoints.center;
-            cfg.freq = (servo.frequency >= 40 && servo.frequency <= 400) ? servo.frequency : 50;
-            steeringServos[i].attach(servo.hardwareId, cfg);
-            steeringServos[i].writeMicroseconds(servo.endpoints.center);
+        if (steeringServos[i].attached()) {
+            steeringServos[i].wake();
+        }
+    }
+    for (uint8_t i = 0; i < HardwareConfig::MAX_AUX_MOTORS; i++) {
+        if (auxServos[i].attached()) {
+            auxServos[i].wake();
         }
     }
     s_lastServoPos = -999;

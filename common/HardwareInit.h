@@ -55,8 +55,8 @@ public:
 
     static void setChannel(MotorChannel& ch, int16_t speed);
     static void setServo(int16_t position);
-    static void detachServos();
-    static void attachServos();
+    static void sleepServos();
+    static void wakeServos();
     static void setPump(bool active);
     static void setLight(uint8_t pin, uint8_t brightnessPct);
     static void setLight(const HardwareConfig::Lights::Light& light, uint8_t brightnessPct);

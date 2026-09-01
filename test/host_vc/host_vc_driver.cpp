@@ -23,6 +23,7 @@ extern size_t host_motor_write_count;
 extern int host_last_servo_us;
 extern bool host_radiokit_connected;
 extern bool host_servo_attached;
+extern bool host_servo_sleeping;
 
 int main() {
     std::cout << "[Host VC Test] Initializing VehicleController Host Harness..." << std::endl;
@@ -1399,15 +1400,15 @@ int main() {
         VehicleController::update();
     }
     assert(host_last_motor_speed > 50.0f && "Vehicle driving forward at speed");
-    assert(host_servo_attached == true && "Steering servo attached while connected");
+    assert(host_servo_attached == true && host_servo_sleeping == false && "Steering servo attached and active while connected");
 
     // 27.2: Connection LOST -> Failsafe engages immediately
     host_radiokit_connected = false;
     host_virtual_millis += 20;
     VehicleController::update();
 
-    // Servos must be detached (depowered)
-    assert(host_servo_attached == false && "Steering servos must be detached upon disconnect");
+    // Servos must be put to sleep (depowered)
+    assert(host_servo_sleeping == true && "Steering servos must be put to sleep upon disconnect");
 
     // 50% braking stop: vehicle must decelerate to 0 and shift to Park
     for (int t = 0; t < 100; t++) {
@@ -1439,7 +1440,7 @@ int main() {
     host_virtual_millis += 20;
     VehicleController::update();
 
-    assert(host_servo_attached == true && "Steering servos re-attached on reconnect");
+    assert(host_servo_sleeping == false && "Steering servos woken on reconnect");
     assert(host_last_motor_speed == 0.0f && "Drive torque must stay locked at 0 while throttle interlock active");
 
     // 27.5: User returns gas pedal to neutral (-100) -> Interlock unlocks
@@ -1457,7 +1458,7 @@ int main() {
     }
     assert(host_last_motor_speed > 30.0f && "Drive torque unlocked after throttle zero-crossing");
 
-    std::cout << "  PASS: Connection loss failsafe (50% brake, servo detach, 30s engine auto-stop) and reconnect throttle interlock verified." << std::endl;
+    std::cout << "  PASS: Connection loss failsafe (50% brake, servo sleep, 30s engine auto-stop) and reconnect throttle interlock verified." << std::endl;
 
     // ── Test 28: Synchronized Turn and Hazard Indicator Phase Locking ──
     std::cout << "[Host VC Test] Test 28: Synchronized Turn and Hazard Indicator Phase Locking..." << std::endl;

@@ -57,5 +57,5 @@ The disconnect failsafe phases SHALL coordinate cleanly with the board's `discon
 
 #### Scenario: Full disconnect timeout progression
 - **WHEN** signal is lost and not restored
-- **THEN** vehicle brakes to stop, detaches servos, drops sound to idle at t=0, stops engine sound at t=30s, and powers down board at t=disconnect_timeout_s
+- **THEN** vehicle brakes to stop, puts servos to sleep, drops sound to idle at t=0, stops engine sound at t=30s, and powers down board at t=disconnect_timeout_s
 

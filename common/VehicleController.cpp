@@ -257,15 +257,15 @@ void VehicleController::update() {
     bool isConnected = RadioKit.isConnected();
     if (isConnected && !s_wasConnected) {
         s_reconnectThrottleInterlock = true;
-        HardwareInit::attachServos();
+        HardwareInit::wakeServos();
         s_disconnectEngineStopDone = false;
         Serial.println("[EVENT] Controller reconnected -> throttle interlock armed");
     } else if (!isConnected && s_wasConnected) {
-        HardwareInit::detachServos();
+        HardwareInit::sleepServos();
         HardwareInit::setAuxMotor(0);
         HardwareInit::setPump(false);
         s_disconnectEngineStopDone = false;
-        Serial.println("[EVENT] Controller disconnected -> failsafe engaged (50% brake, servos detached)");
+        Serial.println("[EVENT] Controller disconnected -> failsafe engaged (50% brake, servos asleep)");
     }
     s_wasConnected = isConnected;
 
