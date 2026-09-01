@@ -1,68 +1,65 @@
 #include <Arduino.h>
 #include <ESP32_EasyKit.h>
 
-#define SERVO_PIN        5   // S1 on MIKRO_V2
-#define POWER_LATCH_PIN 15   // Power latch / 5V rail enable on MIKRO_V2
+  #define SERVO_PIN        5   // S1 on MIKRO_V2
 
 EasyServo servo;
 
+// Strict 20-degree safe sweep range: 80° to 100° (center = 90°)
+const float MIN_ANGLE = 80.0f;
+const float MAX_ANGLE = 100.0f;
+const float CENTER_ANGLE = 90.0f;
+
 void setup() {
     Serial.begin(115200);
-    delay(1000);
-
-    // Latch power / enable 5V rail on MIKRO_V2
-    pinMode(POWER_LATCH_PIN, OUTPUT);
-    digitalWrite(POWER_LATCH_PIN, HIGH);
+    Serial.setTxTimeoutMs(0);
+    delay(500);
 
     Serial.println("\n========================================================");
-    Serial.println("   MIKRO_V2 Servo 20-Degree Sweep Test (80 MHz CPU)   ");
+    Serial.println("   MIKRO_V2 Safe 20° Servo Sweep (80° <-> 100°)        ");
     Serial.println("========================================================");
     Serial.printf("CPU Frequency:   %u MHz\n", getCpuFrequencyMhz());
     Serial.printf("XTAL Frequency:  %u MHz\n", getXtalFrequencyMhz());
-    Serial.printf("APB Frequency:   %u Hz\n", getApbFrequency());
-    Serial.printf("Servo Pin:       GPIO %d\n", SERVO_PIN);
-    Serial.printf("Power Latch Pin: GPIO %d (HIGH)\n", POWER_LATCH_PIN);
+    Serial.printf("Servo Pin:       GPIO %d (S1)\n", SERVO_PIN);
+    Serial.printf("Safe Range:      %.1f° to %.1f° (Total Span: 20°)\n", MIN_ANGLE, MAX_ANGLE);
 
-    // Attach servo on GPIO 5 (50 Hz, 500-2500 µs pulse range)
-    int attachedPin = servo.attach(SERVO_PIN);
-    if (attachedPin == 0) {
+    // Attach servo on GPIO 5
+    int attached = servo.attach(SERVO_PIN);
+    if (!attached) {
         Serial.println("ERROR: Servo attach failed!");
         while (true) {
             delay(1000);
         }
     }
 
-    // Set easing speed for smooth sweep (40 deg/s)
-    servo.setSpeed(40.0f, 0.3f, 0.7f);
-    servo.write(80.0f); // Center - 10°
+    // Set gentle easing speed (30 deg/s) with smooth S-curve
+    servo.setSpeed(30.0f, 0.3f, 0.7f);
+    servo.write(CENTER_ANGLE);
 
-    Serial.println("Servo attached successfully! Starting 20-degree sweep (80° <-> 100°)...");
+    Serial.println("Servo attached at center (90°). Starting 20° safe sweep...");
 }
 
 void loop() {
-    static uint32_t lastTargetSwitch = 0;
-    static bool forward = true;
-    static uint32_t lastLog = 0;
+    static uint32_t lastMove = 0;
+    static bool flip = false;
+    static uint32_t lastPrint = 0;
 
     // Update non-blocking easing engine
     servo.update();
 
-    // Switch target every 2 seconds: sweep 20 degrees between 80° and 100°
-    if (millis() - lastTargetSwitch >= 2000) {
-        lastTargetSwitch = millis();
-        forward = !forward;
-        float targetAngle = forward ? 100.0f : 80.0f;
-        servo.write(targetAngle);
-        Serial.printf("\n>>> Target Commanded: %.1f° (20° span)\n", targetAngle);
+    // Alternate every 1.5 seconds between 80° and 100° (20° total travel)
+    if (millis() - lastMove >= 1500) {
+        lastMove = millis();
+        flip = !flip;
+        float target = flip ? MAX_ANGLE : MIN_ANGLE; // 100° or 80°
+        servo.write(target);
+        Serial.printf("\n>>> Safe Move Target: %.1f°\n", target);
     }
 
-    // Periodic telemetry log every 500 ms
-    if (millis() - lastLog >= 500) {
-        lastLog = millis();
-        Serial.printf("[Telemetry] Angle: %5.1f° | Pulse: %4u µs | CPU: %u MHz | XTAL: %u MHz\n",
-                      servo.readAngle(),
-                      servo.readMicroseconds(),
-                      getCpuFrequencyMhz(),
-                      getXtalFrequencyMhz());
+    // Telemetry printout
+    if (millis() - lastPrint >= 500) {
+        lastPrint = millis();
+        Serial.printf("[Servo S1] Angle: %5.1f° | Pulse: %4u µs\n",
+                      servo.readAngle(), servo.readMicroseconds());
     }
 }

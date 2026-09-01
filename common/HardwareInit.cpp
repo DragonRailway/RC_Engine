@@ -105,6 +105,12 @@ int16_t   HardwareInit::s_lastServoPos = -999;
 // ─── Method implementations ──────────────────────────────────────────────────
 
 void HardwareInit::init(const HardwareConfig& hw) {
+    if (POWER::POWER_ENABLE != 0xFF) {
+        pinMode(POWER::POWER_ENABLE, OUTPUT);
+        digitalWrite(POWER::POWER_ENABLE, HIGH);
+        s_powerLatched = true;
+    }
+
     Serial.println("[HardwareInit] Initializing peripherals...");
 
     s_easingSpeedDegS = hw.animation.easingSpeedDegS;
@@ -825,6 +831,9 @@ void HardwareInit::initSteeringServos(const HardwareConfig& hw) {
         const auto& servo = hw.steeringServos[i];
         if (!servo.configured) continue;
         s_steeringConfigs[i] = servo;
+        if (i + 1 > s_steeringServoCount) {
+            s_steeringServoCount = i + 1;
+        }
 
         EasyKit::ServoConfig cfg;
         cfg.minUs = 500;
@@ -833,7 +842,6 @@ void HardwareInit::initSteeringServos(const HardwareConfig& hw) {
         cfg.freq = (servo.frequency >= 40 && servo.frequency <= 400) ? servo.frequency : 50;
 
         if (steeringServos[i].attach(servo.hardwareId, cfg) == EasyKit::Result::OK) {
-            s_steeringServoCount++;
             Serial.printf("[HardwareInit] Steering servo[%d]: Pin=%d Freq=%dHz Center=%dus (L=%d, R=%d)\n",
                           i, servo.hardwareId, cfg.freq, servo.endpoints.center, servo.endpoints.left, servo.endpoints.right);
             steeringServos[i].writeMicroseconds(servo.endpoints.center);
