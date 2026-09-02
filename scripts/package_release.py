@@ -142,15 +142,40 @@ def package_release(target_envs=None, dist_dir=DEFAULT_DIST_DIR, skip_build=Fals
 
         flash_meta = get_board_flash_meta(env)
 
+        clean_ver = ver_str.lstrip("v")
         manifest = {
             "manifest_version": 1,
             "name": "RC_Engine",
-            "version": ver_str,
+            "version": clean_ver,
             "board": env,
+            "chipFamily": flash_meta["chip_family"],
             "chip_family": flash_meta["chip_family"],
             "flash_mode": flash_meta["flash_mode"],
             "flash_size": flash_meta["flash_size"],
             "flash_freq": flash_meta["flash_freq"],
+            "builds": [
+                {
+                    "chipFamily": flash_meta["chip_family"],
+                    "parts": [
+                        {
+                            "path": "bootloader.bin",
+                            "offset": flash_meta["bootloader_offset_dec"],
+                        },
+                        {
+                            "path": "partitions.bin",
+                            "offset": 32768,
+                        },
+                        {
+                            "path": "otadata.bin",
+                            "offset": 57344,
+                        },
+                        {
+                            "path": "app.bin",
+                            "offset": 65536,
+                        },
+                    ],
+                }
+            ],
             "created_at": datetime.now(timezone.utc).isoformat(),
             "parts": [
                 {
