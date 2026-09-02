@@ -1,9 +1,4 @@
-# sound-synth-engine Specification
-
-## Purpose
-Real-time 32-voice audio synthesizer, Hermite cubic spline pitch-shifting, diesel knock generator, and soft-knee limiter driven by `EngineSim` state.
-
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Engine simulation synchronization
 The `SoundSynth` class SHALL provide a `syncState(const EngineSim& sim)` method that reads the current state snapshot (`state`, `rpm`, `pitchFactor`, `jakeBrakeActive`, `wastegateTriggered`, `gear`, `reverseActive`) from `EngineSim` without performing internal drivetrain physics calculations:
@@ -24,23 +19,11 @@ The `SoundSynth` class SHALL provide a `syncState(const EngineSim& sim)` method 
 - **WHEN** `EngineSim` flags jake brake or wastegate active
 - **THEN** `SoundSynth` activates the corresponding sound voice slot (`JAKE_BRAKE`, `WASTEGATE`)
 
+## ADDED Requirements
+
 ### Requirement: Cycle-quantized jake brake deactivation
 The `SoundSynth` class SHALL only deactivate the `JAKE_BRAKE` sound voice and unmute base engine voices at the conclusion of a sample loop wraparound (`wrapped == true`) when `jakeBrakeRequest` is false.
 
 #### Scenario: Jake brake loop completion
 - **WHEN** Jake brake request transitions to false while Jake brake audio is playing
 - **THEN** Jake brake voice continues playing until the end of its current audio loop, then un-mutes engine voices without audio discontinuities
-
-### Requirement: 32-voice mixing and Hermite cubic spline interpolation
-The `SoundSynth` class SHALL render 16-bit stereo audio blocks (`renderBlock`) using 4-point Hermite cubic spline fractional-step interpolation for pitch-shifted voices and rational soft-knee asymptotic saturation limiting to prevent clipping.
-
-#### Scenario: Multi-voice audio rendering
-- **WHEN** engine is running and auxiliary effects (horn, turbo, indicator) are active
-- **THEN** `renderBlock` sums active voice samples, applies master/voice volumes, soft-knee limits the mix, and writes interleaved stereo 16-bit PCM frames
-
-### Requirement: Dedicated audio thread execution safety
-Audio block rendering in `SoundSynth::renderBlock` SHALL execute inside the FreeRTOS `audioTask` (Core 1) without dynamic heap allocations, blocking mutexes, or filesystem access.
-
-#### Scenario: High-priority DMA audio rendering
-- **WHEN** `audioTask` invokes `renderBlock` for 64 audio frames
-- **THEN** rendering completes within real-time budget (<1.5 ms) without frame drops or audio buffer underruns

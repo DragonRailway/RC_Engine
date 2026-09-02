@@ -180,9 +180,8 @@ void SoundSynth::syncState(const EngineSim& sim) {
     // Reversing
     voices[REVERSING].active = sim.isReverseActive();
 
-    // ── Idle/Rev cross-fade with throttle-dependent volume scaling ──
+    // ── Reference Layered IDLE/REV Volume Calculation ──
     int32_t throttlePct = (int32_t)currentThrottleFaded;
-    int16_t idleProportion = 100;
     if (engineState == EngineSim::RUNNING || engineState == EngineSim::STOPPING) {
         voices[IDLE].active = (sounds.slots[IDLE].samples && sounds.slots[IDLE].sampleCount > 0);
         voices[REV].active = (engineState == EngineSim::RUNNING) && (sounds.slots[REV].samples && sounds.slots[REV].sampleCount > 0);
@@ -190,22 +189,26 @@ void SoundSynth::syncState(const EngineSim& sim) {
             voices[IDLE].volume = cfg.sound.idle;
             voices[REV].volume = 0;
         } else {
-            if (currentRpm <= cfg.engine.revSwitchPoint) {
-                idleProportion = 100;
-            } else if (currentRpm >= cfg.engine.idleEndPoint) {
-                idleProportion = 0;
-            } else {
-                idleProportion = map(currentRpm, cfg.engine.revSwitchPoint, cfg.engine.idleEndPoint, 100, 0);
-                idleProportion = constrain(idleProportion, 0, 100);
+            int32_t idleScale = map(throttlePct, 0, 100, cfg.sound.engineIdle, cfg.sound.fullThrottle);
+            int32_t revScale  = map(throttlePct, 0, 100, cfg.sound.engineRev,  cfg.sound.fullThrottle);
+
+            int32_t idleVol = (int32_t)((float)cfg.sound.idle * (float)idleScale / 100.0f);
+            int32_t revVol  = (int32_t)((float)cfg.sound.rev  * (float)revScale  / 100.0f);
+
+            if (cfg.sound.idleMin > 0 && idleVol < (int32_t)cfg.sound.idleMin) {
+                idleVol = cfg.sound.idleMin;
+            }
+            if (cfg.sound.revMin > 0 && revVol < (int32_t)cfg.sound.revMin) {
+                revVol = cfg.sound.revMin;
             }
 
-            int32_t minEngineScale = (cfg.sound.idleMin > 0) ? cfg.sound.idleMin : 50;
-            int32_t maxEngineScale = (cfg.sound.fullThrottle > 0) ? cfg.sound.fullThrottle : 150;
-            int32_t throttleVol = map(throttlePct, 0, 100, minEngineScale, maxEngineScale);
+            if (engineMuted) {
+                idleVol = 0;
+                revVol = 0;
+            }
 
-            float duckFactor = (jakeBrakeActive && cfg.sound.jakeBrake > 0) ? 0.20f : 1.0f;
-            voices[IDLE].volume = (uint8_t)constrain((int32_t)((float)cfg.sound.idle * (float)throttleVol / 100.0f * (float)idleProportion / 100.0f * (engineMuted ? 0.0f : 1.0f)), 0, 255);
-            voices[REV].volume  = (uint8_t)constrain((int32_t)((float)cfg.sound.rev  * (float)throttleVol / 100.0f * (float)(100 - idleProportion) / 100.0f * duckFactor), 0, 255);
+            voices[IDLE].volume = (uint8_t)constrain(idleVol, 0, 255);
+            voices[REV].volume  = (uint8_t)constrain(revVol, 0, 255);
         }
     } else {
         voices[IDLE].active = false;
