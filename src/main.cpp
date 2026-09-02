@@ -310,10 +310,10 @@ void setup() {
     // additional transport init is needed.
     UiLogger::onRadioKitStarted();
 
-    // Register RadioKit filesystem upload completion hook (0 polling overhead)
-    RKFs::setUploadCallback([](const char* path, bool success) {
-        if (success && path && (strstr(path, "hardware") != nullptr || strstr(path, "vehicle") != nullptr)) {
-            Serial.printf("[RadioKit] Config file upload complete (%s) -> scheduling reload\n", path);
+    // Register RadioKit filesystem packet callback to schedule config reload on upload completion
+    rk_fsSetCallback([](uint8_t subCmd, const uint8_t* payload, uint16_t payloadLen) {
+        if (subCmd == RK_FS_CMD_UPLOAD_END || subCmd == RK_FS_CMD_REPLACE || subCmd == RK_FS_CMD_WRITE) {
+            Serial.println("[RadioKit] FS write/upload complete -> scheduling config reload");
             s_configReloadPending = true;
         }
     });
