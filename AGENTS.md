@@ -60,7 +60,7 @@ RC_brain/
 ├── data/                     # Gitignored scratch (never deployed)
 ├── scripts/                  # build_fs.py, validate_sounds.py, smoke/hot-reload/DSP tools
 ├── test/                     # Host test harnesses (host_vc, host_dsp), golden baselines
-└── docs/                     # RadioKit API docs, audio debug tooling guide
+└── docs/                     # Audio debug tooling and hardware inertia verification guides
 ```
 
 ## FS Deployment (config-bundles model)
@@ -83,8 +83,3 @@ Config-only tweaks on a live board still hot-reload over RadioKit FS upload (no 
 ## Config validation
 - **Firmware**: `common/ConfigParser.h` logs `WARN:` lines for semantic config errors at boot and hot-reload (unknown keys, unrecognized `hardware` tokens, out-of-range values, unrecognized enums) — warn-and-continue, never halts.
 - **Host**: `scripts/build_fs.py` validates the hardware config against `configs/schemas/hardware_config.schema.json` before staging (aborts flash on violations). `scripts/validate_configs.py` validates every config in the repo (CI-able).
-
-## RadioKit Remote Access API
-- **Where**: embedded in the RadioKit Flutter app on the Android phone (`10.0.0.6:7007`), reachable via `adb forward tcp:17007 tcp:7007` (direct LAN curl fails).
-- **Docs**: `docs/radiokit-api/README.md` (index + workflows), `skills/*.md` (server skill guides), `api-schema.json`, `root.md`.
-- **Design**: `docs/radiokit-rc-ui-design.json` — the RC_UI control surface; `src/RADIOKIT.h` is generated from it via `GET /api/designs/<id>/header`.
