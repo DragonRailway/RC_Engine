@@ -25,7 +25,7 @@ except ImportError:
     jsonschema = None
 
 REPO = Path(__file__).resolve().parent.parent
-HW_DIR = REPO / "configs" / "hardware_configs"
+HW_DIR = REPO / "configs" / "hardware_configs" if (REPO / "configs" / "hardware_configs").is_dir() else (REPO / "configs")
 VEHICLE_DIR = REPO / "configs" / "vehicle_configs"
 SCHEMA = REPO / "configs" / "schemas" / "hardware_config.schema.json"
 

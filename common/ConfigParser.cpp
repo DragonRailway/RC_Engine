@@ -1123,8 +1123,10 @@ void ConfigParser::parseSoundVolumes(JsonDocument& doc, RcEngineSound::Config& c
     cfg.sound.master = 100;
     cfg.sound.start = sv["start"] | sv["START"] | 100;
     cfg.sound.idle = sv["idle"] | sv["IDLE"] | 100;
+    cfg.sound.engineIdle = sv["engine_idle"] | sv["ENGINE_IDLE"] | 100;
     cfg.sound.idleMin = sv["idle_min"] | sv["IDLE_MIN"] | 0;
     cfg.sound.rev = sv["rev"] | sv["REV"] | 100;
+    cfg.sound.engineRev = sv["engine_rev"] | sv["ENGINE_REV"] | 100;
     cfg.sound.revMin = sv["rev_min"] | sv["REV_MIN"] | 0;
     cfg.sound.fullThrottle = sv["full_throttle"] | sv["FULL_THROTTLE"] | 100;
     cfg.sound.turbo = sv["turbo"] | sv["TURBO"] | 0;

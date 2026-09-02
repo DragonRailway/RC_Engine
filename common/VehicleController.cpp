@@ -640,11 +640,9 @@ void VehicleController::update() {
     s_engine->update(reverse ? -rpm : rpm);
 
     // ── Physics-Based Sound FX: Jake Brake ──
-    uint16_t curRpm = s_engine->getRpm();
-    bool jakeCondition = (throttlePct == 0 && curRpm > (s_profile->config.engine.maxRpm * 60 / 100));
+    bool jakeCondition = s_engine->isJakeBrakeActive();
     if (jakeCondition != s_jakeBrakePrev) {
-        s_engine->triggerJakeBrake(jakeCondition);
-        Serial.printf("[EVENT] JakeBrake -> %s (RPM: %u)\n", jakeCondition ? "ON" : "OFF", curRpm);
+        Serial.printf("[EVENT] JakeBrake -> %s (RPM: %u)\n", jakeCondition ? "ON" : "OFF", s_engine->getRpm());
         s_jakeBrakePrev = jakeCondition;
     }
 

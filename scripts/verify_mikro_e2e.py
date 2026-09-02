@@ -12,7 +12,7 @@ import urllib.request
 import urllib.error
 import serial
 
-API_BASES = ["http://127.0.0.1:17007/api", "http://10.0.0.6:7007/api"]
+API_BASES = ["http://127.0.0.1:7007/api", "http://10.0.0.6:7007/api", "http://127.0.0.1:17007/api"]
 SERIAL_PORT = "/dev/ttyACM0"
 BAUD_RATE = 2000000
 

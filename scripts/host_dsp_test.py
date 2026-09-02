@@ -26,6 +26,8 @@ def compile_harness():
         f"-I{TEST_DIR}",
         f"-I{os.path.join(REPO_ROOT, 'lib', 'SoundEngine', 'src')}",
         os.path.join(TEST_DIR, "host_dsp_driver.cpp"),
+        os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "EngineSim.cpp"),
+        os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "SoundSynth.cpp"),
         os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "RcEngineSound.cpp"),
         "-o", HARNESS_BIN
     ]

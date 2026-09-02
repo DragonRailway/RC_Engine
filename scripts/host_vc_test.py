@@ -19,6 +19,8 @@ def main():
     print("[Host VC Test] Compiling VehicleController host harness on x86...")
     rk_src = os.path.join(REPO_ROOT, 'lib', 'rk-arduino', 'src')
     if not os.path.exists(rk_src):
+        rk_src = os.path.join(REPO_ROOT, '..', 'rk-arduino', 'src')
+    if not os.path.exists(rk_src):
         rk_src = os.path.join(REPO_ROOT, '..', 'RadioKit', 'rk-arduino', 'src')
 
     cmd = [
@@ -35,6 +37,8 @@ def main():
         os.path.join(REPO_ROOT, "test", "host_vc", "host_easykit_stubs.cpp"),
         os.path.join(REPO_ROOT, "common", "VehicleController.cpp"),
         os.path.join(REPO_ROOT, "common", "HardwareInit.cpp"),
+        os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "EngineSim.cpp"),
+        os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "SoundSynth.cpp"),
         os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "RcEngineSound.cpp"),
         os.path.join(rk_src, "widgets", "Widget.cpp"),
         os.path.join(rk_src, "widgets", "Button.cpp"),

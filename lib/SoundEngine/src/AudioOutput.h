@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <driver/i2s_std.h>
+#include <SoundSynth.h>
 #include <RcEngineSound.h>
 
 class AudioOutput {
@@ -9,7 +10,7 @@ public:
     static constexpr int SAMPLE_RATE = 22050;
     static constexpr int BUFFER_SIZE = 64;
 
-    static RcEngineSound* engine;
+    static SoundSynth* engine;
     static volatile bool active;
     static int16_t buffer[BUFFER_SIZE * 2];
     static volatile uint32_t bufferPos;
@@ -20,7 +21,7 @@ public:
     static volatile uint8_t currentOffset;
     static volatile bool offsetRamping;
 
-    static void begin(RcEngineSound* eng) {
+    static void begin(SoundSynth* eng) {
         engine = eng;
         active = false;
         bufferPos = 0;
@@ -69,10 +70,14 @@ public:
         pinMode(AUDIO::I2S_SD, OUTPUT);
         digitalWrite(AUDIO::I2S_SD, HIGH);
 
-        // 8KB stack: getNextSample() needs ~1KB for its VoiceState snapshot and
-        // i2s_channel_write() is also deep; 4KB was tight for both in one task.
         BaseType_t taskRes = xTaskCreatePinnedToCore(audioTask, "audio", 8192, NULL, 3, &audioTaskHandle, 1);
         Serial.printf("[AudioOutput] Initialized (22,050 Hz) TaskCreate=%d\n", (int)taskRes);
+    }
+
+    static void begin(RcEngineSound* eng) {
+        if (eng) {
+            begin(&eng->getSynth());
+        }
     }
 
     static void start() {
@@ -80,7 +85,7 @@ public:
             pinMode(AUDIO::I2S_SD, OUTPUT);
             digitalWrite(AUDIO::I2S_SD, HIGH);
         }
-        currentOffset = 0; // Start with offset at 0, audioTask will ramp it
+        currentOffset = 0;
         offsetRamping = true;
         active = true;
         Serial.println("[AudioOutput] Started");
@@ -123,8 +128,6 @@ public:
 
     static TaskHandle_t audioTaskHandle;
 
-    // Audio output task: generate samples (FPU-safe task context), apply offset
-    // fade, write to I2S. Paced naturally by I2S DMA blocking.
     static void audioTask(void* param) {
         Serial.println("[AudioOutput] audioTask entered loop");
         while (true) {
@@ -136,7 +139,6 @@ public:
 
             int64_t t_start = esp_timer_get_time();
 
-            // Generate one buffer of samples in task context
             if (selftestMode != SELFTEST_OFF) {
                 for (int i = 0; i < BUFFER_SIZE; i++) {
                     uint32_t idx = selftestSampleIndex;
@@ -163,8 +165,6 @@ public:
 
             int64_t t_gen = esp_timer_get_time();
 
-            // Apply volume ramp: scale 0.0→1.0 over ~12ms (276 samples)
-            // At 22,050Hz with 64-sample buffers, increment ~30/128 per buffer
             if (offsetRamping && currentOffset < 128) {
                 currentOffset += 30;
                 if (currentOffset >= 128) {
@@ -173,7 +173,6 @@ public:
                 }
             }
 
-            // Scale buffer by ramp factor (0.0→1.0) during fade-in to prevent pops
             if (currentOffset < 128) {
                 float scale = currentOffset / 128.0f;
                 for (int i = 0; i < BUFFER_SIZE * 2; i++) {
@@ -187,33 +186,11 @@ public:
                 vTaskDelay(pdMS_TO_TICKS(2));
             }
             int64_t t_i2s = esp_timer_get_time();
-
-#ifdef AUDIO_DEBUG
-            static uint32_t decimate = 0;
-            decimate++;
-            if (decimate >= 100) {
-                decimate = 0;
-                int16_t peak = 0;
-                int64_t sum_sq = 0;
-                int clips = 0;
-                for (int i = 0; i < BUFFER_SIZE * 2; i++) {
-                    int16_t val = buffer[i];
-                    if (abs(val) > peak) peak = abs(val);
-                    sum_sq += (int64_t)val * val;
-                    if (val <= -32768 || val >= 32767) clips++;
-                }
-                uint16_t rms = (uint16_t)sqrtf((float)sum_sq / (BUFFER_SIZE * 2));
-                uint32_t gen_us = (uint32_t)(t_gen - t_start);
-                uint32_t i2s_us = (uint32_t)(t_i2s - t_gen);
-                Serial.printf("[AUDIO_STATS] {\"peak\":%d,\"rms\":%d,\"clips\":%d,\"nan\":0,\"task_us\":%u,\"i2s_us\":%u}\n",
-                              peak, rms, clips, gen_us, i2s_us);
-            }
-#endif
         }
     }
 };
 
-RcEngineSound* AudioOutput::engine = nullptr;
+SoundSynth* AudioOutput::engine = nullptr;
 volatile bool AudioOutput::active = false;
 volatile uint32_t AudioOutput::totalBlocksRendered = 0;
 int16_t AudioOutput::buffer[BUFFER_SIZE * 2] = {};

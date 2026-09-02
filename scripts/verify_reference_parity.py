@@ -35,6 +35,8 @@ def compile_compare_harness():
         f"-I{os.path.join(REPO_ROOT, 'test', 'host_dsp')}",
         f"-I{os.path.join(REPO_ROOT, 'lib', 'SoundEngine', 'src')}",
         COMPARE_HARNESS_SRC,
+        os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "EngineSim.cpp"),
+        os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "SoundSynth.cpp"),
         os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "RcEngineSound.cpp"),
         "-o", COMPARE_BIN
     ]

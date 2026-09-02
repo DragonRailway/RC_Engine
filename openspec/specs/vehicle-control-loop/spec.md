@@ -96,4 +96,11 @@ The firmware SHALL control turn indicators and hazard warning lights through a u
 - **WHEN** left turn indicator is active and hazard is OFF
 - **THEN** only the left turn LED SHALL blink while the right LED remains OFF.
 
+### Requirement: Decoupled hardware I/O dispatch
+The `VehicleController` SHALL delegate all powertrain physics, motor speed ramping, and transmission slip calculations to `EngineSim`, directly passing the computed motor speed (`s_engineSim->getMotorSpeed()`) to `HardwareInit::setMotor` or `HardwareInit::setSkidMotors`.
+
+#### Scenario: Periodic control dispatch
+- **WHEN** `VehicleController::update()` executes
+- **THEN** inputs are passed to `EngineSim`, `SoundSynth` is synchronized with `EngineSim`, and physical actuator PWM is updated directly from simulation outputs
+
 

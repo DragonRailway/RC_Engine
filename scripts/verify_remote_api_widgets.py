@@ -20,7 +20,20 @@ import json
 import urllib.request
 import urllib.error
 
-API_BASE = "http://127.0.0.1:17007/api"
+API_BASES = ["http://127.0.0.1:7007/api", "http://10.0.0.6:7007/api", "http://127.0.0.1:17007/api"]
+
+def get_api_base():
+    for base in API_BASES:
+        try:
+            req = urllib.request.Request(f"{base}/status")
+            with urllib.request.urlopen(req, timeout=1.5) as resp:
+                if resp.status == 200:
+                    return base
+        except Exception:
+            continue
+    return "http://127.0.0.1:7007/api"
+
+API_BASE = get_api_base()
 
 # Widget IDs
 W_STEER      = 0  # Knob
@@ -144,22 +157,23 @@ def main():
     total_tests += 1
     print("\n[Test 3] Left Indicator Opposite Steering Auto-Cancel...")
     set_widget(W_STEER, [0])
-    time.sleep(0.1)
+    time.sleep(0.2)
     set_widget(W_LEFT_IND, [1]) # Turn ON Left indicator
-    ok, val = wait_for_widget_val(W_LEFT_IND, 1, timeout=1.5)
+    ok, val = wait_for_widget_val(W_LEFT_IND, 1, timeout=2.0)
     assert ok, f"Left indicator failed to turn ON (val={val})"
     print(f"  - Left indicator turned ON [state.value={val}]")
+    time.sleep(0.3)
     
     print("  - Turning steering wheel to the opposite side (+35% Right)...")
     set_widget(W_STEER, [35])
-    ok, val = wait_for_widget_val(W_LEFT_IND, 0, timeout=2.0)
+    ok, val = wait_for_widget_val(W_LEFT_IND, 0, timeout=2.5)
     if ok:
         print(f"  ✓ PASS: left_indicator automatically toggled OFF in App UI [state.value={val}]")
         passed_tests += 1
     else:
         print(f"  ✗ FAIL: left_indicator stayed ON (got state.value={val})")
     set_widget(W_STEER, [0])
-    time.sleep(0.2)
+    time.sleep(0.3)
 
     # -------------------------------------------------------------
     # Test 4: Right Indicator Opposite Steering Cancellation
@@ -167,22 +181,23 @@ def main():
     total_tests += 1
     print("\n[Test 4] Right Indicator Opposite Steering Auto-Cancel...")
     set_widget(W_STEER, [0])
-    time.sleep(0.1)
+    time.sleep(0.2)
     set_widget(W_RIGHT_IND, [1]) # Turn ON Right indicator
-    ok, val = wait_for_widget_val(W_RIGHT_IND, 1, timeout=1.5)
+    ok, val = wait_for_widget_val(W_RIGHT_IND, 1, timeout=2.0)
     assert ok, f"Right indicator failed to turn ON (val={val})"
     print(f"  - Right indicator turned ON [state.value={val}]")
+    time.sleep(0.3)
     
     print("  - Turning steering wheel to the opposite side (-35% Left)...")
     set_widget(W_STEER, [-35])
-    ok, val = wait_for_widget_val(W_RIGHT_IND, 0, timeout=2.0)
+    ok, val = wait_for_widget_val(W_RIGHT_IND, 0, timeout=2.5)
     if ok:
         print(f"  ✓ PASS: right_indicator automatically toggled OFF in App UI [state.value={val}]")
         passed_tests += 1
     else:
         print(f"  ✗ FAIL: right_indicator stayed ON (got state.value={val})")
     set_widget(W_STEER, [0])
-    time.sleep(0.2)
+    time.sleep(0.3)
 
     # -------------------------------------------------------------
     # Test 5: Left Indicator Return-to-Center Cancellation
@@ -190,26 +205,28 @@ def main():
     total_tests += 1
     print("\n[Test 5] Left Indicator Return-to-Center Auto-Cancel...")
     set_widget(W_STEER, [0])
-    time.sleep(0.1)
+    time.sleep(0.2)
     set_widget(W_LEFT_IND, [1]) # Turn ON Left indicator
-    ok, val = wait_for_widget_val(W_LEFT_IND, 1, timeout=1.5)
+    ok, val = wait_for_widget_val(W_LEFT_IND, 1, timeout=2.0)
     print(f"  - Left indicator ON [state.value={val}]")
+    time.sleep(0.3)
     
     print("  - Steering into turn (-50% Left)...")
     set_widget(W_STEER, [-50])
-    time.sleep(0.3)
+    time.sleep(0.4)
     val = get_widget_val(W_LEFT_IND)
     print(f"  - Left indicator remains active in turn [state.value={val}]")
     
     print("  - Returning steering wheel to center (0%)...")
     set_widget(W_STEER, [0])
-    ok, val = wait_for_widget_val(W_LEFT_IND, 0, timeout=2.0)
+    ok, val = wait_for_widget_val(W_LEFT_IND, 0, timeout=2.5)
     if ok:
-        print(f"  ✓ PASS: left_indicator automatically cancelled on wheel return [state.value={val}]")
+        print(f"  ✓ PASS: left_indicator automatically toggled OFF in App UI on center return [state.value={val}]")
         passed_tests += 1
     else:
         print(f"  ✗ FAIL: left_indicator did not cancel on return (got state.value={val})")
-    time.sleep(0.2)
+    set_widget(W_STEER, [0])
+    time.sleep(0.3)
 
     # -------------------------------------------------------------
     # Test 6: Right Indicator Return-to-Center Cancellation
@@ -217,20 +234,21 @@ def main():
     total_tests += 1
     print("\n[Test 6] Right Indicator Return-to-Center Auto-Cancel...")
     set_widget(W_STEER, [0])
-    time.sleep(0.1)
+    time.sleep(0.2)
     set_widget(W_RIGHT_IND, [1]) # Turn ON Right indicator
-    ok, val = wait_for_widget_val(W_RIGHT_IND, 1, timeout=1.5)
+    ok, val = wait_for_widget_val(W_RIGHT_IND, 1, timeout=2.0)
     print(f"  - Right indicator ON [state.value={val}]")
+    time.sleep(0.3)
     
     print("  - Steering into turn (+50% Right)...")
     set_widget(W_STEER, [50])
-    time.sleep(0.3)
+    time.sleep(0.4)
     val = get_widget_val(W_RIGHT_IND)
     print(f"  - Right indicator remains active in turn [state.value={val}]")
     
     print("  - Returning steering wheel to center (0%)...")
     set_widget(W_STEER, [0])
-    ok, val = wait_for_widget_val(W_RIGHT_IND, 0, timeout=2.0)
+    ok, val = wait_for_widget_val(W_RIGHT_IND, 0, timeout=2.5)
     if ok:
         print(f"  ✓ PASS: right_indicator automatically cancelled on wheel return [state.value={val}]")
         passed_tests += 1

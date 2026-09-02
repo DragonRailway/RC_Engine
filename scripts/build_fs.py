@@ -43,7 +43,7 @@ except ImportError:
 REPO = Path(__file__).resolve().parent.parent
 PARTITIONS_CSV = REPO / "partitions_ota_4MB.csv"
 CONFIGS = REPO / "configs"
-HW_DIR = CONFIGS / "hardware_configs"
+HW_DIR = CONFIGS / "hardware_configs" if (CONFIGS / "hardware_configs").is_dir() else CONFIGS
 VEHICLE_DIR = CONFIGS / "vehicle_configs"
 COMMON_DIR = VEHICLE_DIR / "common"
 SCHEMAS_DIR = CONFIGS / "schemas"

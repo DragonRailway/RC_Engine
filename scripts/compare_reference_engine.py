@@ -28,6 +28,8 @@ def generate_engine_wav():
         f"-I{os.path.join(REPO_ROOT, 'test', 'host_dsp')}",
         f"-I{os.path.join(REPO_ROOT, 'lib', 'SoundEngine', 'src')}",
         os.path.join(REPO_ROOT, "test", "host_dsp", "host_dsp_driver.cpp"),
+        os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "EngineSim.cpp"),
+        os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "SoundSynth.cpp"),
         os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "RcEngineSound.cpp"),
         "-o", HARNESS_BIN
     ]

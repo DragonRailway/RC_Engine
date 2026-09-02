@@ -1523,6 +1523,71 @@ int main() {
 
     std::cout << "  PASS: Synchronized turn-and-hazard state transitions and phase locking verified." << std::endl;
 
+    // =========================================================================
+    // Test 29: Isolated EngineSim Physics, Ramping, Transmission, & Direct Bypass
+    // =========================================================================
+    std::cout << "[Host VC Test] Test 29: Isolated EngineSim Physics & Powertrain Model..." << std::endl;
+    {
+        EngineSim sim;
+        EngineSim::Config cfg;
+        cfg.engine.hasEngine = true;
+        cfg.engine.maxRpm = 500;
+        cfg.engine.minRpm = 0;
+        cfg.engine.acc = 20;
+        cfg.engine.dec = 15;
+        cfg.engine.brakeDec = 30;
+        cfg.engine.inertia = 10;
+        cfg.engine.escRampTime = 20;
+        cfg.transmission.type = EngineSim::TRANS_AUTOMATIC;
+        cfg.transmission.numberOfGears = 3;
+        cfg.transmission.torqueConverterSlip = 80;
+        sim.begin(cfg);
+
+        // 29.1: State Machine (OFF -> STARTING -> RUNNING -> STOPPING -> OFF)
+        assert(sim.getState() == EngineSim::OFF);
+        sim.startEngine();
+        assert(sim.getState() == EngineSim::STARTING);
+        sim.setRunning();
+        assert(sim.getState() == EngineSim::RUNNING);
+
+        // 29.2: Acceleration Ramping
+        EngineSim::Input in;
+        in.throttle = 100;
+        in.brake = 0;
+        in.gear = 0; // Drive
+        in.parkingBrake = false;
+
+        sim.update(in, 20);
+        float speed1 = sim.getMotorSpeed();
+        assert(speed1 > 0.0f && "Motor speed should begin ramping up");
+
+        // Advance 10 ticks (200ms)
+        for (int i = 0; i < 10; i++) {
+            sim.update(in, 20);
+        }
+        float speed2 = sim.getMotorSpeed();
+        assert(speed2 > speed1 && "Motor speed should increase with acceleration");
+        assert(sim.getRpm() > 0 && "Engine RPM should rise");
+
+        // 29.3: Dynamic Braking
+        in.throttle = 0;
+        in.brake = 100; // Full brake
+        for (int i = 0; i < 15; i++) {
+            sim.update(in, 20);
+        }
+        assert(sim.getMotorSpeed() < speed2 && "Motor speed should decelerate under braking");
+
+        // 29.4: Direct Mode Bypass (hasEngine = false or inertia = 0)
+        EngineSim::Config directCfg = cfg;
+        directCfg.engine.inertia = 0;
+        sim.setConfig(directCfg);
+        in.throttle = 85;
+        in.brake = 0;
+        sim.update(in, 20);
+        assert(fabs(sim.getMotorSpeed() - 85.0f) < 0.1f && "Direct mode must immediately follow commanded throttle without inertia lag");
+    }
+    std::cout << "  PASS: Isolated EngineSim physics, state machine, and direct mode bypass verified." << std::endl;
+
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;
 }
