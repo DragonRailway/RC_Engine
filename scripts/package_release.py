@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
-"""Packaging utility to build all PlatformIO board environments and generate release assets."""
+"""Packaging utility to build all PlatformIO board environments and generate manifest-based release ZIP packages."""
 
 import argparse
 import configparser
+import hashlib
+import json
 import os
 import shutil
 import subprocess
 import sys
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLATFORMIO_INI = REPO_ROOT / "platformio.ini"
-CONFIGS_DIR = REPO_ROOT / "configs"
 DEFAULT_DIST_DIR = REPO_ROOT / "dist"
+
+# Standard ESP32 otadata (boot_app0) initial buffer (8192 bytes, active slot = ota_0)
+DEFAULT_BOOT_APP0_BYTES = (
+    bytes([1, 0, 0, 0] + [0xFF] * 24 + [154, 152, 67, 71]) + (b"\xFF" * (8192 - 32))
+)
 
 
 def get_all_environments():
@@ -32,40 +39,76 @@ def build_environment(env_name):
     subprocess.run(cmd, cwd=REPO_ROOT, check=True)
 
 
-def package_configs_zip(output_path):
-    print(f"[Package] Zipping configs to {output_path}...")
-    if output_path.exists():
-        output_path.unlink()
-
-    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(CONFIGS_DIR):
-            # Ignore hidden dirs or pycache
-            dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]
-            for file in files:
-                if file.startswith(".") or file.endswith("~") or file.endswith(".pyc"):
-                    continue
-                file_path = Path(root) / file
-                arcname = file_path.relative_to(REPO_ROOT)
-                zipf.write(file_path, arcname)
-    print(f"[Package] Created configs archive: {output_path.name} ({output_path.stat().st_size / 1024:.1f} KB)")
-
-
-def get_chip_for_env(env_name):
+def get_board_flash_meta(env_name):
     config = configparser.ConfigParser()
     config.read(PLATFORMIO_INI)
-    section = f"env:{env_name}"
-    board = config.get(section, "board", fallback="esp32-s3-devkitc-1").lower()
+    sec = f"env:{env_name}"
+
+    board = config.get(sec, "board", fallback="esp32-s3-devkitc-1").lower()
     if "esp32-s3" in board or "esp32s3" in board:
-        return "esp32s3"
+        chip_family = "ESP32-S3"
+        chip_tag = "esp32s3"
+        bootloader_offset_hex = "0x0000"
+        bootloader_offset_dec = 0
     elif "esp32-c3" in board or "esp32c3" in board:
-        return "esp32c3"
+        chip_family = "ESP32-C3"
+        chip_tag = "esp32c3"
+        bootloader_offset_hex = "0x0000"
+        bootloader_offset_dec = 0
     elif "esp32-c6" in board or "esp32c6" in board:
-        return "esp32c6"
+        chip_family = "ESP32-C6"
+        chip_tag = "esp32c6"
+        bootloader_offset_hex = "0x0000"
+        bootloader_offset_dec = 0
     elif "esp32-s2" in board or "esp32s2" in board:
-        return "esp32s2"
+        chip_family = "ESP32-S2"
+        chip_tag = "esp32s2"
+        bootloader_offset_hex = "0x0000"
+        bootloader_offset_dec = 0
     elif "esp32-h2" in board or "esp32h2" in board:
-        return "esp32h2"
-    return "esp32"
+        chip_family = "ESP32-H2"
+        chip_tag = "esp32h2"
+        bootloader_offset_hex = "0x0000"
+        bootloader_offset_dec = 0
+    else:
+        chip_family = "ESP32"
+        chip_tag = "esp32"
+        bootloader_offset_hex = "0x1000"
+        bootloader_offset_dec = 4096
+
+    # Flash properties with fallback to [env] section
+    flash_size = config.get(sec, "board_build.flash_size", fallback=None) or config.get("env", "board_build.flash_size", fallback="4MB")
+    flash_mode = config.get(sec, "board_build.flash_mode", fallback=None) or config.get("env", "board_build.flash_mode", fallback="qio")
+    f_flash_raw = config.get(sec, "board_build.f_flash", fallback=None) or config.get("env", "board_build.f_flash", fallback="80000000L")
+    flash_freq = "80m" if "80" in f_flash_raw else "40m"
+
+    return {
+        "chip_family": chip_family,
+        "chip_tag": chip_tag,
+        "bootloader_offset_hex": bootloader_offset_hex,
+        "bootloader_offset_dec": bootloader_offset_dec,
+        "flash_size": flash_size,
+        "flash_mode": flash_mode,
+        "flash_freq": flash_freq,
+    }
+
+
+def resolve_boot_app0_bytes():
+    """Finds boot_app0.bin in PlatformIO framework tools or returns standard bytes."""
+    search_dirs = [
+        Path.home() / ".platformio" / "packages",
+        Path.home() / "sandbox" / "fedora" / ".platformio" / "packages",
+    ]
+    for base in search_dirs:
+        if base.exists():
+            matches = list(base.glob("**/boot_app0.bin"))
+            if matches:
+                return matches[0].read_bytes()
+    return DEFAULT_BOOT_APP0_BYTES
+
+
+def calculate_sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
 def package_release(target_envs=None, dist_dir=DEFAULT_DIST_DIR, skip_build=False, version="v1.0.0"):
@@ -77,35 +120,91 @@ def package_release(target_envs=None, dist_dir=DEFAULT_DIST_DIR, skip_build=Fals
     print(f"[Package] Version: {ver_str}")
     print(f"[Package] Target environments: {', '.join(envs_to_build)}")
 
+    otadata_bytes = resolve_boot_app0_bytes()
     packaged_files = []
 
-    # 1. Build and package firmware binaries per environment
+    # Build and package manifest-based ZIP packages per environment
     for env in envs_to_build:
         if not skip_build:
             build_environment(env)
 
         build_dir = REPO_ROOT / ".pio" / "build" / env
-        factory_src = build_dir / "firmware.factory.bin"
-        ota_src = build_dir / "firmware.bin"
+        bootloader_path = build_dir / "bootloader.bin"
+        partitions_path = build_dir / "partitions.bin"
+        app_path = build_dir / "firmware.bin"
 
-        if not factory_src.exists() or not ota_src.exists():
+        if not bootloader_path.exists() or not partitions_path.exists() or not app_path.exists():
             raise FileNotFoundError(f"Binary outputs missing in {build_dir}. Ensure build succeeded.")
 
-        chip = get_chip_for_env(env)
-        factory_dst = dist_dir / f"RC_Engine-{ver_str}-{chip}-{env}.bin"
-        ota_dst = dist_dir / f"RC_Engine-{ver_str}-{chip}-{env}-ota.bin"
+        bootloader_bytes = bootloader_path.read_bytes()
+        partitions_bytes = partitions_path.read_bytes()
+        app_bytes = app_path.read_bytes()
 
-        shutil.copy2(factory_src, factory_dst)
-        shutil.copy2(ota_src, ota_dst)
+        flash_meta = get_board_flash_meta(env)
 
-        packaged_files.extend([factory_dst, ota_dst])
-        print(f"[Package] Copied {factory_dst.name} ({factory_dst.stat().st_size / 1024:.1f} KB)")
-        print(f"[Package] Copied {ota_dst.name} ({ota_dst.stat().st_size / 1024:.1f} KB)")
+        manifest = {
+            "manifest_version": 1,
+            "name": "RC_Engine",
+            "version": ver_str,
+            "board": env,
+            "chip_family": flash_meta["chip_family"],
+            "flash_mode": flash_meta["flash_mode"],
+            "flash_size": flash_meta["flash_size"],
+            "flash_freq": flash_meta["flash_freq"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "parts": [
+                {
+                    "name": "bootloader",
+                    "path": "bootloader.bin",
+                    "offset": flash_meta["bootloader_offset_hex"],
+                    "offset_dec": flash_meta["bootloader_offset_dec"],
+                    "size": len(bootloader_bytes),
+                    "sha256": calculate_sha256(bootloader_bytes),
+                },
+                {
+                    "name": "partitions",
+                    "path": "partitions.bin",
+                    "offset": "0x8000",
+                    "offset_dec": 32768,
+                    "size": len(partitions_bytes),
+                    "sha256": calculate_sha256(partitions_bytes),
+                },
+                {
+                    "name": "otadata",
+                    "path": "otadata.bin",
+                    "offset": "0xE000",
+                    "offset_dec": 57344,
+                    "size": len(otadata_bytes),
+                    "sha256": calculate_sha256(otadata_bytes),
+                },
+                {
+                    "name": "app",
+                    "path": "app.bin",
+                    "offset": "0x10000",
+                    "offset_dec": 65536,
+                    "size": len(app_bytes),
+                    "sha256": calculate_sha256(app_bytes),
+                    "role": "app",
+                    "ota_supported": True,
+                },
+            ],
+        }
 
-    # 2. Package configs zip
-    configs_zip = dist_dir / f"RC_Engine-{ver_str}-configs.zip"
-    package_configs_zip(configs_zip)
-    packaged_files.append(configs_zip)
+        manifest_json_bytes = json.dumps(manifest, indent=2).encode("utf-8")
+
+        zip_dst = dist_dir / f"RC_Engine-{ver_str}-{flash_meta['chip_tag']}-{env}.zip"
+        if zip_dst.exists():
+            zip_dst.unlink()
+
+        with zipfile.ZipFile(zip_dst, "w", zipfile.ZIP_DEFLATED) as zipf:
+            zipf.writestr("manifest.json", manifest_json_bytes)
+            zipf.writestr("bootloader.bin", bootloader_bytes)
+            zipf.writestr("partitions.bin", partitions_bytes)
+            zipf.writestr("otadata.bin", otadata_bytes)
+            zipf.writestr("app.bin", app_bytes)
+
+        packaged_files.append(zip_dst)
+        print(f"[Package] Created {zip_dst.name} ({zip_dst.stat().st_size / 1024:.1f} KB)")
 
     print("\n=======================================================")
     print(f"🎉 Successfully packaged {len(packaged_files)} release assets in {dist_dir}:")

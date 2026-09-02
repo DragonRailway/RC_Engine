@@ -33,7 +33,11 @@ public:
     static const char* genericNames[];
 
     static bool begin();
+    static String findHardwareConfig();
+    static String findVehicleConfig();
+    static bool loadHardwareConfig(HardwareConfig& config);
     static bool loadHardwareConfig(const char* path, HardwareConfig& config);
+    static bool loadVehicleConfig(RcEngineSound::Config& config);
     static bool loadVehicleConfig(const char* path, RcEngineSound::Config& config);
     static bool loadSounds(const RcEngineSound::Config& cfg, SoundData& soundData);
     static bool loadSounds(const char* vehicleName, SoundData& soundData);

@@ -40,6 +40,127 @@ bool ConfigParser::begin() {
     return true;
 }
 
+String ConfigParser::findHardwareConfig() {
+    File root = LittleFS.open("/");
+    if (!root || !root.isDirectory()) return "";
+
+    File entry = root.openNextFile();
+    while (entry) {
+        if (!entry.isDirectory()) {
+            const char* rawName = entry.name();
+            const char* p = rawName;
+            if (p[0] == '/') p++;
+            const char* slash = strrchr(p, '/');
+            if (slash) p = slash + 1;
+            if (strncmp(p, "hardware-", 9) == 0 && String(p).endsWith(".json")) {
+                String res = String("/") + p;
+                entry.close();
+                root.close();
+                return res;
+            }
+        }
+        entry = root.openNextFile();
+    }
+    root.close();
+    return "";
+}
+
+String ConfigParser::findVehicleConfig() {
+    // 1. Search root directory
+    File root = LittleFS.open("/");
+    if (root && root.isDirectory()) {
+        File entry = root.openNextFile();
+        while (entry) {
+            if (!entry.isDirectory()) {
+                const char* rawName = entry.name();
+                const char* p = rawName;
+                if (p[0] == '/') p++;
+                const char* slash = strrchr(p, '/');
+                if (slash) p = slash + 1;
+                if (strcmp(p, "vehicle.json") == 0 ||
+                    (strncmp(p, "vehicle-", 8) == 0 && String(p).endsWith(".json"))) {
+                    String res = String("/") + p;
+                    entry.close();
+                    root.close();
+                    return res;
+                }
+            }
+            entry = root.openNextFile();
+        }
+        root.close();
+    }
+
+    // 2. Search /vehicle_configs and /vehicle_config directories
+    const char* subdirs[] = {"/vehicle_configs", "/vehicle_config"};
+    for (const char* dirName : subdirs) {
+        File dir = LittleFS.open(dirName);
+        if (dir && dir.isDirectory()) {
+            File entry = dir.openNextFile();
+            while (entry) {
+                if (entry.isDirectory()) {
+                    String subPath = String(dirName) + "/" + entry.name();
+                    File subDir = LittleFS.open(subPath.c_str());
+                    if (subDir && subDir.isDirectory()) {
+                        File subEntry = subDir.openNextFile();
+                        while (subEntry) {
+                            if (!subEntry.isDirectory()) {
+                                const char* sp = subEntry.name();
+                                if (sp[0] == '/') sp++;
+                                const char* slash = strrchr(sp, '/');
+                                if (slash) sp = slash + 1;
+                                if (strcmp(sp, "vehicle.json") == 0 ||
+                                    (strncmp(sp, "vehicle-", 8) == 0 && String(sp).endsWith(".json"))) {
+                                    String res = subPath + "/" + sp;
+                                    subEntry.close();
+                                    subDir.close();
+                                    entry.close();
+                                    dir.close();
+                                    return res;
+                                }
+                            }
+                            subEntry = subDir.openNextFile();
+                        }
+                        subDir.close();
+                    }
+                } else {
+                    const char* p = entry.name();
+                    if (p[0] == '/') p++;
+                    const char* slash = strrchr(p, '/');
+                    if (slash) p = slash + 1;
+                    if (strcmp(p, "vehicle.json") == 0 ||
+                        (strncmp(p, "vehicle-", 8) == 0 && String(p).endsWith(".json"))) {
+                        String res = String(dirName) + "/" + p;
+                        entry.close();
+                        dir.close();
+                        return res;
+                    }
+                }
+                entry = dir.openNextFile();
+            }
+            dir.close();
+        }
+    }
+    return "";
+}
+
+bool ConfigParser::loadHardwareConfig(HardwareConfig& config) {
+    String path = findHardwareConfig();
+    if (path.length() == 0) {
+        LOG_CFG_ERR("No hardware config matching /hardware-*.json found on LittleFS");
+        return false;
+    }
+    return loadHardwareConfig(path.c_str(), config);
+}
+
+bool ConfigParser::loadVehicleConfig(RcEngineSound::Config& config) {
+    String path = findVehicleConfig();
+    if (path.length() == 0) {
+        LOG_CFG_ERR("No vehicle config matching vehicle-*.json or vehicle.json found on LittleFS");
+        return false;
+    }
+    return loadVehicleConfig(path.c_str(), config);
+}
+
 bool ConfigParser::loadHardwareConfig(const char* path, HardwareConfig& config) {
     File file = LittleFS.open(path, "r");
     if (!file) {

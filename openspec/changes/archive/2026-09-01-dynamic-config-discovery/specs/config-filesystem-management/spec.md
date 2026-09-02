@@ -1,8 +1,5 @@
-# Config Filesystem Management Specification
+## MODIFIED Requirements
 
-## Purpose
-Defines requirements for LittleFS configuration parsing, lower snake_case JSON keys, and config validation.
-## Requirements
 ### Requirement: Lower snake_case JSON schema
 The firmware SHALL parse hardware configuration (dynamically discovered via `hardware-*.json`) and vehicle configuration (dynamically discovered via `vehicle-*.json` / `vehicle.json` in root or vehicle config subdirectories) using `lower_snake_case` JSON keys. The hardware schema SHALL additionally accept an optional `"animation"` block (easing speed/strength, fade duration) whose absence falls back to firmware defaults.
 
@@ -22,16 +19,7 @@ The firmware SHALL parse hardware configuration (dynamically discovered via `har
 - **WHEN** the hardware config omits the `"animation"` block
 - **THEN** `ConfigParser` leaves the animation fields at their firmware defaults and loading still succeeds
 
-### Requirement: Deductive drivetrain topology detection
-The firmware SHALL automatically deduce the physical drivetrain layout based on the keys present in the `"drivetrain"` JSON object without requiring a mandatory mode tag.
-
-#### Scenario: Skid-steer drivetrain detected
-- **WHEN** the `"drivetrain"` object contains both `"left_motor"` and `"right_motor"` keys
-- **THEN** `ConfigParser` configures the vehicle controller to operate in Skid-Steer mode (differential mixing of throttle and steering)
-
-#### Scenario: Ackermann drivetrain detected
-- **WHEN** the `"drivetrain"` object contains a `"drive_motor"` key (and optional `"steering_servo"`)
-- **THEN** `ConfigParser` configures the vehicle controller to operate in standard Ackermann mode (single throttle drive output + steering servo output)
+## ADDED Requirements
 
 ### Requirement: Dynamic Configuration Discovery
 The firmware SHALL dynamically discover hardware and vehicle configuration files on LittleFS without requiring hardcoded static filenames or compile-time file path defines:
@@ -51,4 +39,3 @@ The firmware SHALL dynamically discover hardware and vehicle configuration files
 #### Scenario: Dynamic vehicle config discovery in subdirectory bundle
 - **WHEN** LittleFS contains `/vehicle_configs/ScaniaV8/vehicle.json` and no vehicle config in root
 - **THEN** `ConfigParser::findVehicleConfig()` returns `"/vehicle_configs/ScaniaV8/vehicle.json"` and successfully loads the vehicle configuration
-

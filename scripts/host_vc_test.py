@@ -17,6 +17,10 @@ VC_BIN = os.path.join(REPO_ROOT, "test", "host_vc", "host_vc_harness")
 
 def main():
     print("[Host VC Test] Compiling VehicleController host harness on x86...")
+    rk_src = os.path.join(REPO_ROOT, 'lib', 'rk-arduino', 'src')
+    if not os.path.exists(rk_src):
+        rk_src = os.path.join(REPO_ROOT, '..', 'RadioKit', 'rk-arduino', 'src')
+
     cmd = [
         "g++", "-std=c++17", "-O2",
         "-DTRACKLINK_V3",
@@ -25,23 +29,23 @@ def main():
         f"-I{os.path.join(REPO_ROOT, 'boards')}",
         f"-I{os.path.join(REPO_ROOT, 'common')}",
         f"-I{os.path.join(REPO_ROOT, '..', 'ESP32_EasyKit', 'src')}",
-        f"-I{os.path.join(REPO_ROOT, '..', 'RadioKit', 'rk-arduino', 'src')}",
+        f"-I{rk_src}",
         f"-I{os.path.join(REPO_ROOT, 'lib', 'SoundEngine', 'src')}",
         VC_SRC,
         os.path.join(REPO_ROOT, "test", "host_vc", "host_easykit_stubs.cpp"),
         os.path.join(REPO_ROOT, "common", "VehicleController.cpp"),
         os.path.join(REPO_ROOT, "common", "HardwareInit.cpp"),
         os.path.join(REPO_ROOT, "lib", "SoundEngine", "src", "RcEngineSound.cpp"),
-        os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "Widget.cpp"),
-        os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "Button.cpp"),
-        os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "LED.cpp"),
-        os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "Multiple.cpp"),
-        os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "Telemetry.cpp"),
-        os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "Text.cpp"),
-        os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "Knob.cpp"),
-        os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "Slider.cpp"),
-        os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "SlideSwitch.cpp"),
-        os.path.join(REPO_ROOT, "..", "RadioKit", "rk-arduino", "src", "widgets", "Joystick.cpp"),
+        os.path.join(rk_src, "widgets", "Widget.cpp"),
+        os.path.join(rk_src, "widgets", "Button.cpp"),
+        os.path.join(rk_src, "widgets", "LED.cpp"),
+        os.path.join(rk_src, "widgets", "Multiple.cpp"),
+        os.path.join(rk_src, "widgets", "Telemetry.cpp"),
+        os.path.join(rk_src, "widgets", "Text.cpp"),
+        os.path.join(rk_src, "widgets", "Knob.cpp"),
+        os.path.join(rk_src, "widgets", "Slider.cpp"),
+        os.path.join(rk_src, "widgets", "SlideSwitch.cpp"),
+        os.path.join(rk_src, "widgets", "Joystick.cpp"),
         "-o", VC_BIN
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)

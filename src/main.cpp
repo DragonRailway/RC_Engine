@@ -10,23 +10,6 @@
 #include <VehicleProfile.h>
 #include <AudioOutput.h>
 
-// ── Board-specific hardware config ──
-// Each board has its own hardware config file on LittleFS, selected here at
-// compile time by the same -D define that selects the board pins. The shared
-// /hardware-config.json is no longer used; each board tunes its own file
-// (e.g. voltage calibration, servo endpoints, battery) independently.
-#ifdef MIKRO_V2
-#define HW_CONFIG_PATH "/hardware-MIKRO_V2.json"
-#elif defined(TRACKLINK_V2)
-#define HW_CONFIG_PATH "/hardware-TRACKLINK_V2.json"
-#elif defined(TRACKLINK_V3)
-#define HW_CONFIG_PATH "/hardware-TRACKLINK_V3.json"
-#elif defined(GTRACK)
-#define HW_CONFIG_PATH "/hardware-GTRACK.json"
-#else
-#error "Unknown board: define MIKRO_V2, TRACKLINK_V2, TRACKLINK_V3, or GTRACK in platformio.ini"
-#endif
-
 RcEngineSound engine;
 VehicleProfile profile;
 HardwareConfig hwConfig;
@@ -140,14 +123,17 @@ static bool reloadConfigs() {
     HardwareConfig newHw;
     RcEngineSound::Config newVc;
 
-    if (!ConfigParser::loadHardwareConfig(HW_CONFIG_PATH, newHw)) {
-        Serial.printf("[Reload] %s invalid — keeping current config\n", HW_CONFIG_PATH);
-        UiLogger::logf("ERR: %s invalid", HW_CONFIG_PATH);
+    String hwPath = ConfigParser::findHardwareConfig();
+    String vcPath = ConfigParser::findVehicleConfig();
+
+    if (hwPath.length() == 0 || !ConfigParser::loadHardwareConfig(hwPath.c_str(), newHw)) {
+        Serial.println("[Reload] No valid hardware-*.json found — keeping current config");
+        UiLogger::logf("ERR: hardware config invalid");
         return false;
     }
-    if (!ConfigParser::loadVehicleConfig("/vehicle-config.json", newVc)) {
-        Serial.println("[Reload] vehicle-config.json invalid — keeping current config");
-        UiLogger::logf("ERR: vehicle-config.json invalid");
+    if (vcPath.length() == 0 || !ConfigParser::loadVehicleConfig(vcPath.c_str(), newVc)) {
+        Serial.println("[Reload] No valid vehicle config found — keeping current config");
+        UiLogger::logf("ERR: vehicle config invalid");
         return false;
     }
 
@@ -264,10 +250,14 @@ void setup() {
 
 
     Serial.println("\n── Loading Configs ──");
-    bool hwOk = ConfigParser::loadHardwareConfig(HW_CONFIG_PATH, hwConfig);
-    bool vcOk = ConfigParser::loadVehicleConfig("/vehicle-config.json", profile.config);
+    String hwPath = ConfigParser::findHardwareConfig();
+    String vcPath = ConfigParser::findVehicleConfig();
+
+    bool hwOk = (hwPath.length() > 0) && ConfigParser::loadHardwareConfig(hwPath.c_str(), hwConfig);
+    bool vcOk = (vcPath.length() > 0) && ConfigParser::loadVehicleConfig(vcPath.c_str(), profile.config);
 
     if (hwOk && vcOk) {
+        Serial.printf("[Config] Loaded HW: %s, Vehicle: %s\n", hwPath.c_str(), vcPath.c_str());
         printConfig(hwConfig, profile.config);
 
         bool hasSoundAssets = false;
@@ -306,8 +296,9 @@ void setup() {
         VehicleController::applyConfiguredLightMask(hwConfig.lights, hwConfig.auxLight.configured);
     } else {
         Serial.println("\n── Recovery Mode Active ──");
-        Serial.printf("Config missing or incomplete (%s: %s, /vehicle-config.json: %s)\n",
-                      HW_CONFIG_PATH, hwOk ? "OK" : "MISSING", vcOk ? "OK" : "MISSING");
+        Serial.printf("Config missing or incomplete (hardware-*.json [%s]: %s, vehicle-*.json [%s]: %s)\n",
+                      hwPath.c_str(), hwOk ? "OK" : "MISSING",
+                      vcPath.c_str(), vcOk ? "OK" : "MISSING");
         Serial.println("RadioKit BLE and LittleFS are active. Upload configuration files to initialize.");
         UiLogger::log("WARN: Config missing — Recovery Mode");
     }

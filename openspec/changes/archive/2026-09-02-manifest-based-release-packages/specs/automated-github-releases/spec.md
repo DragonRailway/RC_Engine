@@ -1,6 +1,5 @@
-## Purpose
-Automate multi-board firmware compilation and distribute versioned, manifest-based release packages to GitHub Releases.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Automated Multi-Board Release Workflow
 The repository SHALL include a GitHub Actions workflow (`.github/workflows/release.yml`) that triggers upon pushing a tag matching `v*` or via manual `workflow_dispatch`, automatically builds all environments defined in `platformio.ini`, and publishes the compiled firmware release packages to a GitHub Release.
 
@@ -22,4 +21,3 @@ The release packaging SHALL export a manifest-based ZIP archive (`RC_Engine-<ver
 #### Scenario: Manifest schema and offsets validation
 - **WHEN** a release ZIP package is inspected
 - **THEN** `manifest.json` contains valid chip family, board name, flash settings, and a `parts` list declaring decimal and hex flash offsets, sizes, and SHA-256 hashes for all included binary parts
-
