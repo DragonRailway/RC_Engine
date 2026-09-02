@@ -30,7 +30,6 @@ struct PcmHeader {
 class ConfigParser {
 public:
     static const char* soundTypeNames[];
-    static const char* genericNames[];
 
     static bool begin();
     static String findHardwareConfig();

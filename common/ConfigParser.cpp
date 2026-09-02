@@ -12,22 +12,6 @@ const char* ConfigParser::soundTypeNames[] = {
     "bell", "door", "scanner", "music", "whistle", "gun", "outoffuel", "others"
 };
 
-const char* ConfigParser::genericNames[] = {
-    "idle-ScaniaV8.pcm", "rev-ScaniaV8.pcm", "start-ScaniaV8.pcm",
-    "knock-ScaniaV8.pcm", "Turbo-whistle.pcm", "1000HpScaniaV8-wastegate.pcm",
-    "ScaniaV8train-horn.pcm",
-    "ScaniaV8-jakebrake.pcm", "fan-Generic.pcm", "siren-Dummy.pcm",
-    "airbrake-Truck2.pcm", "parkingbrake-Generic.pcm",
-    "ClunkingGearShifting.pcm", "reversing-TruckBeep.pcm",
-    "indicator-Generic.pcm", "coupling-generic.pcm", "supercharger.pcm",
-    "uncoupling-generic.pcm", "sound1-Dummy.pcm",
-    "squeal-Tire2.pcm", "hydraulicPump-Generic.pcm",
-    "hydraulicFlow-Generic.pcm", "trackrattle.pcm", "bucketrattle-Generic.pcm",
-    "bell-Dummy.pcm", "door.pcm", "scanner-kitt.pcm",
-    "music-Dummy.pcm", "whistle-Turbo.pcm", "gun-Dummy.pcm",
-    "outoffuel-Dummy.pcm", "others-Dummy.pcm"
-};
-
 // ── Public API methods ──────────────────────────────────────────────────────
 
 bool ConfigParser::begin() {
@@ -448,35 +432,23 @@ bool ConfigParser::loadSounds(const RcEngineSound::Config& cfg, SoundData& sound
     for (int i = 0; i < SOUND_COUNT; i++) {
         const char* slot = soundTypeNames[i];
 
-        String p1 = "/sounds/vehicles/" + soundSet + "/" + String(slot) + ".pcm";
-        soundData.slots[i] = loadSoundSlot(p1.c_str());
+        String paths[] = {
+            "/vehicle_configs/" + soundSet + "/sounds/" + String(slot) + ".pcm",
+            "/vehicle_config/" + soundSet + "/sounds/" + String(slot) + ".pcm",
+            "/sounds/vehicles/" + soundSet + "/" + String(slot) + ".pcm",
+            "/vehicle_configs/common/" + String(typeStr) + "/" + String(slot) + ".pcm",
+            "/vehicle_config/common/" + String(typeStr) + "/" + String(slot) + ".pcm",
+            "/sounds/common/" + String(typeStr) + "/" + String(slot) + ".pcm",
+            "/sounds/presets/" + String(typeStr) + "/" + String(slot) + ".pcm",
+            "/sounds/generic/" + String(slot) + ".pcm",
+            "/sounds/" + String(slot) + ".pcm"
+        };
 
-        if (!soundData.slots[i].samples) {
-            String p1_flat = "/sounds/" + soundSet + "-" + String(slot) + ".pcm";
-            soundData.slots[i] = loadSoundSlot(p1_flat.c_str());
-        }
-
-        if (!soundData.slots[i].samples) {
-            String p2 = "/sounds/common/" + String(typeStr) + "/" + String(slot) + ".pcm";
-            soundData.slots[i] = loadSoundSlot(p2.c_str());
-        }
-        if (!soundData.slots[i].samples) {
-            String p2_alt = "/sounds/presets/" + String(typeStr) + "/" + String(slot) + ".pcm";
-            soundData.slots[i] = loadSoundSlot(p2_alt.c_str());
-        }
-
-        if (!soundData.slots[i].samples) {
-            String p3 = "/sounds/generic/" + String(slot) + ".pcm";
-            soundData.slots[i] = loadSoundSlot(p3.c_str());
-        }
-
-        if (!soundData.slots[i].samples) {
-            String p3_flat = String("/sounds/") + slot + ".pcm";
-            soundData.slots[i] = loadSoundSlot(p3_flat.c_str());
-        }
-        if (!soundData.slots[i].samples) {
-            String legacyPath = String("/sounds/") + genericNames[i];
-            soundData.slots[i] = loadSoundSlot(legacyPath.c_str());
+        for (const String& p : paths) {
+            soundData.slots[i] = loadSoundSlot(p.c_str());
+            if (soundData.slots[i].samples) {
+                break;
+            }
         }
     }
 
