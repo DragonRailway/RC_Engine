@@ -23,13 +23,18 @@ DEFAULT_BOOT_APP0_BYTES = (
 )
 
 
+EXCLUDE_ENVIRONMENTS = {"MIKRO_V2_SWEEP"}
+
+
 def get_all_environments():
     config = configparser.ConfigParser()
     config.read(PLATFORMIO_INI)
     envs = []
     for section in config.sections():
         if section.startswith("env:") and section != "env":
-            envs.append(section.split("env:", 1)[1])
+            env_name = section.split("env:", 1)[1]
+            if env_name not in EXCLUDE_ENVIRONMENTS and not env_name.endswith("_SWEEP"):
+                envs.append(env_name)
     return envs
 
 
