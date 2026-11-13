@@ -1,0 +1,18 @@
+[package]
+name = "rc-dsp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Pure no_std multi-channel audio synthesizer and DSP mixer for RC Engine"
+
+[features]
+default = []
+std = []
+
+[dependencies]
+libm = { workspace = true }
+heapless = { workspace = true }
+
+[dev-dependencies]

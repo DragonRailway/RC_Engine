@@ -1,0 +1,19 @@
+[package]
+name = "firmware-tracklink-v3"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Production firmware binary for TrackLink V3 board"
+
+[features]
+default = ["std"]
+std = ["rc-brain/std", "bsp-tracklink-v3/std"]
+
+[dependencies]
+rc-brain = { path = "../../crates/rc-brain" }
+bsp-tracklink-v3 = { path = "../../crates/boards/bsp-tracklink-v3" }
+bsp-core = { path = "../../crates/boards/bsp-core" }
+rc-core = { path = "../../crates/rc-core" }
+rk-rs = { path = "../../../rk-rs/crates/rk-rs" }

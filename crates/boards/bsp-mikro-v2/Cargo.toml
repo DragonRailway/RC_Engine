@@ -1,0 +1,15 @@
+[package]
+name = "bsp-mikro-v2"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Board Support Package for Mikro V2 (Micro scale 1/24–1/35 RC vehicles)"
+
+[features]
+default = []
+std = ["bsp-core/std"]
+
+[dependencies]
+bsp-core = { path = "../bsp-core", default-features = false }

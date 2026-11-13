@@ -1,0 +1,36 @@
+[package]
+name = "rc-brain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "RC Engine firmware application combining vehicle control, sound synthesis, and RadioKit BLE"
+
+[lib]
+name = "rc_brain"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rc-brain"
+path = "src/main.rs"
+required-features = ["std"]
+
+[features]
+default = []
+std = ["rc-dsp/std", "rc-core/std", "rc-boards/std", "rk-rs/std"]
+
+[dependencies]
+rc-dsp = { path = "../rc-dsp", default-features = false }
+rc-core = { path = "../rc-core", default-features = false }
+rc-boards = { path = "../rc-boards", default-features = false }
+rk-rs = { path = "../../../rk-rs/crates/rk-rs", default-features = false }
+embassy-sync = { workspace = true }
+embassy-time = { workspace = true }
+embassy-futures = { workspace = true }
+heapless = { workspace = true }
+embedded-io-async = { workspace = true }
+
+[dev-dependencies]
+critical-section = { version = "1.2", features = ["std"] }
+embassy-time = { version = "0.5", features = ["generic-queue-8", "mock-driver"] }

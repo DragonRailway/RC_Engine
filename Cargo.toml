@@ -1,0 +1,40 @@
+[workspace]
+members = [
+    "crates/rc-dsp",
+    "crates/rc-core",
+    "crates/rc-boards",
+    "crates/rc-brain",
+    "crates/boards/bsp-core",
+    "crates/boards/bsp-tracklink-v3",
+    "crates/boards/bsp-rk-ultra",
+    "crates/boards/bsp-mikro-v2",
+    "crates/boards/bsp-gtrack",
+    "crates/boards/bsp-tracklink-v2",
+    "crates/rc-drivers-esp32s3",
+    "crates/rc-storage",
+    "crates/rc-sensors",
+    "apps/firmware-tracklink-v3",
+    "apps/firmware-rk-ultra",
+    "apps/firmware-mikro-v2",
+    "apps/firmware-gtrack",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["RC Engine Team"]
+repository = "https://github.com/DragonRailway/RC_Engine"
+readme = "README.md"
+
+[workspace.dependencies]
+heapless = { version = "0.8", default-features = false, features = ["serde"] }
+byteorder = { version = "1.5", default-features = false }
+libm = "0.2"
+embassy-sync = "0.8"
+embassy-time = "0.5"
+embassy-futures = "0.1"
+embedded-io-async = "0.7"
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+serde-json-core = { version = "0.5", default-features = false }

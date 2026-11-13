@@ -1,0 +1,27 @@
+[package]
+name = "rc-boards"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Umbrella crate re-exporting board support packages and hardware peripheral profiles"
+
+[features]
+default = []
+std = [
+    "bsp-core/std",
+    "bsp-tracklink-v3/std",
+    "bsp-rk-ultra/std",
+    "bsp-mikro-v2/std",
+    "bsp-gtrack/std",
+    "bsp-tracklink-v2/std",
+]
+
+[dependencies]
+bsp-core = { path = "../boards/bsp-core", default-features = false }
+bsp-tracklink-v3 = { path = "../boards/bsp-tracklink-v3", default-features = false }
+bsp-rk-ultra = { path = "../boards/bsp-rk-ultra", default-features = false }
+bsp-mikro-v2 = { path = "../boards/bsp-mikro-v2", default-features = false }
+bsp-gtrack = { path = "../boards/bsp-gtrack", default-features = false }
+bsp-tracklink-v2 = { path = "../boards/bsp-tracklink-v2", default-features = false }

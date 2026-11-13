@@ -1,0 +1,18 @@
+[package]
+name = "rc-sensors"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Sensors and expanders for RK_ULTRA: LSM6DSVTR IMU (SPI) and AW9523 LED expander (I2C)"
+
+[features]
+default = []
+std = []
+
+[dependencies]
+libm = { workspace = true }
+heapless = { workspace = true }
+
+[dev-dependencies]

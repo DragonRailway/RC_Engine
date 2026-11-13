@@ -1,0 +1,18 @@
+# Rust build artifacts
+/target
+target/
+**/*.rs.bk
+*.bk
+
+# Generated and temporary files
+*.log
+*.swp
+*~
+.DS_Store
+*.wav
+
+# IDE and Editor directories
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace

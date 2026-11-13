@@ -1,0 +1,18 @@
+[package]
+name = "rc-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "LittleFS filesystem layer for RC Engine: loading vehicle configurations and sounds from SPI flash"
+
+[features]
+default = []
+std = ["rc-core/std"]
+
+[dependencies]
+rc-core = { path = "../rc-core", default-features = false }
+heapless = { workspace = true }
+
+[dev-dependencies]

@@ -1,0 +1,21 @@
+[package]
+name = "rc-drivers-esp32s3"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "ESP32-S3 hardware drivers for RC Engine: Power latch, Battery ADC, Motor PWM, and I2S DMA"
+
+[features]
+default = []
+std = ["bsp-core/std", "rc-dsp/std"]
+
+[dependencies]
+bsp-core = { path = "../boards/bsp-core", default-features = false }
+rc-dsp = { path = "../rc-dsp", default-features = false }
+heapless = { workspace = true }
+embassy-time = { workspace = true }
+embassy-sync = { workspace = true }
+
+[dev-dependencies]

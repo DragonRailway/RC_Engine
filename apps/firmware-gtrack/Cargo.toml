@@ -1,0 +1,19 @@
+[package]
+name = "firmware-gtrack"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Production firmware binary for GTrack Dual-Track Excavator board"
+
+[features]
+default = ["std"]
+std = ["rc-brain/std", "bsp-gtrack/std"]
+
+[dependencies]
+rc-brain = { path = "../../crates/rc-brain" }
+bsp-gtrack = { path = "../../crates/boards/bsp-gtrack" }
+bsp-core = { path = "../../crates/boards/bsp-core" }
+rc-core = { path = "../../crates/rc-core" }
+rk-rs = { path = "../../../rk-rs/crates/rk-rs" }

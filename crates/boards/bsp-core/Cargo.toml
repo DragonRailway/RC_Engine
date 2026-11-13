@@ -1,0 +1,15 @@
+[package]
+name = "bsp-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Core traits, pin pool, and shared hardware definitions for RC Engine Board Support Packages"
+
+[features]
+default = []
+std = []
+
+[dependencies]
+heapless = { workspace = true }

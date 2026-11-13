@@ -1,0 +1,15 @@
+[package]
+name = "bsp-gtrack"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Board Support Package for GTrack Dual-Track Excavator & Heavy Equipment"
+
+[features]
+default = []
+std = ["bsp-core/std"]
+
+[dependencies]
+bsp-core = { path = "../bsp-core", default-features = false }

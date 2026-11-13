@@ -1,0 +1,15 @@
+[package]
+name = "bsp-tracklink-v2"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Board Support Package for TrackLink V2 (Legacy single-driver locomotive board)"
+
+[features]
+default = []
+std = ["bsp-core/std"]
+
+[dependencies]
+bsp-core = { path = "../bsp-core", default-features = false }

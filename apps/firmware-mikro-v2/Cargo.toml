@@ -1,0 +1,19 @@
+[package]
+name = "firmware-mikro-v2"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Production firmware binary for Mikro V2 board"
+
+[features]
+default = ["std"]
+std = ["rc-brain/std", "bsp-mikro-v2/std"]
+
+[dependencies]
+rc-brain = { path = "../../crates/rc-brain" }
+bsp-mikro-v2 = { path = "../../crates/boards/bsp-mikro-v2" }
+bsp-core = { path = "../../crates/boards/bsp-core" }
+rc-core = { path = "../../crates/rc-core" }
+rk-rs = { path = "../../../rk-rs/crates/rk-rs" }
