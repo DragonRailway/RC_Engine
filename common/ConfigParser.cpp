@@ -358,7 +358,7 @@ bool ConfigParser::loadHardwareConfig(const char* path, HardwareConfig& config) 
         if (strcasecmp(modeStr, "blink") == 0) config.charging.mode = 1;
         else if (strcasecmp(modeStr, "pulse") == 0) config.charging.mode = 2;
         else config.charging.mode = 0;
-        config.charging.configured = (config.charging.pin != 0xFF);
+        config.charging.configured = (config.charging.pin != NO_PIN);
     }
 
     validateHardwareConfig(config);
@@ -573,7 +573,7 @@ void ConfigParser::checkKeys(JsonObjectConst obj, const char* section,
 }
 
 void ConfigParser::warnUnresolvedHardware(const char* where, const char* hw) {
-    if (hw[0] != '\0' && PinMapper::resolve(hw) == 0xFF) {
+    if (hw[0] != '\0' && PinMapper::resolve(hw) == NO_PIN) {
         LOG_CFG_WARN("%s: hardware '%s' not recognized — output not configured", where, hw);
     }
 }
@@ -793,7 +793,7 @@ void ConfigParser::validateHardwareConfig(const HardwareConfig& cfg) {
 
     for (uint8_t i = 0; i < cfg.steeringServoCount; i++) {
         const auto& s = cfg.steeringServos[i];
-        if (s.hardwareId != 0xFF) {
+        if (s.hardwareId != NO_PIN) {
             if (s.frequency < 40 || s.frequency > 400) {
                 LOG_CFG_WARN("steering_servos: frequency %d Hz outside 40-400", s.frequency);
             }
@@ -851,7 +851,7 @@ void ConfigParser::parseDriveMotor(JsonVariantConst motor, HardwareConfig::Drive
     JsonVariantConst dutyObj = motor["duty"] | motor["DUTY"];
     config.duty.min = dutyObj["min"] | dutyObj["MIN"] | config.duty.min;
     config.duty.max = dutyObj["max"] | dutyObj["MAX"] | config.duty.max;
-    config.configured = (config.hardwareId != 0xFF);
+    config.configured = (config.hardwareId != NO_PIN);
 }
 
 void ConfigParser::parseSteeringServo(JsonVariantConst servo, HardwareConfig::SteeringServo& config) {
@@ -865,13 +865,13 @@ void ConfigParser::parseSteeringServo(JsonVariantConst servo, HardwareConfig::St
     config.endpoints.left = epObj["left"] | epObj["LEFT"] | config.endpoints.left;
     config.endpoints.right = epObj["right"] | epObj["RIGHT"] | config.endpoints.right;
     config.endpoints.center = epObj["center"] | epObj["CENTER"] | config.endpoints.center;
-    config.configured = (config.hardwareId != 0xFF);
+    config.configured = (config.hardwareId != NO_PIN);
 }
 
-uint8_t ConfigParser::resolveLightAlias(const char* hw, const HardwareConfig& config) {
-    if (hw == nullptr || hw[0] == '\0') return 0xFF;
-    uint8_t pin = PinMapper::resolve(hw);
-    if (pin != 0xFF) return pin;
+int8_t ConfigParser::resolveLightAlias(const char* hw, const HardwareConfig& config) {
+    if (hw == nullptr || hw[0] == '\0') return NO_PIN;
+    int8_t pin = PinMapper::resolve(hw);
+    if (pin != NO_PIN) return pin;
     if (strcasecmp(hw, "head_light") == 0 && config.lights.headLight.configured) return config.lights.headLight.pin;
     if ((strcasecmp(hw, "full_beam") == 0 || strcasecmp(hw, "high_beam") == 0) && config.lights.fullBeam.configured) return config.lights.fullBeam.pin;
     if ((strcasecmp(hw, "fog_lamp") == 0 || strcasecmp(hw, "fog_light") == 0) && config.lights.fogLamp.configured) return config.lights.fogLamp.pin;
@@ -882,8 +882,8 @@ uint8_t ConfigParser::resolveLightAlias(const char* hw, const HardwareConfig& co
     if (strcasecmp(hw, "beacon") == 0 && config.lights.beacon.configured) return config.lights.beacon.pin;
     if ((strcasecmp(hw, "work_light") == 0 || strcasecmp(hw, "work_lamp") == 0) && config.lights.workLight.configured) return config.lights.workLight.pin;
     if (strcasecmp(hw, "aux_light") == 0 && (config.lights.auxLight.configured || config.auxLight.configured)) return config.lights.auxLight.configured ? config.lights.auxLight.pin : config.auxLight.pin;
-    if (strcasecmp(hw, "turn_light") == 0 && config.lights.turnLight.configured) return config.lights.turnLight.leftPin != 0xFF ? config.lights.turnLight.leftPin : config.lights.turnLight.rightPin;
-    return 0xFF;
+    if (strcasecmp(hw, "turn_light") == 0 && config.lights.turnLight.configured) return config.lights.turnLight.leftPin != NO_PIN ? config.lights.turnLight.leftPin : config.lights.turnLight.rightPin;
+    return NO_PIN;
 }
 
 void ConfigParser::parseLight(JsonVariantConst light, HardwareConfig::Lights::Light& config, const char* name, uint8_t defaultBrightness) {
@@ -894,22 +894,22 @@ void ConfigParser::parseLight(JsonVariantConst light, HardwareConfig::Lights::Li
             const char* hw = p.as<const char*>();
             if (hw && config.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
                 warnUnresolvedHardware(name, hw);
-                uint8_t pin = PinMapper::resolve(hw);
-                if (pin != 0xFF) config.pins[config.pinCount++] = pin;
+                int8_t pin = PinMapper::resolve(hw);
+                if (pin != NO_PIN) config.pins[config.pinCount++] = pin;
             }
         }
     } else {
         const char* hw = light["hardware"] | "";
         if (hw[0] != '\0') {
             warnUnresolvedHardware(name, hw);
-            uint8_t pin = PinMapper::resolve(hw);
-            if (pin != 0xFF && config.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
+            int8_t pin = PinMapper::resolve(hw);
+            if (pin != NO_PIN && config.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
                 config.pins[config.pinCount++] = pin;
             }
         }
     }
     config.brightness = light["brightness_max"] | defaultBrightness;
-    config.pin = (config.pinCount > 0) ? config.pins[0] : 0xFF;
+    config.pin = (config.pinCount > 0) ? config.pins[0] : NO_PIN;
     config.configured = (config.pinCount > 0);
 }
 
@@ -934,7 +934,7 @@ void ConfigParser::parseLights(JsonObjectConst lights, HardwareConfig::Lights& c
         config.ditchLight.rightPin = PinMapper::resolve(hwR);
         config.ditchLight.brightness = ditch["brightness_max"] | ditch["BRIGHTNESS_MAX"] | 100;
         config.ditchLight.intervalMs = ditch["interval_ms"] | ditch["INTERVAL_MS"] | 8;
-        config.ditchLight.configured = config.ditchLight.leftPin != 0xFF || config.ditchLight.rightPin != 0xFF;
+        config.ditchLight.configured = config.ditchLight.leftPin != NO_PIN || config.ditchLight.rightPin != NO_PIN;
     }
 
     parseLight(lights["step_light"] | lights["STEP_LIGHT"], config.stepLight, "step_light", 30);
@@ -953,7 +953,7 @@ void ConfigParser::parseLights(JsonObjectConst lights, HardwareConfig::Lights& c
         config.turnLight.brightness = turn["brightness_max"] | turn["BRIGHTNESS_MAX"] | 60;
         config.turnLight.intervalOn = turn["interval_on"] | turn["INTERVAL_ON"] | 300;
         config.turnLight.intervalOff = turn["interval_off"] | turn["INTERVAL_OFF"] | 300;
-        config.turnLight.configured = config.turnLight.leftPin != 0xFF || config.turnLight.rightPin != 0xFF;
+        config.turnLight.configured = config.turnLight.leftPin != NO_PIN || config.turnLight.rightPin != NO_PIN;
     }
 
     JsonVariantConst reversing = lights["reversing_light"] | lights["REVERSING_LIGHT"];
@@ -963,26 +963,26 @@ void ConfigParser::parseLights(JsonObjectConst lights, HardwareConfig::Lights& c
             for (JsonVariantConst p : reversing["hardware"].as<JsonArrayConst>()) {
                 const char* hw = p.as<const char*>();
                 if (hw && config.reversingLight.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
-                    uint8_t pin = PinMapper::resolve(hw);
-                    if (pin != 0xFF) config.reversingLight.pins[config.reversingLight.pinCount++] = pin;
+                    int8_t pin = PinMapper::resolve(hw);
+                    if (pin != NO_PIN) config.reversingLight.pins[config.reversingLight.pinCount++] = pin;
                 }
             }
         } else {
             const char* hw = reversing["hardware"] | reversing["HARDWARE"] | "";
-            uint8_t pin = PinMapper::resolve(hw);
-            if (pin == 0xFF) {
+            int8_t pin = PinMapper::resolve(hw);
+            if (pin == NO_PIN) {
                 if ((strcasecmp(hw, "head_light") == 0 || strcasecmp(hw, "HEAD_LIGHT") == 0) && config.headLight.configured) pin = config.headLight.pin;
                 else if ((strcasecmp(hw, "tail_light") == 0 || strcasecmp(hw, "TAIL_LIGHT") == 0) && config.tailLight.configured) pin = config.tailLight.pin;
                 else if ((strcasecmp(hw, "brake_light") == 0 || strcasecmp(hw, "BRAKE_LIGHT") == 0) && config.brakeLight.configured) pin = config.brakeLight.pin;
             }
-            if (pin != 0xFF) {
+            if (pin != NO_PIN) {
                 config.reversingLight.pins[config.reversingLight.pinCount++] = pin;
             } else if (hw[0] != '\0') {
                 LOG_CFG_WARN("reversing_light: hardware '%s' not recognized — output not configured", hw);
             }
         }
         config.reversingLight.brightness = 100;
-        config.reversingLight.pin = (config.reversingLight.pinCount > 0) ? config.reversingLight.pins[0] : 0xFF;
+        config.reversingLight.pin = (config.reversingLight.pinCount > 0) ? config.reversingLight.pins[0] : NO_PIN;
         config.reversingLight.configured = (config.reversingLight.pinCount > 0);
     }
 
@@ -1031,7 +1031,7 @@ void ConfigParser::parseAuxMotor(JsonVariantConst motor, HardwareConfig::AuxMoto
         LOG_CFG_WARN("aux_motor: unknown type '%s' — defaulting to mixer", type);
         config.purpose = HardwareConfig::AuxMotor::MIXER;
     }
-    config.configured = (config.motor.hardwareId != 0xFF && config.purpose != HardwareConfig::AuxMotor::NONE);
+    config.configured = (config.motor.hardwareId != NO_PIN && config.purpose != HardwareConfig::AuxMotor::NONE);
 }
 
 void ConfigParser::parseAuxLight(JsonVariantConst light, HardwareConfig::AuxLight& config) {
@@ -1042,22 +1042,22 @@ void ConfigParser::parseAuxLight(JsonVariantConst light, HardwareConfig::AuxLigh
             const char* hw = p.as<const char*>();
             if (hw && config.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
                 warnUnresolvedHardware("aux_light", hw);
-                uint8_t pin = PinMapper::resolve(hw);
-                if (pin != 0xFF) config.pins[config.pinCount++] = pin;
+                int8_t pin = PinMapper::resolve(hw);
+                if (pin != NO_PIN) config.pins[config.pinCount++] = pin;
             }
         }
     } else {
         const char* hw = light["hardware"] | light["HARDWARE"] | "";
         if (hw[0] != '\0') {
             warnUnresolvedHardware("aux_light", hw);
-            uint8_t pin = PinMapper::resolve(hw);
-            if (pin != 0xFF && config.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
+            int8_t pin = PinMapper::resolve(hw);
+            if (pin != NO_PIN && config.pinCount < HardwareConfig::MAX_PINS_PER_LIGHT) {
                 config.pins[config.pinCount++] = pin;
             }
         }
     }
     config.brightness = light["brightness_max"] | light["BRIGHTNESS_MAX"] | 60;
-    config.pin = (config.pinCount > 0) ? config.pins[0] : 0xFF;
+    config.pin = (config.pinCount > 0) ? config.pins[0] : NO_PIN;
     config.configured = (config.pinCount > 0);
 }
 

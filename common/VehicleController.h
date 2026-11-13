@@ -33,12 +33,21 @@ public:
     static void applyConfiguredLightMask(const HardwareConfig::Lights& L, bool auxHwConfigured);
     static void init(HardwareConfig* hw, RcEngineSound* engine, VehicleProfile* profile);
 
+    enum class ChargingState {
+        NOT_CHARGING,
+        CHARGING_ACTIVE,
+        CHARGING_COMPLETE
+    };
+
     static bool isBatteryWarning() { return s_batteryWarning; }
     static bool isBatteryCutoff() { return s_batteryCutoff; }
     static bool isDisconnectWarning() { return s_inWarningPhase; }
-    static bool isChargingState() { return HardwareInit::isCharging(); }
+    static ChargingState getChargingState() { return s_chargingState; }
+    static bool isChargingState() { return s_chargingState == ChargingState::CHARGING_ACTIVE; }
+    static bool isDockedState() { return s_chargingState != ChargingState::NOT_CHARGING; }
     static bool isReverserInterlocked() { return s_reverserInterlocked; }
     static bool getActiveDirection() { return s_activeDirection; }
+    static void handlePowerButtonClick();
 
     static void update();
 
@@ -99,6 +108,7 @@ private:
     static bool     s_wasConnected;
     static bool     s_reconnectThrottleInterlock;
     static bool     s_disconnectEngineStopDone;
+    static ChargingState s_chargingState;
 
     // Drivetrain Virtual Mass Inertia Simulation
     static float    s_currentMotorSpeed;

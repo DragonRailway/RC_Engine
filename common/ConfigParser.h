@@ -54,7 +54,7 @@ public:
 
     static void parseDriveMotor(JsonVariantConst motor, HardwareConfig::DriveMotor& config);
     static void parseSteeringServo(JsonVariantConst servo, HardwareConfig::SteeringServo& config);
-    static uint8_t resolveLightAlias(const char* hw, const HardwareConfig& config);
+    static int8_t resolveLightAlias(const char* hw, const HardwareConfig& config);
     static void parseLight(JsonVariantConst light, HardwareConfig::Lights::Light& config, const char* name, uint8_t defaultBrightness = 60);
     static void parseLights(JsonObjectConst lights, HardwareConfig::Lights& config);
     static void parseAuxMotor(JsonVariantConst motor, HardwareConfig::AuxMotor& config);

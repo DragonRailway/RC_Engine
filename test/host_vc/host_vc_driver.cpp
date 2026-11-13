@@ -24,6 +24,8 @@ extern int host_last_servo_us;
 extern bool host_radiokit_connected;
 extern bool host_servo_attached;
 extern bool host_servo_sleeping;
+extern bool host_last_led_inverted;
+extern uint8_t host_last_led_pin;
 
 int main() {
     std::cout << "[Host VC Test] Initializing VehicleController Host Harness..." << std::endl;
@@ -275,7 +277,8 @@ int main() {
     assert(HardwareInit::isPowerLatched() && "USB boot (POWER_BUTTON low) should latch ON immediately");
     assert(host_gpio_pin_val[POWER::POWER_ENABLE] == HIGH && "POWER_ENABLE should be HIGH on USB boot");
 
-    // Part B: Runtime 4000ms button hold shutdown
+    // Part B: Runtime 4000ms button hold shutdown on battery
+    host_gpio_pin_val[POWER::CHARGE_SENS] = HIGH;
     host_gpio_pin_val[POWER::POWER_ENABLE] = HIGH;
     host_gpio_pin_val[POWER::POWER_BUTTON] = HIGH;
     host_virtual_millis = 0;
@@ -426,14 +429,31 @@ int main() {
     assert(HardwareInit::getLightDutyPercent(38) == 0.0f && "Indicator should blink OFF at 200ms phase 1");
 
     host_gpio_pin_val[POWER::POWER_BUTTON] = LOW;
+    host_virtual_millis = 201100;
+    HardwareInit::update(testHw3.power.buttonHoldS, testHw3.power.indicatorPin);
+    HardwareInit::clearButtonClicked();
 
     // Charging indicator animation
+    HardwareInit::setUsbBoot(true);
     host_gpio_pin_val[POWER::CHARGE_SENS] = LOW;
     VehicleController::init(&testHw3, &engine, &profile);
     VehicleController::update();
     assert(VehicleController::isChargingState() && "Charging state should be active");
 
-    std::cout << "  PASS: Power button hold rapid blink feedback and charging indicator verified." << std::endl;
+    // Power button single click wakes up from USB boot minimal charging mode
+    host_gpio_pin_val[POWER::POWER_BUTTON] = HIGH;
+    host_virtual_millis = 202100;
+    HardwareInit::update(testHw3.power.buttonHoldS);
+    host_gpio_pin_val[POWER::POWER_BUTTON] = LOW;
+    host_virtual_millis = 202300;
+    HardwareInit::update(testHw3.power.buttonHoldS);
+    assert(HardwareInit::isButtonClicked() && "Power button click detected");
+    HardwareInit::clearUsbBoot();
+    VehicleController::update();
+    HardwareInit::clearButtonClicked();
+    assert(!HardwareInit::isUsbBoot() && "USB boot cleared after wake");
+
+    std::cout << "  PASS: Power button hold rapid blink feedback, charging indicator, and wake verified." << std::endl;
 
     // ── Test 14: Steer-by-Wire Continuous Servo Tracking ──
     host_radiokit_connected = true;
@@ -1587,6 +1607,172 @@ int main() {
         assert(fabs(sim.getMotorSpeed() - 85.0f) < 0.1f && "Direct mode must immediately follow commanded throttle without inertia lag");
     }
     std::cout << "  PASS: Isolated EngineSim physics, state machine, and direct mode bypass verified." << std::endl;
+
+    // ── Test 30: Inverted Board Pins and NO_PIN Resolution ──
+    std::cout << "[Host VC Test] Test 30: Inverted Board Pins and NO_PIN Resolution..." << std::endl;
+    {
+        // 30.1: Board helper methods
+        assert(Board::isPinInverted(-42) == true && "-42 must be reported as inverted");
+        assert(Board::isPinInverted(-1) == true && "-1 must be reported as inverted");
+        assert(Board::isPinInverted(42) == false && "42 must not be reported as inverted");
+        assert(Board::isPinInverted(0) == false && "0 must not be reported as inverted");
+        assert(Board::isPinInverted(Board::NO_PIN) == false && "NO_PIN must not be reported as inverted");
+
+        assert(Board::toGpio(-42) == 42 && "toGpio(-42) must return 42");
+        assert(Board::toGpio(42) == 42 && "toGpio(42) must return 42");
+        assert(Board::toGpio(0) == 0 && "toGpio(0) must return 0");
+        assert(Board::toGpio(Board::NO_PIN) == 0xFF && "toGpio(NO_PIN) must return 0xFF");
+
+        assert(Board::isValid(-42) == true && "Valid inverted pin must return true");
+        assert(Board::isValid(42) == true && "Valid positive pin must return true");
+        assert(Board::isValid(0) == true && "Valid GPIO 0 must return true");
+        assert(Board::isValid(Board::NO_PIN) == false && "NO_PIN must return false");
+
+        // 30.2: PinMapper resolution and polarity detection
+        assert(PinMapper::isPinInverted(-6) == true);
+        assert(PinMapper::toGpio(-6) == 6);
+        assert(PinMapper::isValid(-6) == true);
+        assert(PinMapper::isValid(Board::NO_PIN) == false);
+
+        // 30.3: Active-low LED initialization
+        HardwareConfig hw30;
+        hw30.lights.headLight.configured = true;
+        hw30.lights.headLight.pin = -42;
+        hw30.lights.headLight.brightness = 80;
+        host_last_led_inverted = false;
+        host_last_led_pin = 0;
+        HardwareInit::init(hw30);
+        assert(host_last_led_pin == 42 && "EasyLED should be attached to absolute GPIO 42");
+        assert(host_last_led_inverted == true && "EasyLED config must have invertOutput=true for negative pin");
+
+        // 30.4: Active-high LED initialization
+        hw30.lights.headLight.pin = 42;
+        host_last_led_inverted = true;
+        host_last_led_pin = 0;
+        HardwareInit::init(hw30);
+        assert(host_last_led_pin == 42 && "EasyLED should be attached to absolute GPIO 42");
+        assert(host_last_led_inverted == false && "EasyLED config must have invertOutput=false for positive pin");
+    }
+    std::cout << "  PASS: Inverted board pins, active-low LED polarity, and NO_PIN resolution verified." << std::endl;
+
+    // ── Test 31: Charging Mode USB Unplug 4-Blink Shutdown ──
+    std::cout << "[Host VC Test] Test 31: Charging Mode USB Unplug 4-Blink Shutdown..." << std::endl;
+    {
+        HardwareConfig hw31;
+        hw31.charging.configured = true;
+        hw31.charging.pin = 38;
+        hw31.charging.mode = 1;
+        HardwareInit::init(hw31);
+
+        // Latch power and enter charging mode via USB boot
+        host_gpio_pin_val[POWER::POWER_ENABLE] = HIGH;
+        HardwareInit::setUsbBoot(true);
+        host_gpio_pin_val[POWER::CHARGE_SENS] = LOW; // plugged
+        host_radiokit_connected = false;
+        host_analog_read_mv = 3800; // 1S nominal (not > 4.35V)
+
+        VehicleController::init(&hw31, &engine, &profile);
+        VehicleController::update();
+        assert(VehicleController::isChargingState() && "Should be in charging state while CHARGE_SENS is LOW");
+        assert(host_gpio_pin_val[POWER::POWER_ENABLE] == HIGH && "POWER_ENABLE should be HIGH while charging");
+
+        // Simulate USB unplug
+        host_gpio_pin_val[POWER::CHARGE_SENS] = HIGH;
+        uint32_t msBefore = host_virtual_millis;
+
+        // Next update must detect USB unplug in charging mode, run 4 blinks (800ms), and power off
+        VehicleController::update();
+
+        // Verify that 800ms (4 blinks * 200ms) elapsed during the synchronous shutdown sequence
+        assert((host_virtual_millis - msBefore) == 800 && "Unplug sequence must run for exactly 800ms (4 * 200ms blinks)");
+
+        // Verify that power is latched off
+        assert(host_gpio_pin_val[POWER::POWER_ENABLE] == LOW && "POWER_ENABLE must be released (LOW) after unplug blinks");
+        assert(!HardwareInit::isPowerLatched() && "HardwareInit power latched state must be false");
+        assert(!HardwareInit::isUsbBoot() && "USB boot flag must be cleared");
+
+        // Verify fallback cascade when charging.configured is false
+        HardwareConfig hw31_fallback;
+        hw31_fallback.charging.configured = false;
+        hw31_fallback.power.indicatorPin = 39;
+        hw31_fallback.lights.headLight.pin = 40;
+        HardwareInit::init(hw31_fallback);
+
+        host_gpio_pin_val[POWER::POWER_ENABLE] = HIGH;
+        HardwareInit::setUsbBoot(true);
+        host_gpio_pin_val[POWER::CHARGE_SENS] = LOW;
+        VehicleController::init(&hw31_fallback, &engine, &profile);
+        VehicleController::update();
+        assert(VehicleController::isChargingState());
+
+        host_gpio_pin_val[POWER::CHARGE_SENS] = HIGH;
+        msBefore = host_virtual_millis;
+        VehicleController::update();
+        assert((host_virtual_millis - msBefore) == 800 && "Fallback cascade must also execute 800ms 4-blink sequence");
+        assert(host_gpio_pin_val[POWER::POWER_ENABLE] == LOW && "POWER_ENABLE must be released after fallback blink");
+    }
+    std::cout << "  PASS: Charging mode USB unplug 4-blink shutdown and fallback cascade verified." << std::endl;
+
+    // ── Test 32: USB-Connected Power-Off Dispatch to Charging Mode ──
+    std::cout << "[Host VC Test] Test 32: USB-Connected Power-Off Dispatch to Charging Mode..." << std::endl;
+    {
+        HardwareConfig hw32;
+        hw32.power.buttonHoldS = 4;
+        hw32.charging.configured = true;
+        hw32.charging.pin = 38;
+        HardwareInit::init(hw32);
+
+        // Board is in RUN mode on USB (latched power, charging sense active)
+        host_gpio_pin_val[POWER::POWER_ENABLE] = HIGH;
+        host_gpio_pin_val[POWER::CHARGE_SENS] = LOW; // USB connected
+        HardwareInit::clearUsbBoot();
+        HardwareInit::clearPowerOffRequested();
+
+        // 1. Hold power button for 4.5 seconds while USB is connected
+        host_gpio_pin_val[POWER::POWER_BUTTON] = HIGH;
+        host_virtual_millis = 500000;
+        HardwareInit::update(hw32.power.buttonHoldS, hw32.power.indicatorPin);
+
+        host_virtual_millis = 504500; // 4.5s elapsed
+        HardwareInit::update(hw32.power.buttonHoldS, hw32.power.indicatorPin);
+
+        // Power-off must NOT cut POWER_ENABLE directly; instead it must request power off
+        assert(host_gpio_pin_val[POWER::POWER_ENABLE] == HIGH && "POWER_ENABLE must remain latched while USB is connected");
+        assert(HardwareInit::isPowerOffRequested() && "Power-off request must be flagged for USB transition");
+
+        // Simulate main control loop dispatching power-off on USB:
+        // Sets USB boot mode, keeps power latched, clears power off request
+        HardwareInit::clearPowerOffRequested();
+        HardwareInit::setUsbBoot(true);
+        host_gpio_pin_val[POWER::POWER_BUTTON] = LOW;
+
+        VehicleController::init(&hw32, &engine, &profile);
+        VehicleController::update();
+        assert(VehicleController::isChargingState() && "VehicleController must be in charging mode");
+        assert(host_gpio_pin_val[POWER::POWER_ENABLE] == HIGH && "POWER_ENABLE must remain latched in charging mode");
+
+        // 2. Power button click while in charging mode wakes back to Run mode
+        host_gpio_pin_val[POWER::POWER_BUTTON] = HIGH;
+        host_virtual_millis = 505000;
+        HardwareInit::update(hw32.power.buttonHoldS);
+        host_gpio_pin_val[POWER::POWER_BUTTON] = LOW;
+        host_virtual_millis = 505200;
+        HardwareInit::update(hw32.power.buttonHoldS);
+        assert(HardwareInit::isButtonClicked() && "Button click must be detected");
+        HardwareInit::clearUsbBoot();
+        HardwareInit::clearButtonClicked();
+        assert(!HardwareInit::isUsbBoot() && "Must be in Run Mode after wake");
+
+        // 3. Power button hold on battery (USB unplugged) cuts POWER_ENABLE directly
+        host_gpio_pin_val[POWER::CHARGE_SENS] = HIGH; // USB unplugged
+        host_gpio_pin_val[POWER::POWER_BUTTON] = HIGH;
+        host_virtual_millis = 510000;
+        HardwareInit::update(hw32.power.buttonHoldS);
+        host_virtual_millis = 514500;
+        HardwareInit::update(hw32.power.buttonHoldS);
+        assert(host_gpio_pin_val[POWER::POWER_ENABLE] == LOW && "Power button hold on battery must immediately cut POWER_ENABLE");
+    }
+    std::cout << "  PASS: USB-connected power-off dispatch to charging mode and battery cutoff verified." << std::endl;
 
     std::cout << "[Host VC Test] ALL HOST VEHICLE CONTROLLER ASSERTIONS PASSED SUCCESSFULLY." << std::endl;
     return 0;

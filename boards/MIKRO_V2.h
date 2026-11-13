@@ -44,21 +44,21 @@ struct Board_MIKRO_V2 : BaseBoard {
     // 3. AUDIO (I2S DAC)
     // ───────────────────────────────────────────
     struct AUDIO {
-        static constexpr uint8_t I2S_LRC  = 48;
-        static constexpr uint8_t I2S_BCLK = 47;
-        static constexpr uint8_t I2S_DIN  = 33;
-        static constexpr uint8_t I2S_SD   = 34;
+        static constexpr int8_t I2S_LRC  = 48;
+        static constexpr int8_t I2S_BCLK = 47;
+        static constexpr int8_t I2S_DIN  = 33;
+        static constexpr int8_t I2S_SD   = 34;
     };
 
     // ───────────────────────────────────────────
     // 4. POWER & BATTERY MANAGEMENT
     // ───────────────────────────────────────────
     struct POWER : BaseBoard::POWER {
-        static constexpr uint8_t POWER_ENABLE       = 15;   // set high to enable board
-        static constexpr uint8_t POWER_BUTTON       = 14;   // Detect power button press
-        static constexpr uint8_t VOLTAGE_SENS       = 4;    // Voltage sense pin
-        static constexpr float   VOLTAGE_DIV_R_HIGH = 100.0f;
-        static constexpr float   VOLTAGE_DIV_R_LOW  = 100.0f;
-        static constexpr uint8_t CHARGE_SENS        = 35;   // Charging status indicator
+        static constexpr int8_t POWER_ENABLE       = 15;   // set high to enable board
+        static constexpr int8_t POWER_BUTTON       = 14;   // Detect power button press
+        static constexpr int8_t VOLTAGE_SENS       = 4;    // Voltage sense pin
+        static constexpr float  VOLTAGE_DIV_R_HIGH = 100.0f;
+        static constexpr float  VOLTAGE_DIV_R_LOW  = 100.0f;
+        static constexpr int8_t CHARGE_SENS        = 35;   // Charging status indicator
     };
 };

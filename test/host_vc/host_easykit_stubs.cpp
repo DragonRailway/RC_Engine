@@ -22,6 +22,8 @@ int host_last_aux2_us = 0;
 uint8_t host_last_head_led = 0;
 uint8_t host_last_tail_led = 0;
 uint8_t host_last_brake_led = 0;
+bool host_last_led_inverted = false;
+uint8_t host_last_led_pin = 0;
 
 uint8_t host_gpio_pin_mode[128] = {0};
 uint8_t host_gpio_pin_val[128] = {0};
@@ -78,7 +80,11 @@ struct EasyLED_StubState {
 EasyLED::EasyLED() {}
 EasyLED::EasyLED(uint8_t pin) {}
 EasyLED::~EasyLED() {}
-EasyKit::Result EasyLED::begin(uint8_t pin, const EasyKit::LEDConfig& config) { return EasyKit::Result::OK; }
+EasyKit::Result EasyLED::begin(uint8_t pin, const EasyKit::LEDConfig& config) {
+    host_last_led_pin = pin;
+    host_last_led_inverted = config.invertOutput;
+    return EasyKit::Result::OK;
+}
 void EasyLED::end() {}
 void EasyLED::write(bool value) { write(value ? 100.0f : 0.0f); }
 void EasyLED::write(uint16_t ticks) { write(static_cast<float>(ticks) * 100.0f / 1023.0f); }

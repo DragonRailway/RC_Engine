@@ -55,6 +55,7 @@ bool     VehicleController::s_parkingBrakePrev = false;
 bool     VehicleController::s_wasConnected = false;
 bool     VehicleController::s_reconnectThrottleInterlock = false;
 bool     VehicleController::s_disconnectEngineStopDone = false;
+VehicleController::ChargingState VehicleController::s_chargingState = VehicleController::ChargingState::NOT_CHARGING;
 
 float    VehicleController::s_currentMotorSpeed = 0.0f;
 uint32_t VehicleController::s_lastInertiaTime = 0;
@@ -79,6 +80,16 @@ bool     VehicleController::s_ditchRunning = false;
 int16_t  VehicleController::aux_hydraulic1 = 0;
 bool     VehicleController::bucket_rattle_trigger = false;
 bool     VehicleController::dump_bed_toggle = false;
+
+static int8_t resolveChargingIndicatorPin(const HardwareConfig* hw) {
+    if (!hw) return Board::NO_PIN;
+    if (hw->charging.configured && Board::isValid(hw->charging.pin)) return hw->charging.pin;
+    if (Board::isValid(hw->power.indicatorPin)) return hw->power.indicatorPin;
+    if (Board::isValid(hw->lights.headLight.pin)) return hw->lights.headLight.pin;
+    if (Board::isValid(hw->lights.turnLight.leftPin)) return hw->lights.turnLight.leftPin;
+    if (Board::isValid(hw->lights.turnLight.rightPin)) return hw->lights.turnLight.rightPin;
+    return Board::NO_PIN;
+}
 
 // ── Method implementations ──
 
@@ -207,6 +218,7 @@ void VehicleController::init(HardwareConfig* hw, RcEngineSound* engine, VehicleP
     s_wasConnected = RadioKit.isConnected();
     s_reconnectThrottleInterlock = false;
     s_disconnectEngineStopDone = false;
+    s_chargingState = ChargingState::NOT_CHARGING;
 
     Serial.printf("[VehicleController] Battery warning: %.2fV (%.2fV/cell), cutoff: %.2fV (%.2fV/cell)\n",
                   s_warningVoltage, s_hw->battery.warningVoltage,
@@ -244,13 +256,17 @@ void VehicleController::init(HardwareConfig* hw, RcEngineSound* engine, VehicleP
     }
 }
 
+void VehicleController::handlePowerButtonClick() {
+    s_disconnectStart = millis();
+    s_inWarningPhase = false;
+}
+
 void VehicleController::update() {
     if (!s_hw || !s_engine || !s_profile) return;
 
     // ── Power Button Click Handler ──
-    if (HardwareInit::consumeButtonClicked()) {
-        s_disconnectStart = millis();
-        s_inWarningPhase = false;
+    if (HardwareInit::isButtonClicked()) {
+        handlePowerButtonClick();
     }
 
     // ── Connection Status & Failsafe Transition Tracking ──
@@ -269,25 +285,83 @@ void VehicleController::update() {
     }
     s_wasConnected = isConnected;
 
-    // ── 3-State Board Power & Disconnect Auto Power-Off ──
-    bool isCharging = HardwareInit::isCharging();
-    if (isCharging && !isConnected) {
+    // ── Battery Protection & Sampling ──
+    static uint32_t s_lastBatSample = 0;
+    uint32_t nowMs = millis();
+    if (nowMs - s_lastBatSample >= 200) {
+        s_lastBatSample = nowMs;
+        if (Board::isValid(POWER::VOLTAGE_SENS)) {
+            float pinV = analogReadMilliVolts(Board::toGpio(POWER::VOLTAGE_SENS)) / 1000.0f;
+            float rawBatV = pinV * s_hw->battery.vScale + s_hw->battery.vOffset;
+
+            if (rawBatV > 2.5f * s_cellCount) {
+                if (s_filteredBatV <= 0.1f) {
+                    s_filteredBatV = rawBatV;
+                } else {
+                    s_filteredBatV = 0.90f * s_filteredBatV + 0.10f * rawBatV;
+                }
+            } else {
+                s_filteredBatV = 0.0f;
+            }
+        }
+    }
+    float batV = s_filteredBatV;
+
+    // ── 4-State Board Power & Disconnect Auto Power-Off ──
+    bool isChgPinLow = HardwareInit::isCharging();
+    bool isUsb = HardwareInit::isUsbPowered() || (batV > 4.35f * s_cellCount);
+
+    if (isChgPinLow) {
+        s_chargingState = ChargingState::CHARGING_ACTIVE;
+    } else if (isUsb) {
+        s_chargingState = ChargingState::CHARGING_COMPLETE;
+    } else {
+        // USB unplugged while in charging mode (and was USB-booted without being switched ON)
+        if (s_chargingState != ChargingState::NOT_CHARGING && HardwareInit::isUsbBoot() && !isConnected) {
+            Serial.println("[VehicleController] USB unplugged in charging mode -> powerOffWithBlink()");
+            int8_t chgPin = resolveChargingIndicatorPin(s_hw);
+            HardwareInit::powerOffWithBlink(chgPin, 4, 100, 100);
+            return;
+        }
+        s_chargingState = ChargingState::NOT_CHARGING;
+    }
+
+    if (s_chargingState != ChargingState::NOT_CHARGING && HardwareInit::isUsbBoot() && !isConnected) {
         s_disconnectStart = 0;
         s_inWarningPhase = false;
         HardwareInit::setAllMotors(0);
+        HardwareInit::sleepServos();
+        if (s_engine->getState() != RcEngineSound::OFF) {
+            s_engine->stopEngine();
+        }
 
-        // Drive charging indicator (configured pin or headlight fallback)
-        uint8_t chgPin = s_hw->charging.configured ? s_hw->charging.pin : s_hw->lights.headLight.pin;
-        if (chgPin != 0xFF) {
-            if (s_hw->charging.mode == 1) {
-                HardwareInit::setLightBlink(chgPin, true, 500, 500, 100);
-            } else if (s_hw->charging.mode == 2) {
-                uint8_t pulseDuty = (uint8_t)(50.0f + 50.0f * sinf(millis() * 0.005f));
-                HardwareInit::setLight(chgPin, pulseDuty);
+        // Drive charging indicator (configured pin or fallback cascade)
+        int8_t chgPin = resolveChargingIndicatorPin(s_hw);
+        if (Board::isValid(chgPin)) {
+            if (s_chargingState == ChargingState::CHARGING_ACTIVE) {
+                if (s_hw->charging.mode == 1) {
+                    HardwareInit::setLightBlink(chgPin, true, 500, 500, 100);
+                } else if (s_hw->charging.mode == 2) {
+                    uint8_t pulseDuty = (uint8_t)(50.0f + 50.0f * sinf(millis() * 0.005f));
+                    HardwareInit::setLight(chgPin, pulseDuty);
+                } else {
+                    // Default / heartbeat: 120ms ON, 120ms OFF, 120ms ON, 640ms OFF @ 1000ms cycle
+                    uint32_t t = millis() % 1000;
+                    bool on = (t < 120) || (t >= 240 && t < 360);
+                    HardwareInit::setLight(chgPin, on ? 100 : 0);
+                }
             } else {
-                HardwareInit::setLight(chgPin, 100);
+                // CHARGING_COMPLETE: Solid steady glow at 20% of max brightness
+                HardwareInit::setLight(chgPin, 20);
             }
         }
+
+        uint32_t now = millis();
+        if (now - s_lastTelemetry >= 1000) {
+            s_lastTelemetry = now;
+            updateTelemetry(0, 0, 0, 1, false, false, false, 0, batV);
+        }
+        return;
     } else if (isConnected) {
         s_disconnectStart = 0;
         s_inWarningPhase = false;
@@ -314,12 +388,17 @@ void VehicleController::update() {
         uint32_t warningMs = (uint32_t)s_hw->power.warningWindowS * 1000U;
         if (timeoutMs > 0) {
             if (elapsed >= timeoutMs) {
-                Serial.println("[VehicleController] Disconnect timeout reached -> powerOff()");
-                HardwareInit::powerOff();
+                if (HardwareInit::isUsbPowered() || HardwareInit::isCharging()) {
+                    Serial.println("[VehicleController] Disconnect timeout reached on USB -> requestPowerOff()");
+                    HardwareInit::requestPowerOff();
+                } else {
+                    Serial.println("[VehicleController] Disconnect timeout reached -> powerOff()");
+                    HardwareInit::powerOff();
+                }
                 return;
             } else if (warningMs > 0 && elapsed >= (timeoutMs - warningMs)) {
                 s_inWarningPhase = true;
-                if (s_hw->power.indicatorPin != 0xFF) {
+                if (Board::isValid(s_hw->power.indicatorPin)) {
                     HardwareInit::setLightBlink(s_hw->power.indicatorPin, true, 500, 500, 100);
                 }
             } else {
@@ -331,28 +410,6 @@ void VehicleController::update() {
     // Vehicle type from vehicle-config.json is the single source of truth
     const RcEngineSound::VehicleType vtype = s_profile->config.type;
     const bool isLoco = (vtype == RcEngineSound::VEHICLE_LOCOMOTIVE);
-
-    // ── Battery Protection & Low Voltage Cutoff ──
-    static uint32_t s_lastBatSample = 0;
-    uint32_t nowMs = millis();
-    if (nowMs - s_lastBatSample >= 200) {
-        s_lastBatSample = nowMs;
-        if (POWER::VOLTAGE_SENS != 0xFF) {
-            float pinV = analogReadMilliVolts(POWER::VOLTAGE_SENS) / 1000.0f;
-            float rawBatV = pinV * s_hw->battery.vScale + s_hw->battery.vOffset;
-
-            if (rawBatV > 2.5f * s_cellCount) {
-                if (s_filteredBatV <= 0.1f) {
-                    s_filteredBatV = rawBatV;
-                } else {
-                    s_filteredBatV = 0.90f * s_filteredBatV + 0.10f * rawBatV;
-                }
-            } else {
-                s_filteredBatV = 0.0f;
-            }
-        }
-    }
-    float batV = s_filteredBatV;
 
     if (s_cutoffVoltage > 0.0f && batV > 2.5f * s_cellCount) {
         if (batV < s_warningVoltage) {
@@ -1093,18 +1150,18 @@ void VehicleController::applyLightsWithAutomation(uint8_t bits, bool turnL, bool
     uint8_t brakeBright = brakeActive ? L.brakeLight.brightness : 0;
     uint8_t revBright   = manualRev ? L.reversingLight.brightness : 0;
 
-    if (L.reversingLight.pin != 0xFF && L.reversingLight.pin == L.brakeLight.pin) {
+    if (Board::isValid(L.reversingLight.pin) && L.reversingLight.pin == L.brakeLight.pin) {
         brakeBright = max(brakeBright, revBright);
         revBright = 0;
     }
-    if (L.tailLight.pin != 0xFF && L.tailLight.pin == L.brakeLight.pin) {
+    if (Board::isValid(L.tailLight.pin) && L.tailLight.pin == L.brakeLight.pin) {
         brakeBright = max(brakeBright, tailBright);
         tailBright = 0;
     }
 
     HardwareInit::setLight(L.tailLight.pin,      tailBright);
     HardwareInit::setLight(L.brakeLight.pin,     brakeBright);
-    if (L.reversingLight.pin != 0xFF && L.reversingLight.pin != L.brakeLight.pin) {
+    if (Board::isValid(L.reversingLight.pin) && L.reversingLight.pin != L.brakeLight.pin) {
         HardwareInit::setLight(L.reversingLight.pin, revBright);
     }
 
@@ -1157,8 +1214,10 @@ void VehicleController::updateTelemetry(int16_t motorSpeed, int16_t steerVal, in
     const char* gearStr = (gear == 0) ? "D" : (gear == 2) ? "R" : "P";
     const char* eStateStr = s_engine ? engineStateStr(s_engine->getState()) : "OFF";
     uint16_t rpm = s_engine ? s_engine->getRpm() : 0;
-    Serial.printf("[STATUS] Eng:%s RPM:%u Thr:%d%% Mot:%d%% Spd:%dkm/h Steer:%d Gear:%s Brk:%d Head:%d L:%d R:%d Bat:%.2fV (%s%%)\n",
+    int btnVal = Board::isValid(POWER::POWER_BUTTON) ? digitalRead(Board::toGpio(POWER::POWER_BUTTON)) : -1;
+    int chgVal = Board::isValid(POWER::CHARGE_SENS) ? digitalRead(Board::toGpio(POWER::CHARGE_SENS)) : -1;
+    Serial.printf("[STATUS] Eng:%s RPM:%u Thr:%d%% Mot:%d%% Spd:%dkm/h Steer:%d Gear:%s Brk:%d Head:%d L:%d R:%d Bat:%.2fV (%s%%) Btn:%d Chg:%d\n",
                   eStateStr, rpm, throttlePct, motorSpeed, speedKmph, steerVal, gearStr,
                   brakePressed ? 1 : 0, s_headlightMode, turnL ? 1 : 0, turnR ? 1 : 0,
-                  batV, s_battBuf);
+                  batV, s_battBuf, btnVal, chgVal);
 }

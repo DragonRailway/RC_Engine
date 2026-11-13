@@ -16,7 +16,7 @@ class HardwareInit {
         uint8_t    dutyMin = 20;
         uint8_t    dutyMax = 90;
         uint32_t   frequency = 20000;
-        uint8_t    bemfPin = 0xFF;
+        int8_t     bemfPin = NO_PIN;
         bool       attached = false;
         EasyMotor* driver = nullptr;   // used when type == DRIVER
         EasyServo* esc = nullptr;      // used when type == ESC
@@ -26,22 +26,36 @@ public:
     static void init(const HardwareConfig& hw);
     static void hotReload(const HardwareConfig& hw);
     static void stopAll();
-    static void update(uint16_t buttonHoldS = 4, uint8_t indicatorPin = 0xFF);
+    static void update(uint16_t buttonHoldS = 4, int8_t indicatorPin = NO_PIN);
     static void latchPower(uint16_t bootLatchS = 1);
-    static void updatePowerButton(uint16_t buttonHoldS = 4, uint8_t indicatorPin = 0xFF);
+    static void updatePowerButton(uint16_t buttonHoldS = 4, int8_t indicatorPin = NO_PIN);
 
+    static bool isButtonClicked() { return s_buttonClicked; }
+    static void clearButtonClicked() { s_buttonClicked = false; }
     static bool consumeButtonClicked() {
         bool clicked = s_buttonClicked;
         s_buttonClicked = false;
         return clicked;
     }
 
+    static bool isPowerOffRequested() { return s_powerOffRequested; }
+    static void requestPowerOff() { s_powerOffRequested = true; }
+    static void clearPowerOffRequested() { s_powerOffRequested = false; }
+
     static bool isCharging() {
-        if (POWER::CHARGE_SENS == 0xFF) return false;
-        return digitalRead(POWER::CHARGE_SENS) == LOW;
+        if (!Board::isValid(POWER::CHARGE_SENS)) return false;
+        bool inv = Board::isPinInverted(POWER::CHARGE_SENS);
+        uint8_t gpio = Board::toGpio(POWER::CHARGE_SENS);
+        return (digitalRead(gpio) == LOW) ^ inv;
     }
 
+    static bool isUsbBoot() { return s_isUsbBoot; }
+    static void clearUsbBoot() { s_isUsbBoot = false; }
+    static void setUsbBoot(bool usbBoot = true) { s_isUsbBoot = usbBoot; }
+    static bool isUsbPowered();
+
     static void powerOff();
+    static void powerOffWithBlink(int8_t indicatorPin, uint8_t blinks = 4, uint16_t onMs = 100, uint16_t offMs = 100);
 
     static bool isPowerLatched() { return s_powerLatched; }
 
@@ -49,7 +63,7 @@ public:
     static void setAllMotors(int16_t speed);
     static void setMotor(int16_t speed);
 
-    static uint8_t getPrimaryBemfPin() {
+    static int8_t getPrimaryBemfPin() {
         return s_primaryBemfPin;
     }
 
@@ -58,14 +72,14 @@ public:
     static void sleepServos();
     static void wakeServos();
     static void setPump(bool active);
-    static void setLight(uint8_t pin, uint8_t brightnessPct);
+    static void setLight(int8_t pin, uint8_t brightnessPct);
     static void setLight(const HardwareConfig::Lights::Light& light, uint8_t brightnessPct);
-    static void setLightBlink(uint8_t pin, bool active, uint16_t onMs, uint16_t offMs, uint8_t dutyPct);
-    static void setLightFade(uint8_t pin, uint8_t targetPct, uint16_t durationMs);
+    static void setLightBlink(int8_t pin, bool active, uint16_t onMs, uint16_t offMs, uint8_t dutyPct);
+    static void setLightFade(int8_t pin, uint8_t targetPct, uint16_t durationMs);
     static void setLightFade(const HardwareConfig::Lights::Light& light, uint8_t targetPct, uint16_t durationMs);
 
-    static uint8_t getLightDutyPercent(uint8_t pin) {
-        if (pin == 0xFF || pin == 0) return 0;
+    static uint8_t getLightDutyPercent(int8_t pin) {
+        if (!Board::isValid(pin) || pin == 0) return 0;
         EasyLED* led = findLight(pin);
         if (!led) return 0;
         return (uint8_t)led->getDutyPercent();
@@ -88,33 +102,33 @@ public:
     static MotorChannel s_driveCh[HardwareConfig::MAX_DRIVE_MOTORS];
     static uint8_t      s_driveChCount;
     static MotorChannel s_rightCh;
-    static uint8_t      s_primaryBemfPin;
+    static int8_t       s_primaryBemfPin;
 
-    static uint8_t headPins[HardwareConfig::MAX_PINS_PER_LIGHT];
+    static int8_t  headPins[HardwareConfig::MAX_PINS_PER_LIGHT];
     static uint8_t headPinCount;
-    static uint8_t fullPins[HardwareConfig::MAX_PINS_PER_LIGHT];
+    static int8_t  fullPins[HardwareConfig::MAX_PINS_PER_LIGHT];
     static uint8_t fullPinCount;
-    static uint8_t fogPins[HardwareConfig::MAX_PINS_PER_LIGHT];
+    static int8_t  fogPins[HardwareConfig::MAX_PINS_PER_LIGHT];
     static uint8_t fogPinCount;
-    static uint8_t tailPins[HardwareConfig::MAX_PINS_PER_LIGHT];
+    static int8_t  tailPins[HardwareConfig::MAX_PINS_PER_LIGHT];
     static uint8_t tailPinCount;
-    static uint8_t brakePins[HardwareConfig::MAX_PINS_PER_LIGHT];
+    static int8_t  brakePins[HardwareConfig::MAX_PINS_PER_LIGHT];
     static uint8_t brakePinCount;
-    static uint8_t turnLPin;
-    static uint8_t turnRPin;
-    static uint8_t reversingPins[HardwareConfig::MAX_PINS_PER_LIGHT];
+    static int8_t  turnLPin;
+    static int8_t  turnRPin;
+    static int8_t  reversingPins[HardwareConfig::MAX_PINS_PER_LIGHT];
     static uint8_t reversingPinCount;
-    static uint8_t beaconPins[HardwareConfig::MAX_PINS_PER_LIGHT];
+    static int8_t  beaconPins[HardwareConfig::MAX_PINS_PER_LIGHT];
     static uint8_t beaconPinCount;
-    static uint8_t cabPins[HardwareConfig::MAX_PINS_PER_LIGHT];
+    static int8_t  cabPins[HardwareConfig::MAX_PINS_PER_LIGHT];
     static uint8_t cabPinCount;
-    static uint8_t workPins[HardwareConfig::MAX_PINS_PER_LIGHT];
+    static int8_t  workPins[HardwareConfig::MAX_PINS_PER_LIGHT];
     static uint8_t workPinCount;
-    static uint8_t stepPins[HardwareConfig::MAX_PINS_PER_LIGHT];
+    static int8_t  stepPins[HardwareConfig::MAX_PINS_PER_LIGHT];
     static uint8_t stepPinCount;
-    static uint8_t ditchLPin;
-    static uint8_t ditchRPin;
-    static uint8_t auxPins[HardwareConfig::MAX_PINS_PER_LIGHT];
+    static int8_t  ditchLPin;
+    static int8_t  ditchRPin;
+    static int8_t  auxPins[HardwareConfig::MAX_PINS_PER_LIGHT];
     static uint8_t auxPinCount;
 
     static HardwareConfig::AuxMotor s_auxConfigs[HardwareConfig::MAX_AUX_MOTORS];
@@ -129,7 +143,7 @@ public:
     static uint16_t s_fadeDurationMs;
     static uint8_t  s_ditchBrightness;
 
-    static uint8_t s_blinkPin[4];
+    static int8_t  s_blinkPin[4];
     static bool    s_blinkActive[4];
     static constexpr uint8_t MAX_PHYSICAL_DRIVERS = 4;
 
@@ -160,9 +174,9 @@ public:
     static bool      s_ditchActive;
 
     static void initAuxOutputs(const HardwareConfig& hw);
-    static EasyLED* findLight(uint8_t pin);
+    static EasyLED* findLight(int8_t pin);
     static void resetBlinkTracking();
-    static int8_t blinkSlot(uint8_t pin);
+    static int8_t blinkSlot(int8_t pin);
     static void initChannel(MotorChannel& ch, const HardwareConfig::DriveMotor& motor,
                             EasyMotor* driver, EasyServo* esc);
     static void initSteeringServos(const HardwareConfig& hw);
@@ -173,5 +187,7 @@ private:
     static bool     s_powerButtonHolding;
     static uint32_t s_powerButtonHoldStart;
     static bool     s_buttonClicked;
+    static bool     s_powerOffRequested;
+    static bool     s_isUsbBoot;
     static int16_t  s_lastServoPos;
 };

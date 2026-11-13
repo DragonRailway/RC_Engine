@@ -13,6 +13,9 @@ using CurrentBoard = Board_GTRACK;
 #elif defined(MIKRO_V2)
 #include "MIKRO_V2.h"
 using CurrentBoard = Board_MIKRO_V2;
+#elif defined(RK_ULTRA)
+#include "RK_ULTRA.h"
+using CurrentBoard = Board_RK_ULTRA;
 #elif defined(TRACKLINK_V2)
 #include "TRACKLINK_V2.h"
 using CurrentBoard = Board_TRACKLINK_V2;
@@ -30,11 +33,12 @@ using POWER = typename CurrentBoard::POWER;
 
 class Board {
 public:
+    static constexpr int8_t NO_PIN = ::NO_PIN;
     static constexpr const char* NAME = CurrentBoard::NAME;
     using AUDIO = typename CurrentBoard::AUDIO;
     using POWER = typename CurrentBoard::POWER;
 
-    static uint8_t resolve(const char* name) {
+    static int8_t resolve(const char* name) {
         if (!name) return NO_PIN;
         for (const auto& entry : CurrentBoard::PINS) {
             if (strcmp(entry.name, name) == 0) {
@@ -44,14 +48,31 @@ public:
         return NO_PIN;
     }
 
+    static constexpr bool isPinInverted(int8_t pin) {
+        return pin < 0;
+    }
+
+    static constexpr bool isValid(int8_t pin) {
+        return pin != NO_PIN;
+    }
+
+    static constexpr uint8_t toGpio(int8_t pin) {
+        if (pin == NO_PIN) return 0xFF;
+        return static_cast<uint8_t>(pin < 0 ? -pin : pin);
+    }
+
+    static bool isInverted(const char* name) {
+        return isPinInverted(resolve(name));
+    }
+
     static DriverPins getDriver(const char* name) {
-        if (!name) return {0, 0, 0xFF, 0xFF, false};
+        if (!name) return {0, 0, NO_PIN, NO_PIN, NO_PIN, false};
         for (const auto& entry : CurrentBoard::DRIVERS) {
             if (strcmp(entry.name, name) == 0) {
                 return entry.pins;
             }
         }
-        return {0, 0, 0xFF, 0xFF, false};
+        return {0, 0, NO_PIN, NO_PIN, NO_PIN, false};
     }
 
     static constexpr size_t driverCount() {

@@ -63,8 +63,8 @@ The `PINS[]` table maps human-readable names used in `/hardware-config.json` dir
 
 ```cpp
 static constexpr PinEntry PINS[] = {
-    // Builtin status LED
-    {"L0", 42},
+    // Builtin status LED (negative = active-low / inverted polarity)
+    {"L0", -42},
 
     // LED outputs (MOSFET channels)
     {"L1", 6},  {"L2", 7},  {"L3", 8},
@@ -78,6 +78,16 @@ static constexpr PinEntry PINS[] = {
 };
 ```
 
+- **Pin Polarity & Inversion (Signed `int8_t`)**:
+  - All pin numbers in board definitions and configs use `int8_t`.
+  - **Negative pin numbers designate active-low / inverted polarity** (e.g. `-42`).
+  - When a pin is negative, the firmware automatically sets `invertOutput = true` for LED PWM output, or inverts input reading, while routing the positive GPIO `Board::toGpio(pin)` (`42`) to the ESP32 hardware peripheral.
+  - Pin helpers available via `boards.h`:
+    - `Board::isPinInverted(int8_t pin)`: Returns `true` if `pin < 0`.
+    - `Board::toGpio(int8_t pin)`: Returns `abs(pin)` (or `0xFF` if `NO_PIN`).
+    - `Board::isValid(int8_t pin)`: Returns `true` if `pin != NO_PIN` (`127`).
+- **Unassigned Sentinel**:
+  - Unconfigured pins default to `NO_PIN = 127` (available as `NO_PIN` and `Board::NO_PIN`).
 - **Pin Flexibility (Interchangeable Usage)**:
   - All ESP32 GPIOs in `PINS[]` can be used interchangeably in JSON configs:
     - `L0` .. `L8` (Lighting channels) can also drive servos/ESCs.
@@ -99,8 +109,8 @@ static constexpr DriverEntry DRIVERS[] = {
         .pins = Driver::DualPWM {
             .pwm1   = 13, // Forward PWM pin
             .pwm2   = 14, // Reverse PWM pin
-            .enable = 12, // Optional: Sleep/EN pin (defaults to 0xFF)
-            .bemf   = 4   // Optional: Back-EMF ADC sensing pin (defaults to 0xFF)
+            .enable = 12, // Optional: Sleep/EN pin (negative = active-low, defaults to NO_PIN)
+            .bemf   = 4   // Optional: Back-EMF ADC sensing pin (defaults to NO_PIN)
         }
     },
     {
@@ -125,7 +135,7 @@ static constexpr DriverEntry DRIVERS[] = {
         .pins = Driver::PwmDir {
             .pwm    = 18, // Speed PWM pin
             .dir    = 19, // Direction GPIO pin
-            .enable = 17  // Optional enable pin
+            .enable = 17  // Optional enable pin (negative = active-low, defaults to NO_PIN)
         }
     }
 };
@@ -138,28 +148,28 @@ Defines the I2S digital audio pins connected to the DAC (e.g. MAX98357A):
 
 ```cpp
 struct AUDIO {
-    static constexpr uint8_t I2S_LRC  = 17; // Word Select / Clock (LCLK)
-    static constexpr uint8_t I2S_BCLK = 18; // Bit Clock (BCLK)
-    static constexpr uint8_t I2S_DIN  = 21; // Serial Data (DIN)
-    static constexpr uint8_t I2S_SD   = 47; // Shutdown / Enable pin
+    static constexpr int8_t I2S_LRC  = 17; // Word Select / Clock (LCLK)
+    static constexpr int8_t I2S_BCLK = 18; // Bit Clock (BCLK)
+    static constexpr int8_t I2S_DIN  = 21; // Serial Data (DIN)
+    static constexpr int8_t I2S_SD   = 47; // Shutdown / Enable pin
 };
 ```
 
 ---
 
 ### 2.5 Power & Peripherals (`POWER`)
-Defines power button latching, battery ADC divider, and power accessory switches:
+Defines power button latching, battery ADC divider, and power accessory switches. Pins support negative values for active-low hardware:
 
 ```cpp
 struct POWER {
-    static constexpr uint8_t POWER_ENABLE       = 33;   // Active HIGH to latch power on
-    static constexpr uint8_t POWER_BUTTON       = 48;   // Momentary power push-button
-    static constexpr uint8_t VOLTAGE_SENS       = 4;    // Battery voltage ADC pin
+    static constexpr int8_t  POWER_ENABLE       = 33;    // Active HIGH (or negative for active LOW) to latch power on
+    static constexpr int8_t  POWER_BUTTON       = -48;   // Momentary power push-button (negative = active LOW with pull-up)
+    static constexpr int8_t  VOLTAGE_SENS       = 4;     // Battery voltage ADC pin
     static constexpr float   VOLTAGE_DIV_R_HIGH = 100.0f; // High-side resistor (to VBAT)
     static constexpr float   VOLTAGE_DIV_R_LOW  = 100.0f; // Low-side resistor (to GND)
-    static constexpr uint8_t CHARGE_SENS        = 34;   // USB charging detect input
-    static constexpr uint8_t SERVO_ENABLE       = 44;   // Optional: 5V buck / servo rail enable pin
-    static constexpr uint8_t PUMP_ENABLE        = 43;   // Optional: High-side MOSFET power switch (pump)
+    static constexpr int8_t  CHARGE_SENS        = -34;   // USB charging detect input (negative = active LOW)
+    static constexpr int8_t  SERVO_ENABLE       = -44;   // Optional: 5V buck / servo rail enable pin (negative = active LOW)
+    static constexpr int8_t  PUMP_ENABLE        = 43;    // Optional: High-side MOSFET power switch (pump)
 };
 ```
 
@@ -241,17 +251,17 @@ struct Board_TRACKLINK_V3 : BaseBoard {
     };
 
     struct AUDIO {
-        static constexpr uint8_t I2S_LRC  = 17;
-        static constexpr uint8_t I2S_BCLK = 18;
-        static constexpr uint8_t I2S_DIN  = 21;
-        static constexpr uint8_t I2S_SD   = 47;
+        static constexpr int8_t I2S_LRC  = 17;
+        static constexpr int8_t I2S_BCLK = 18;
+        static constexpr int8_t I2S_DIN  = 21;
+        static constexpr int8_t I2S_SD   = 47;
     };
 
     struct POWER {
-        static constexpr uint8_t POWER_ENABLE = 33;
-        static constexpr uint8_t POWER_BUTTON = 48;
-        static constexpr uint8_t VOLTAGE_SENS = 4;
-        static constexpr uint8_t CHARGE_SENS  = 34;
+        static constexpr int8_t POWER_ENABLE = 33;
+        static constexpr int8_t POWER_BUTTON = 48;
+        static constexpr int8_t VOLTAGE_SENS = 4;
+        static constexpr int8_t CHARGE_SENS  = 34;
     };
 };
 ```
@@ -279,17 +289,17 @@ struct Board_MIKRO_V2 : BaseBoard {
     };
 
     struct AUDIO {
-        static constexpr uint8_t I2S_LRC  = 48;
-        static constexpr uint8_t I2S_BCLK = 47;
-        static constexpr uint8_t I2S_DIN  = 33;
-        static constexpr uint8_t I2S_SD   = 34;
+        static constexpr int8_t I2S_LRC  = 48;
+        static constexpr int8_t I2S_BCLK = 47;
+        static constexpr int8_t I2S_DIN  = 33;
+        static constexpr int8_t I2S_SD   = 34;
     };
 
     struct POWER {
-        static constexpr uint8_t POWER_ENABLE = 15;
-        static constexpr uint8_t POWER_BUTTON = 14;
-        static constexpr uint8_t VOLTAGE_SENS = 4;
-        static constexpr uint8_t CHARGE_SENS  = 35;
+        static constexpr int8_t POWER_ENABLE = 15;
+        static constexpr int8_t POWER_BUTTON = 14;
+        static constexpr int8_t VOLTAGE_SENS = 4;
+        static constexpr int8_t CHARGE_SENS  = 35;
     };
 };
 ```
@@ -318,20 +328,20 @@ struct Board_GTRACK : BaseBoard {
     };
 
     struct AUDIO {
-        static constexpr uint8_t I2S_LRC  = 16;
-        static constexpr uint8_t I2S_BCLK = 17;
-        static constexpr uint8_t I2S_DIN  = 18;
-        static constexpr uint8_t I2S_SD   = 21;
+        static constexpr int8_t I2S_LRC  = 16;
+        static constexpr int8_t I2S_BCLK = 17;
+        static constexpr int8_t I2S_DIN  = 18;
+        static constexpr int8_t I2S_SD   = 21;
     };
 
     struct POWER {
-        static constexpr uint8_t POWER_ENABLE       = 35;
-        static constexpr uint8_t POWER_BUTTON       = 36;
-        static constexpr uint8_t VOLTAGE_SENS       = 7;
+        static constexpr int8_t POWER_ENABLE       = 35;
+        static constexpr int8_t POWER_BUTTON       = 36;
+        static constexpr int8_t VOLTAGE_SENS       = 7;
         static constexpr float   VOLTAGE_DIV_R_HIGH = 20.0f;
         static constexpr float   VOLTAGE_DIV_R_LOW  = 5.1f;
-        static constexpr uint8_t SERVO_ENABLE       = 44;
-        static constexpr uint8_t PUMP_ENABLE        = 43;
+        static constexpr int8_t SERVO_ENABLE       = 44;
+        static constexpr int8_t PUMP_ENABLE        = 43;
     };
 };
 ```

@@ -17,6 +17,10 @@ HardwareConfig hwConfig;
 // ── Config hot-reload & Control task state ──
 static TaskHandle_t s_controlTaskHandle = nullptr;
 static volatile bool s_configReloadPending = false;
+static bool s_operationalMode = true;
+
+static void startOperationalStack();
+static void stopOperationalStackToCharging();
 
 static void controlTask(void* param) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
@@ -25,8 +29,54 @@ static void controlTask(void* param) {
     while (true) {
         vTaskDelayUntil(&xLastWakeTime, xFrequency);
 
-        VehicleController::update();
         HardwareInit::update(hwConfig.power.buttonHoldS, hwConfig.power.indicatorPin);
+
+        if (Serial.available()) {
+            char c = Serial.read();
+            if (c == 'w' || c == 'W' || c == '\n') {
+                if (!s_operationalMode) {
+                    Serial.println("[MAIN] Serial wake command received -> Switching ON");
+                    startOperationalStack();
+                }
+            }
+        }
+
+        static uint64_t s_lastPinMask = 0;
+        uint64_t curMask = 0;
+        const int probePins[] = {0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 45, 46, 47, 48};
+        for (int p : probePins) {
+            if (digitalRead(p)) curMask |= (1ULL << p);
+        }
+        if (curMask != s_lastPinMask) {
+            for (int p : probePins) {
+                if (((curMask ^ s_lastPinMask) >> p) & 1) {
+                    Serial.printf("[PIN_EVENT] GPIO %d changed to %d\n", p, (int)((curMask >> p) & 1));
+                }
+            }
+            s_lastPinMask = curMask;
+        }
+
+        if (HardwareInit::isButtonClicked()) {
+            if (!s_operationalMode) {
+                Serial.println("[MAIN] Power button clicked in charging mode -> Switching ON");
+                startOperationalStack();
+            }
+        }
+
+        if (HardwareInit::isPowerOffRequested()) {
+            HardwareInit::clearPowerOffRequested();
+            if (HardwareInit::isUsbPowered() || HardwareInit::isCharging()) {
+                Serial.println("[MAIN] Power-off requested while USB connected -> Switching to Charging Mode");
+                stopOperationalStackToCharging();
+            } else {
+                Serial.println("[MAIN] Power-off requested on battery -> Powering off");
+                HardwareInit::powerOff();
+            }
+        }
+
+        VehicleController::update();
+
+        HardwareInit::clearButtonClicked();
     }
 }
 
@@ -60,6 +110,8 @@ static void applyAuxSliderProfile() {
 #define BOARD_DEFAULT_NAME "TRACKLINK_V3"
 #elif defined(GTRACK)
 #define BOARD_DEFAULT_NAME "GTRACK"
+#elif defined(RK_ULTRA)
+#define BOARD_DEFAULT_NAME "RK_ULTRA"
 #else
 #define BOARD_DEFAULT_NAME "RC_Engine"
 #endif
@@ -115,6 +167,86 @@ static void applyDeviceMetadata(const HardwareConfig& hw, const RcEngineSound::C
 }
 
 static bool s_audioStarted = false;
+static bool s_hasSoundAssets = false;
+static bool s_radioKitStarted = false;
+
+static void startOperationalStack() {
+    if (s_operationalMode && s_radioKitStarted) return;
+    Serial.println("\n── Starting RadioKit & Audio Stack (Switched ON) ──");
+    HardwareInit::clearUsbBoot();
+
+    if (!s_radioKitStarted) {
+        initRadioKit();
+        RadioKit.config.name = BOARD_DEFAULT_NAME;
+        RadioKit.config.description = "RC Engine Controller";
+        applyDeviceMetadata(hwConfig, profile.config);
+        applyAuxSliderProfile();
+        UiLogger::onRadioKitStarted();
+        s_radioKitStarted = true;
+
+        rk_fsSetCallback([](uint8_t subCmd, const uint8_t* payload, uint16_t payloadLen) {
+            if (subCmd == RK_FS_CMD_UPLOAD_END || subCmd == RK_FS_CMD_REPLACE || subCmd == RK_FS_CMD_WRITE) {
+                Serial.println("[RadioKit] FS write/upload complete -> scheduling config reload");
+                s_configReloadPending = true;
+            }
+        });
+    } else {
+#if defined(RK_ENABLE_BLE)
+        NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
+        if (pAdv && !pAdv->isAdvertising()) {
+            pAdv->start();
+        }
+#endif
+    }
+
+    if (hwConfig.sound.configured && s_hasSoundAssets && !s_audioStarted) {
+        Serial.println("\n── Starting Engine Simulation & Audio Output ──");
+        engine.setConfig(profile.config);
+        engine.begin(profile.sounds, profile.config);
+        AudioOutput::begin(&engine);
+        AudioOutput::start();
+        s_audioStarted = true;
+    }
+
+    s_operationalMode = true;
+}
+
+static void stopOperationalStackToCharging() {
+    if (!s_operationalMode) return;
+    Serial.println("\n── Switching to Minimal Charging Mode (USB Connected) ──");
+
+    if (s_audioStarted) {
+        AudioOutput::stop();
+        s_audioStarted = false;
+    }
+    if (engine.getState() != RcEngineSound::OFF) {
+        engine.stopEngine();
+    }
+
+#if defined(RK_ENABLE_BLE)
+    NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
+    if (pAdv && pAdv->isAdvertising()) {
+        pAdv->stop();
+    }
+    NimBLEServer* pServer = NimBLEDevice::getServer();
+    if (pServer) {
+        auto peers = pServer->getPeerDevices();
+        for (auto& peer : peers) {
+            pServer->disconnect(peer);
+        }
+    }
+#endif
+
+    HardwareInit::stopAll();
+    HardwareInit::setUsbBoot(true);
+    s_operationalMode = false;
+
+    if (Board::isValid(POWER::POWER_ENABLE)) {
+        uint8_t gpio = Board::toGpio(POWER::POWER_ENABLE);
+        bool inv = Board::isPinInverted(POWER::POWER_ENABLE);
+        digitalWrite(gpio, inv ? LOW : HIGH);
+    }
+}
 
 static bool reloadConfigs() {
     Serial.println("\n── Reloading Configs ──");
@@ -242,12 +374,14 @@ void setup() {
 
     ConfigParser::printFilesystemInfo();
 
-    // Start RadioKit stack
-    Serial.println("\n── Starting RadioKit ──");
-    initRadioKit();
-    RadioKit.config.name = BOARD_DEFAULT_NAME;
-    RadioKit.config.description = "RC Engine Controller";
-
+    // Check if booted via USB (minimal charging mode)
+    if (HardwareInit::isUsbBoot()) {
+        s_operationalMode = false;
+        Serial.println("\n── USB Boot: Minimal Charging Mode (Modem & Audio OFF) ──");
+        Serial.println("  [Tip] Press the power button to switch ON and begin driving.");
+    } else {
+        s_operationalMode = true;
+    }
 
     Serial.println("\n── Loading Configs ──");
     String hwPath = ConfigParser::findHardwareConfig();
@@ -260,10 +394,9 @@ void setup() {
         Serial.printf("[Config] Loaded HW: %s, Vehicle: %s\n", hwPath.c_str(), vcPath.c_str());
         printConfig(hwConfig, profile.config);
 
-        bool hasSoundAssets = false;
         if (hwConfig.sound.configured) {
             Serial.println("\n── Loading Sounds ──");
-            hasSoundAssets = ConfigParser::loadSounds(profile.config, profile.sounds);
+            s_hasSoundAssets = ConfigParser::loadSounds(profile.config, profile.sounds);
         } else {
             Serial.println("\n── Audio Hardware: DISABLED (omitted from hardware config) ──");
         }
@@ -275,24 +408,10 @@ void setup() {
         profile.config.sound.master = hwConfig.sound.configured ? hwConfig.sound.volume : 0;
         VehicleController::init(&hwConfig, &engine, &profile);
 
-        Serial.println("\n── Starting Engine Simulation ──");
-        engine.setConfig(profile.config);
-        engine.begin(profile.sounds, profile.config);
-
-        if (hwConfig.sound.configured && hasSoundAssets) {
-            Serial.println("\n── Starting Audio Output Hardware ──");
-            AudioOutput::begin(&engine);
-            AudioOutput::start();
-            s_audioStarted = true;
-        } else {
-            if (hwConfig.sound.configured && !hasSoundAssets) {
-                Serial.println("[AudioOutput] Sound enabled in hardware but 0 sound assets loaded — Audio hardware disabled");
-            }
-            s_audioStarted = false;
+        if (s_operationalMode) {
+            startOperationalStack();
         }
 
-        applyDeviceMetadata(hwConfig, profile.config);
-        applyAuxSliderProfile();
         VehicleController::applyConfiguredLightMask(hwConfig.lights, hwConfig.auxLight.configured);
     } else {
         Serial.println("\n── Recovery Mode Active ──");
@@ -301,22 +420,8 @@ void setup() {
                       vcPath.c_str(), vcOk ? "OK" : "MISSING");
         Serial.println("RadioKit BLE and LittleFS are active. Upload configuration files to initialize.");
         UiLogger::log("WARN: Config missing — Recovery Mode");
+        startOperationalStack();
     }
-
-    Serial.println("\n── Starting RadioKit Services ──");
-    // initRadioKit() already calls startSerial + startBLE + enableFS + enableOTA.
-    // Only re-start BLE if startSerial was called in between (to restore BLE as
-    // primary transport). Here initRadioKit() handles the full sequence, so no
-    // additional transport init is needed.
-    UiLogger::onRadioKitStarted();
-
-    // Register RadioKit filesystem packet callback to schedule config reload on upload completion
-    rk_fsSetCallback([](uint8_t subCmd, const uint8_t* payload, uint16_t payloadLen) {
-        if (subCmd == RK_FS_CMD_UPLOAD_END || subCmd == RK_FS_CMD_REPLACE || subCmd == RK_FS_CMD_WRITE) {
-            Serial.println("[RadioKit] FS write/upload complete -> scheduling config reload");
-            s_configReloadPending = true;
-        }
-    });
 
     // Start deterministic 50 Hz control task (Priority 2, Core 1)
     xTaskCreatePinnedToCore(controlTask, "control", 8192, nullptr, 2, &s_controlTaskHandle, 1);
@@ -329,7 +434,11 @@ void setup() {
 }
 
 void loop() {
-    RadioKit.update();
+    if (s_operationalMode) {
+        RadioKit.update();
+    } else {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 
     // Event-driven configuration reload triggered upon upload completion
     if (s_configReloadPending) {

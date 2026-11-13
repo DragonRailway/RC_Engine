@@ -7,13 +7,13 @@
 class PinMapper {
 public:
     // Distinct markers for the motor-driver slots (stored in DriveMotor::hardwareId).
-    // High values keep them out of the GPIO pin range.
-    static constexpr uint8_t DRIVER_A = 0xE1;
-    static constexpr uint8_t DRIVER_B = 0xE2;
-    static constexpr uint8_t DRIVER_C = 0xE3;
-    static constexpr uint8_t DRIVER_D = 0xE4;
+    // Kept in positive range above max GPIO (48) and below NO_PIN (127).
+    static constexpr int8_t DRIVER_A = 120;
+    static constexpr int8_t DRIVER_B = 121;
+    static constexpr int8_t DRIVER_C = 122;
+    static constexpr int8_t DRIVER_D = 123;
 
-    static uint8_t resolve(const char* name) {
+    static int8_t resolve(const char* name) {
         if (!name) return NO_PIN;
 
         if (strcmp(name, "DRIVER_A") == 0) return DRIVER_A;
@@ -22,6 +22,18 @@ public:
         if (strcmp(name, "DRIVER_D") == 0) return DRIVER_D;
 
         return Board::resolve(name);
+    }
+
+    static constexpr bool isPinInverted(int8_t pin) {
+        return Board::isPinInverted(pin);
+    }
+
+    static constexpr uint8_t toGpio(int8_t pin) {
+        return Board::toGpio(pin);
+    }
+
+    static constexpr bool isValid(int8_t pin) {
+        return Board::isValid(pin);
     }
 
     static DriverPins getDriver(const char* name) {
