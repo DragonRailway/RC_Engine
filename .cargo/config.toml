@@ -1,0 +1,11 @@
+[target.xtensa-esp32s3-none-elf]
+runner = "espflash flash --monitor"
+
+[target.riscv32imc-unknown-none-elf]
+runner = "espflash flash --monitor"
+
+[target.riscv32imac-unknown-none-elf]
+runner = "espflash flash --monitor"
+
+[env]
+ESP_LOG = "info"

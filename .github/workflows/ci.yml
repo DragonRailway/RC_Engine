@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Workspace Tests & Bare-Metal Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: riscv32imc-unknown-none-elf
+
+      - name: Cargo Test Workspace
+        run: cargo test --workspace --verbose
+
+      - name: Bare-Metal no_std Check (riscv32imc)
+        run: |
+          cargo check --manifest-path crates/boards/bsp-core/Cargo.toml --target riscv32imc-unknown-none-elf --no-default-features
+          cargo check --manifest-path crates/rc-dsp/Cargo.toml --target riscv32imc-unknown-none-elf --no-default-features
+          cargo check --manifest-path crates/rc-sensors/Cargo.toml --target riscv32imc-unknown-none-elf --no-default-features
+
+      - name: Build Application Binaries
+        run: |
+          cargo check -p firmware-tracklink-v3
+          cargo check -p firmware-rk-ultra
+          cargo check -p firmware-mikro-v2
+          cargo check -p firmware-gtrack
