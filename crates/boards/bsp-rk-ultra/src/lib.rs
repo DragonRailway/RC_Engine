@@ -6,6 +6,7 @@
 #![no_std]
 
 use bsp_core::*;
+use rc_drivers_esp32s3::BoardHardware;
 
 pub const PIN_VOCABULARY: &[(&str, u8)] = &[
     // 5V Servo Rails
@@ -28,6 +29,13 @@ pub const PIN_VOCABULARY: &[(&str, u8)] = &[
 ];
 
 pub struct RkUltra;
+
+impl RkUltra {
+    /// Initialize the physical hardware structure for RK_ULTRA.
+    pub fn init_hardware() -> BoardHardware {
+        BoardHardware::from_board::<Self>()
+    }
+}
 
 impl Board for RkUltra {
     const NAME: &'static str = "RK_ULTRA";
@@ -103,10 +111,13 @@ mod tests {
         assert_eq!(RkUltra::resolve_pin("A1"), Some(42));
         assert_eq!(RkUltra::resolve_pin("SDA"), Some(37));
 
-        // Voltage divider ratio for 75k / 10k is 8.5
         assert!((RkUltra::VOLTAGE_DIVIDER.ratio() - 8.5).abs() < 1e-4);
 
         let driver_a = RkUltra::resolve_driver("DRIVER_A").unwrap();
         assert_eq!(driver_a.isens, Some(4));
+
+        let hw = RkUltra::init_hardware();
+        assert_eq!(hw.name, "RK_ULTRA");
+        assert_eq!(hw.power.power_latch_pin, Some(35));
     }
 }

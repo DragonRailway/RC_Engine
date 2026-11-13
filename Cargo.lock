@@ -14,6 +14,7 @@ name = "bsp-gtrack"
 version = "0.1.0"
 dependencies = [
  "bsp-core",
+ "rc-drivers-esp32s3",
 ]
 
 [[package]]
@@ -21,6 +22,7 @@ name = "bsp-mikro-v2"
 version = "0.1.0"
 dependencies = [
  "bsp-core",
+ "rc-drivers-esp32s3",
 ]
 
 [[package]]
@@ -28,6 +30,7 @@ name = "bsp-rk-ultra"
 version = "0.1.0"
 dependencies = [
  "bsp-core",
+ "rc-drivers-esp32s3",
 ]
 
 [[package]]
@@ -42,6 +45,7 @@ name = "bsp-tracklink-v3"
 version = "0.1.0"
 dependencies = [
  "bsp-core",
+ "rc-drivers-esp32s3",
 ]
 
 [[package]]
@@ -320,6 +324,7 @@ dependencies = [
 name = "rc-brain"
 version = "0.1.0"
 dependencies = [
+ "bsp-core",
  "critical-section",
  "embassy-futures",
  "embassy-sync",
@@ -328,6 +333,7 @@ dependencies = [
  "heapless 0.8.0",
  "rc-boards",
  "rc-core",
+ "rc-drivers-esp32s3",
  "rc-dsp",
  "rk-rs",
 ]

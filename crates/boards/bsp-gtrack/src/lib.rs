@@ -6,6 +6,7 @@
 #![no_std]
 
 use bsp_core::*;
+use rc_drivers_esp32s3::BoardHardware;
 
 pub const PIN_VOCABULARY: &[(&str, u8)] = &[
     // Low-side MOSFET LEDs
@@ -33,6 +34,13 @@ pub const PIN_VOCABULARY: &[(&str, u8)] = &[
 ];
 
 pub struct GTrack;
+
+impl GTrack {
+    /// Initialize the physical hardware structure for GTrack.
+    pub fn init_hardware() -> BoardHardware {
+        BoardHardware::from_board::<Self>()
+    }
+}
 
 impl Board for GTrack {
     const NAME: &'static str = "GTRACK";
@@ -100,5 +108,9 @@ mod tests {
 
         let ratio = GTrack::VOLTAGE_DIVIDER.ratio();
         assert!((ratio - 4.9215686).abs() < 1e-4);
+
+        let hw = GTrack::init_hardware();
+        assert_eq!(hw.name, "GTRACK");
+        assert_eq!(hw.power.power_latch_pin, Some(35));
     }
 }

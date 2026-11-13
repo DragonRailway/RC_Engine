@@ -11,9 +11,11 @@ extern crate std;
 pub mod assets;
 pub mod audio_pipeline;
 pub mod cockpit;
+pub mod runtime;
 pub mod vehicle_task;
 
 pub use assets::*;
 pub use audio_pipeline::*;
 pub use cockpit::*;
+pub use runtime::*;
 pub use vehicle_task::*;

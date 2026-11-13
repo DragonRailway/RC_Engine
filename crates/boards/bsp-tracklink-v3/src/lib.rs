@@ -6,6 +6,7 @@
 #![no_std]
 
 use bsp_core::*;
+use rc_drivers_esp32s3::BoardHardware;
 
 pub const PIN_VOCABULARY: &[(&str, u8)] = &[
     ("L0", 42), // BUILTIN LED
@@ -20,6 +21,13 @@ pub const PIN_VOCABULARY: &[(&str, u8)] = &[
 ];
 
 pub struct TrackLinkV3;
+
+impl TrackLinkV3 {
+    /// Initialize the physical hardware structure for TrackLink V3.
+    pub fn init_hardware() -> BoardHardware {
+        BoardHardware::from_board::<Self>()
+    }
+}
 
 impl Board for TrackLinkV3 {
     const NAME: &'static str = "TRACKLINK_V3";
@@ -87,5 +95,9 @@ mod tests {
         let driver_a = TrackLinkV3::resolve_driver("DRIVER_A").unwrap();
         assert_eq!(driver_a.pwm1, 13);
         assert_eq!(driver_a.pwm2, 14);
+
+        let hw = TrackLinkV3::init_hardware();
+        assert_eq!(hw.name, "TRACKLINK_V3");
+        assert_eq!(hw.power.power_latch_pin, Some(33));
     }
 }

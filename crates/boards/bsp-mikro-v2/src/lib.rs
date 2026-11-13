@@ -6,6 +6,7 @@
 #![no_std]
 
 use bsp_core::*;
+use rc_drivers_esp32s3::BoardHardware;
 
 pub const PIN_VOCABULARY: &[(&str, u8)] = &[
     ("L0", 36), // Builtin LED
@@ -24,6 +25,13 @@ pub const PIN_VOCABULARY: &[(&str, u8)] = &[
 ];
 
 pub struct MikroV2;
+
+impl MikroV2 {
+    /// Initialize the physical hardware structure for Mikro V2.
+    pub fn init_hardware() -> BoardHardware {
+        BoardHardware::from_board::<Self>()
+    }
+}
 
 impl Board for MikroV2 {
     const NAME: &'static str = "MIKRO_V2";
@@ -88,5 +96,9 @@ mod tests {
         assert_eq!(MikroV2::resolve_pin("S1"), Some(5));
         assert_eq!(MikroV2::resolve_pin("S4"), Some(8));
         assert_eq!(MikroV2::resolve_pin("S5"), None);
+
+        let hw = MikroV2::init_hardware();
+        assert_eq!(hw.name, "MIKRO_V2");
+        assert_eq!(hw.power.power_latch_pin, Some(15));
     }
 }

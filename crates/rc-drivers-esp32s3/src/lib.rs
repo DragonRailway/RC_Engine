@@ -5,10 +5,11 @@
 //! - Calibrated battery voltage sensing
 //! - Ultrasonic 20 kHz dual-PWM motor drive
 //! - Dual-core continuous I2S DMA audio pipeline (Core 1)
+//! - `BoardHardware` bundle passed to the central runtime
 
 #![no_std]
 
-use bsp_core::ResistorDivider;
+use bsp_core::{Board, DynamicPinPool, ResistorDivider};
 
 /// Power state machine tracking button presses and latch hold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -20,6 +21,7 @@ pub enum PowerState {
 }
 
 /// Power management controller managing `PWR_EN` and `PWR_BTN`.
+#[derive(Debug, Clone, Copy)]
 pub struct PowerController {
     pub state: PowerState,
     pub power_latch_pin: Option<u8>,
@@ -69,6 +71,7 @@ impl PowerController {
 }
 
 /// Calibrated Battery ADC reader applying the board's exact resistor divider ratio.
+#[derive(Debug, Clone, Copy)]
 pub struct BatteryAdcDriver {
     pub divider: ResistorDivider,
     pub adc_pin: Option<u8>,
@@ -130,18 +133,50 @@ impl PwmDuty {
 }
 
 /// Core 1 continuous I2S DMA streaming buffer ring configuration.
+#[derive(Debug, Clone, Copy)]
 pub struct I2sDmaConfig {
     pub sample_rate: u32,
     pub buffer_count: usize,
     pub buffer_frames: usize,
+    pub lrc_pin: u8,
+    pub bclk_pin: u8,
+    pub din_pin: u8,
+    pub sd_pin: Option<u8>,
 }
 
-impl Default for I2sDmaConfig {
-    fn default() -> Self {
+impl I2sDmaConfig {
+    pub const fn new(lrc: u8, bclk: u8, din: u8, sd: Option<u8>) -> Self {
         Self {
             sample_rate: 22050,
             buffer_count: 4,
-            buffer_frames: 128, // 128 frames * 2 bytes = 256 bytes per DMA descriptor (~5.8 ms)
+            buffer_frames: 128, // 128 frames (~5.8 ms per DMA block)
+            lrc_pin: lrc,
+            bclk_pin: bclk,
+            din_pin: din,
+            sd_pin: sd,
+        }
+    }
+}
+
+/// Unified hardware structure handed off by the BSP to the central runtime.
+#[derive(Debug, Clone)]
+pub struct BoardHardware {
+    pub name: &'static str,
+    pub power: PowerController,
+    pub battery_adc: BatteryAdcDriver,
+    pub audio: I2sDmaConfig,
+    pub dynamic_pins: DynamicPinPool,
+}
+
+impl BoardHardware {
+    /// Constructs a standard `BoardHardware` bundle for any board implementing `Board`.
+    pub fn from_board<B: Board>() -> Self {
+        Self {
+            name: B::NAME,
+            power: PowerController::new(B::POWER.power_enable, B::POWER.power_button),
+            battery_adc: BatteryAdcDriver::new(B::VOLTAGE_DIVIDER, B::POWER.voltage_sens),
+            audio: I2sDmaConfig::new(B::AUDIO.lrc, B::AUDIO.bclk, B::AUDIO.din, B::AUDIO.sd),
+            dynamic_pins: DynamicPinPool::new(),
         }
     }
 }
@@ -155,37 +190,28 @@ mod tests {
         let mut pwr = PowerController::new(Some(35), Some(36));
         assert_eq!(pwr.state, PowerState::Starting);
 
-        // Step 1: Latch activates immediately
         let shutdown = pwr.update(false, 20);
         assert!(!shutdown);
         assert_eq!(pwr.state, PowerState::Running);
 
-        // Short button presses (e.g. 500 ms) do not trigger shutdown
         for _ in 0..25 {
             assert!(!pwr.update(true, 20));
         }
-        // Button released
         assert!(!pwr.update(false, 20));
 
-        // Long button press: 3000 ms = 150 ticks
         for _ in 0..149 {
             assert!(!pwr.update(true, 20));
         }
-        // Tick 150: Reaches 3000 ms threshold
         assert!(pwr.update(true, 20));
         assert_eq!(pwr.state, PowerState::PoweringDown);
     }
 
     #[test]
     fn test_battery_adc_scaling() {
-        // TrackLink V3: 100k / 100k divider -> ratio = 2.0
         let driver = BatteryAdcDriver::new(ResistorDivider::new(100.0, 100.0), Some(2));
-        
-        // At half-scale ADC (2048 / 4095), pin voltage is ~1.55V, battery is ~3.10V
         let volts = driver.raw_to_battery_voltage(2048);
         assert!((volts - 3.10).abs() < 0.05);
 
-        // At full-scale ADC (4095), pin voltage is 3.10V, battery is 6.20V
         let volts_full = driver.raw_to_battery_voltage(4095);
         assert!((volts_full - 6.20).abs() < 0.01);
     }
@@ -194,17 +220,14 @@ mod tests {
     fn test_pwm_duty_dual_pwm() {
         let max_duty = 1023u16;
 
-        // Forward 80%
         let duty_fwd = PwmDuty::from_speed(80, max_duty);
         assert_eq!(duty_fwd.duty_ch1, 818);
         assert_eq!(duty_fwd.duty_ch2, 0);
 
-        // Reverse 50%
         let duty_rev = PwmDuty::from_speed(-50, max_duty);
         assert_eq!(duty_rev.duty_ch1, 0);
         assert_eq!(duty_rev.duty_ch2, 511);
 
-        // Stopped (0%)
         let duty_stop = PwmDuty::from_speed(0, max_duty);
         assert_eq!(duty_stop.duty_ch1, 0);
         assert_eq!(duty_stop.duty_ch2, 0);
