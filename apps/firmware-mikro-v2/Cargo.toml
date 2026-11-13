@@ -16,4 +16,4 @@ rc-brain = { path = "../../crates/rc-brain" }
 bsp-mikro-v2 = { path = "../../crates/boards/bsp-mikro-v2" }
 bsp-core = { path = "../../crates/boards/bsp-core" }
 rc-core = { path = "../../crates/rc-core" }
-rk-rs = { path = "../../../rk-rs/crates/rk-rs" }
+rk-rs = { workspace = true }

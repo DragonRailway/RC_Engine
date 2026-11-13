@@ -388,6 +388,7 @@ dependencies = [
 [[package]]
 name = "rk-core"
 version = "0.1.0"
+source = "git+https://github.com/Radio-Kit/RK-Embassy.git#d007f2dbccdebb1e92f4c377d6a682bd8053a17a"
 dependencies = [
  "byteorder",
  "heapless 0.8.0",
@@ -396,6 +397,7 @@ dependencies = [
 [[package]]
 name = "rk-embassy"
 version = "0.1.0"
+source = "git+https://github.com/Radio-Kit/RK-Embassy.git#d007f2dbccdebb1e92f4c377d6a682bd8053a17a"
 dependencies = [
  "embassy-futures",
  "embassy-sync",
@@ -409,6 +411,7 @@ dependencies = [
 [[package]]
 name = "rk-rs"
 version = "0.1.0"
+source = "git+https://github.com/Radio-Kit/RK-Embassy.git#d007f2dbccdebb1e92f4c377d6a682bd8053a17a"
 dependencies = [
  "embedded-io-async",
  "heapless 0.8.0",
@@ -420,6 +423,7 @@ dependencies = [
 [[package]]
 name = "rk-transport-serial"
 version = "0.1.0"
+source = "git+https://github.com/Radio-Kit/RK-Embassy.git#d007f2dbccdebb1e92f4c377d6a682bd8053a17a"
 dependencies = [
  "embassy-futures",
  "embassy-time",

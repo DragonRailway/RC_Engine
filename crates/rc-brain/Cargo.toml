@@ -33,7 +33,7 @@ rc-core = { path = "../rc-core", default-features = false }
 rc-boards = { path = "../rc-boards", default-features = false }
 bsp-core = { path = "../boards/bsp-core", default-features = false }
 rc-drivers-esp32s3 = { path = "../rc-drivers-esp32s3", default-features = false }
-rk-rs = { path = "../../../rk-rs/crates/rk-rs", default-features = false }
+rk-rs = { workspace = true }
 embassy-sync = { workspace = true }
 embassy-time = { workspace = true }
 embassy-futures = { workspace = true }
