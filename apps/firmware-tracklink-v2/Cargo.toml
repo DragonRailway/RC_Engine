@@ -22,7 +22,9 @@ embedded = [
     "dep:trouble-host",
     "dep:bt-hci",
     "dep:static_cell",
-    "dep:embassy-executor"
+    "dep:embassy-executor",
+    "dep:esp-println",
+    "dep:log"
 ]
 
 [dependencies]
@@ -32,6 +34,8 @@ bsp-core = { path = "../../crates/boards/bsp-core", default-features = false }
 rc-core = { path = "../../crates/rc-core", default-features = false }
 rc-drivers-esp32s3 = { path = "../../crates/rc-drivers-esp32s3", default-features = false }
 rk-rs = { workspace = true }
+log = { workspace = true, optional = true }
+esp-println = { workspace = true, optional = true, features = ["esp32s3", "log", "jtag-serial"] }
 esp-hal = { workspace = true, optional = true }
 esp-bootloader-esp-idf = { workspace = true, optional = true }
 esp-rtos = { workspace = true, optional = true, features = ["esp32s3", "embassy", "esp-radio", "esp-alloc"] }

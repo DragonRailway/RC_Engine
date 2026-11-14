@@ -60,8 +60,13 @@ async fn main(spawner: embassy_executor::Spawner) {
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     esp_rtos::start(timg0.timer0, peripherals.FROM_CPU_INTR0);
 
+    // Initialize esp-println logger over USB-Serial-JTAG
+    esp_println::logger::init_logger(log::LevelFilter::Info);
+    log::info!("TrackLink V2 booting... initializing hardware");
+
     // Initialize TrackLink V2 Power Latch (GPIO21) and Button (GPIO38)
-    let pwr_latch = Output::new(peripherals.GPIO21, Level::High, OutputConfig::default());
+    let mut pwr_latch = Output::new(peripherals.GPIO21, Level::High, OutputConfig::default());
+    pwr_latch.set_high(); // Latch power immediately!
     let pwr_btn = Input::new(peripherals.GPIO38, InputConfig::default().with_pull(Pull::Up));
 
     let mut hw_power = HardwarePower::new(
