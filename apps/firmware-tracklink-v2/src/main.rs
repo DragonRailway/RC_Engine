@@ -1,10 +1,4 @@
-//! Production firmware binary for TrackLink V2.
-//!
-//! Pin assignments:
-//! - Power latch: GPIO21
-//! - Power button: GPIO38 (active low)
-//! - Motor Driver A: GPIO6, GPIO7 (PWM), GPIO5 (Enable)
-//! - I2S DAC: LRC GPIO15, BCLK GPIO16, DIN GPIO17, SD GPIO18
+//! Production firmware binary for TrackLink V2 - LED & Hardware Control Test.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), no_main)]
@@ -44,9 +38,7 @@ use trouble_host::prelude::*;
 
 use bsp_core::Board;
 use bsp_tracklink_v2::TrackLinkV2;
-use rc_brain::*;
-use rk_rs::{WidgetDescriptor, RK_MAX_WIDGETS};
-use rk_rs::{build_conf_payload, build_packet, Command, Orientation};
+use rk_rs::*;
 
 #[cfg(feature = "embedded")]
 #[main]
@@ -63,7 +55,7 @@ async fn main(spawner: embassy_executor::Spawner) {
 
     // Initialize esp-println logger over USB-Serial-JTAG
     esp_println::logger::init_logger(log::LevelFilter::Info);
-    log::info!("TrackLink V2 booting... initializing hardware");
+    log::info!("TrackLink V2 booting... initializing LED test hardware");
 
     // Initialize TrackLink V2 Power Latch (GPIO21) and Button (GPIO38)
     let mut pwr_latch = Output::new(peripherals.GPIO21, Level::High, OutputConfig::default());
@@ -77,9 +69,22 @@ async fn main(spawner: embassy_executor::Spawner) {
         TrackLinkV2::POWER.power_button,
     );
 
-    let hardware = TrackLinkV2::init_hardware();
+    // Physical Hardware LED Outputs on TrackLink V2:
+    // GPIO 9 (L1) and GPIO 42 (L0 / Built-in LED)
+    let mut led_l1 = Output::new(peripherals.GPIO9, Level::Low, OutputConfig::default());
+    let mut led_l0 = Output::new(peripherals.GPIO42, Level::Low, OutputConfig::default());
+    led_l1.set_low();
+    led_l0.set_low();
+
+    // Setup RadioKit UI with Button (Toggle), Flash Button, and Feedback LED
     let mut storage = [WidgetDescriptor::default(); RK_MAX_WIDGETS];
-    let mut runtime = VehicleRuntime::new::<TrackLinkV2>(hardware, &mut storage);
+    let mut runner = RadioKitBuilder::new("TrackLink-V2")
+        .theme("rk")
+        .orientation(Orientation::Landscape)
+        .add_button(1, "Lights", 20, 20, 25, None)
+        .add_button(2, "Flash", 80, 20, 25, None)
+        .add_led(3, "L0", 140, 20, 20, LedShape::Circle)
+        .build(&mut storage);
 
     // Initialize BLE Stack with esp-radio + trouble-host
     let transport = BleConnector::new(peripherals.BT, esp_radio::ble::Config::default()).unwrap();
@@ -95,7 +100,7 @@ async fn main(spawner: embassy_executor::Spawner) {
             .build(),
     );
 
-    let runner = stack.runner();
+    let ble_runner = stack.runner();
     let mut peripheral = stack.peripheral();
 
     let server = RadioKitServer::new_with_config(GapConfig::Peripheral(PeripheralConfig {
@@ -104,7 +109,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     }))
     .unwrap();
 
-    let token = ble_runner_task(runner).unwrap();
+    let token = ble_runner_task(ble_runner).unwrap();
     spawner.spawn(token);
 
     // BLE Advertising packets
@@ -125,6 +130,8 @@ async fn main(spawner: embassy_executor::Spawner) {
     )
     .unwrap();
 
+    let mut l1_state = false;
+
     loop {
         let acceptor = peripheral
             .advertise(
@@ -138,20 +145,21 @@ async fn main(spawner: embassy_executor::Spawner) {
             .unwrap();
 
         if let Ok(conn) = acceptor.accept().await {
-            if let Ok(mut gatt_conn) = conn.with_attribute_server(&server) {
+            if let Ok(gatt_conn) = conn.with_attribute_server(&server) {
                 let mut conf_pushed = false;
                 loop {
+                    // Check if companion subscribed to widget CCCD and push CONF_DATA
                     if !conf_pushed && server.service.widget.should_notify(&gatt_conn) {
                         let mut p_buf = [0u8; 128];
                         if let Ok(p_len) = build_conf_payload(
                             &mut p_buf,
-                            Orientation::Landscape,
-                            "dragon",
+                            runner.config.orientation,
+                            runner.config.theme,
                             0,
                             1,
                             &[],
                             0,
-                            runtime.rk_runner.widgets,
+                            runner.widgets,
                         ) {
                             let mut pkt_buf = [0u8; 192];
                             if let Ok(pkt_len) = build_packet(&mut pkt_buf, Command::ConfData, &p_buf[..p_len]) {
@@ -168,25 +176,77 @@ async fn main(spawner: embassy_executor::Spawner) {
                         GattConnectionEvent::Disconnected { .. } => break,
                         GattConnectionEvent::Gatt { event } => {
                             if let GattEvent::Write(write_evt) = event {
+                                let mut is_get_conf = false;
+                                write_evt.with_data(|_offset, data| {
+                                    let mut parser = WidgetFrameParser::new();
+                                    for &b in data {
+                                        if let Some(Ok(cmd)) = parser.feed_byte(b) {
+                                            if cmd == Command::GetConf {
+                                                is_get_conf = true;
+                                            } else if cmd == Command::VarUpdate || cmd == Command::SetInput {
+                                                runner.handle_packet(cmd, parser.payload());
+                                            }
+                                        }
+                                    }
+                                });
                                 let _ = write_evt.accept().map(|resp| resp.send());
+
+                                if is_get_conf {
+                                    let mut p_buf = [0u8; 128];
+                                    if let Ok(p_len) = build_conf_payload(
+                                        &mut p_buf,
+                                        runner.config.orientation,
+                                        runner.config.theme,
+                                        0,
+                                        1,
+                                        &[],
+                                        0,
+                                        runner.widgets,
+                                    ) {
+                                        let mut pkt_buf = [0u8; 192];
+                                        if let Ok(pkt_len) = build_packet(&mut pkt_buf, Command::ConfData, &p_buf[..p_len]) {
+                                            let mut notif_val = [0u8; 64];
+                                            let copy_len = pkt_len.min(64);
+                                            notif_val[..copy_len].copy_from_slice(&pkt_buf[..copy_len]);
+                                            let _ = server.service.widget.notify(&gatt_conn, &notif_val, false).await;
+                                        }
+                                    }
+                                }
                             }
                         }
                         _ => {}
                     }
 
-                    let btn_pressed = hw_power.is_button_pressed();
-                    let shutdown = runtime.step::<TrackLinkV2>(btn_pressed, 20);
-                    if shutdown {
-                        hw_power.assert_latch(false);
-                        loop {}
+                    // Check widget states and drive physical LEDs
+                    let btn1 = runner.get_value(1) == Some(&WidgetValue::Button(true));
+                    let btn2 = runner.get_value(2) == Some(&WidgetValue::Button(true));
+
+                    if btn1 {
+                        l1_state = !l1_state;
+                    }
+
+                    // L1 (GPIO 9) controlled by Headlights toggle
+                    if l1_state {
+                        led_l1.set_high();
+                    } else {
+                        led_l1.set_low();
+                    }
+
+                    // L0 (GPIO 42) active when Flash button is pressed or L1 is active
+                    if btn2 || l1_state {
+                        led_l0.set_high();
+                        runner.set_value(3, WidgetValue::Led { state: true, color: 0x00FF00, opacity: 255 });
+                    } else {
+                        led_l0.set_low();
+                        runner.set_value(3, WidgetValue::Led { state: false, color: 0x00FF00, opacity: 50 });
+                    }
+
+                    // Power latch check
+                    if hw_power.is_button_pressed() {
+                        // Keep alive
                     }
                 }
             }
         }
     }
-}
-
-#[cfg(not(feature = "embedded"))]
-fn main() {
-    println!("Host simulation mode for TrackLink V2");
 }
