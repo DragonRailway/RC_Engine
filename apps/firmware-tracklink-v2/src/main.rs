@@ -69,21 +69,38 @@ async fn main(spawner: embassy_executor::Spawner) {
         TrackLinkV2::POWER.power_button,
     );
 
-    // Physical Hardware LED Outputs on TrackLink V2:
-    // GPIO 9 (L1) and GPIO 42 (L0 / Built-in LED)
-    let mut led_l1 = Output::new(peripherals.GPIO9, Level::Low, OutputConfig::default());
-    let mut led_l0 = Output::new(peripherals.GPIO42, Level::Low, OutputConfig::default());
+    // Physical Hardware Actuators on TrackLink V2:
+    // DRIVER_A: PWM1 (GPIO 6), PWM2 (GPIO 7), Enable (GPIO 5)
+    // Lights: L1 (GPIO 9 / Headlight), L2 (GPIO 10 / Reversing/Tail), L0 (GPIO 42 / Status)
+    let mut motor_pwm1 = Output::new(peripherals.GPIO6, Level::Low, OutputConfig::default());
+    let mut motor_pwm2 = Output::new(peripherals.GPIO7, Level::Low, OutputConfig::default());
+    let mut motor_en   = Output::new(peripherals.GPIO5, Level::High, OutputConfig::default());
+    let mut led_l1     = Output::new(peripherals.GPIO9, Level::Low, OutputConfig::default());
+    let mut led_l2     = Output::new(peripherals.GPIO10, Level::Low, OutputConfig::default());
+    let mut led_l0     = Output::new(peripherals.GPIO42, Level::Low, OutputConfig::default());
+
+    motor_pwm1.set_low();
+    motor_pwm2.set_low();
+    motor_en.set_high(); // Enable H-bridge
     led_l1.set_low();
+    led_l2.set_low();
     led_l0.set_low();
 
-    // Setup RadioKit UI with Button (Toggle), Flash Button, and Feedback LED
+    // Setup Locomotive RadioKit UI layout:
+    // Wid 10: Throttle (Slider 0..100)
+    // Wid 11: Reverser (Button toggle: FWD / REV)
+    // Wid 12: Headlight (Button toggle: Headlight / Reversing Light)
+    // Wid 13: Bell (Button: Sound/Bell trigger)
+    // Wid 14: Engine (Button toggle: Engine Run / Stop)
     let mut storage = [WidgetDescriptor::default(); RK_MAX_WIDGETS];
     let mut runner = RadioKitBuilder::new("TrackLink-V2")
         .theme("rk")
         .orientation(Orientation::Landscape)
-        .add_button(1, "Lights", 20, 20, 25, None)
-        .add_button(2, "Flash", 80, 20, 25, None)
-        .add_led(3, "L0", 140, 20, 20, LedShape::Circle)
+        .add_slider(10, "Throttle", 67, 105, 20, 114, CenteringMode::Min)
+        .add_button(11, "Reverser", 67, 173, 25, None)
+        .add_button(12, "Headlight", 31, 97, 25, None)
+        .add_button(13, "Bell", 31, 172, 25, Some("bell"))
+        .add_button(14, "Engine", 67, 41, 25, Some("power"))
         .build(&mut storage);
 
     // Initialize BLE Stack with esp-radio + trouble-host
@@ -130,7 +147,12 @@ async fn main(spawner: embassy_executor::Spawner) {
     )
     .unwrap();
 
-    let mut l1_state = false;
+    let mut engine_running = false;
+    let mut prev_engine_btn = false;
+    let mut reverser_fwd = true;
+    let mut prev_reverser_btn = false;
+    let mut headlight_on = false;
+    let mut prev_headlight_btn = false;
 
     loop {
         let acceptor = peripheral
@@ -163,10 +185,12 @@ async fn main(spawner: embassy_executor::Spawner) {
                         ) {
                             let mut pkt_buf = [0u8; 192];
                             if let Ok(pkt_len) = build_packet(&mut pkt_buf, Command::ConfData, &p_buf[..p_len]) {
-                                let mut notif_val = [0u8; 64];
-                                let copy_len = pkt_len.min(64);
-                                notif_val[..copy_len].copy_from_slice(&pkt_buf[..copy_len]);
-                                let _ = server.service.widget.notify(&gatt_conn, &notif_val, false).await;
+                                let mut offset = 0;
+                                while offset < pkt_len {
+                                    let chunk_size = (pkt_len - offset).min(64);
+                                    let _ = server.service.widget.notify_raw(&gatt_conn, &pkt_buf[offset..offset + chunk_size], false).await;
+                                    offset += chunk_size;
+                                }
                                 conf_pushed = true;
                             }
                         }
@@ -205,10 +229,12 @@ async fn main(spawner: embassy_executor::Spawner) {
                                     ) {
                                         let mut pkt_buf = [0u8; 192];
                                         if let Ok(pkt_len) = build_packet(&mut pkt_buf, Command::ConfData, &p_buf[..p_len]) {
-                                            let mut notif_val = [0u8; 64];
-                                            let copy_len = pkt_len.min(64);
-                                            notif_val[..copy_len].copy_from_slice(&pkt_buf[..copy_len]);
-                                            let _ = server.service.widget.notify(&gatt_conn, &notif_val, false).await;
+                                            let mut offset = 0;
+                                            while offset < pkt_len {
+                                                let chunk_size = (pkt_len - offset).min(64);
+                                                let _ = server.service.widget.notify_raw(&gatt_conn, &pkt_buf[offset..offset + chunk_size], false).await;
+                                                offset += chunk_size;
+                                            }
                                         }
                                     }
                                 }
@@ -217,28 +243,77 @@ async fn main(spawner: embassy_executor::Spawner) {
                         _ => {}
                     }
 
-                    // Check widget states and drive physical LEDs
-                    let btn1 = runner.get_value(1) == Some(&WidgetValue::Button(true));
-                    let btn2 = runner.get_value(2) == Some(&WidgetValue::Button(true));
+                    // ── Locomotive Vehicle Controller Logic ──
+                    // 1. Engine Start / Stop Toggle (Wid 14)
+                    let engine_btn = runner.get_value(14) == Some(&WidgetValue::Button(true));
+                    if engine_btn && !prev_engine_btn {
+                        engine_running = !engine_running;
+                    }
+                    prev_engine_btn = engine_btn;
 
-                    if btn1 {
-                        l1_state = !l1_state;
+                    // 2. Reverser Toggle (Wid 11: FWD / REV)
+                    let rev_btn = runner.get_value(11) == Some(&WidgetValue::Button(true));
+                    if rev_btn && !prev_reverser_btn {
+                        reverser_fwd = !reverser_fwd;
+                    }
+                    prev_reverser_btn = rev_btn;
+
+                    // 3. Headlight Toggle (Wid 12)
+                    let head_btn = runner.get_value(12) == Some(&WidgetValue::Button(true));
+                    if head_btn && !prev_headlight_btn {
+                        headlight_on = !headlight_on;
+                    }
+                    prev_headlight_btn = head_btn;
+
+                    // 4. Bell Active (Wid 13)
+                    let bell_active = runner.get_value(13) == Some(&WidgetValue::Button(true));
+
+                    // 5. Throttle Slider (Wid 10: 0..100)
+                    let raw_throttle = match runner.get_value(10) {
+                        Some(&WidgetValue::Slider(val)) => val.clamp(0, 100) as u8,
+                        _ => 0,
+                    };
+
+                    // Only produce motion when engine is running
+                    let effective_throttle = if engine_running { raw_throttle } else { 0 };
+
+                    // Actuate Driver A (GPIO 6 & 7) based on reverser direction and throttle
+                    if effective_throttle > 5 {
+                        if reverser_fwd {
+                            motor_pwm1.set_high();
+                            motor_pwm2.set_low();
+                        } else {
+                            motor_pwm1.set_low();
+                            motor_pwm2.set_high();
+                        }
+                    } else {
+                        motor_pwm1.set_low();
+                        motor_pwm2.set_low();
                     }
 
-                    // L1 (GPIO 9) controlled by Headlights toggle
-                    if l1_state {
-                        led_l1.set_high();
+                    // Directional Lighting:
+                    // When headlight_on is active:
+                    // - FWD: L1 (Headlight) ON, L2 (Tail/Reversing) OFF
+                    // - REV: L2 (Tail/Reversing) ON, L1 (Headlight) OFF
+                    if headlight_on {
+                        if reverser_fwd {
+                            led_l1.set_high();
+                            led_l2.set_low();
+                        } else {
+                            led_l1.set_low();
+                            led_l2.set_high();
+                        }
                     } else {
                         led_l1.set_low();
+                        led_l2.set_low();
                     }
 
-                    // L0 (GPIO 42) active when Flash button is pressed or L1 is active
-                    if btn2 || l1_state {
+                    // Status LED (GPIO 42 / L0):
+                    // Active when engine is running or bell is sounding
+                    if engine_running || bell_active {
                         led_l0.set_high();
-                        runner.set_value(3, WidgetValue::Led { state: true, color: 0x00FF00, opacity: 255 });
                     } else {
                         led_l0.set_low();
-                        runner.set_value(3, WidgetValue::Led { state: false, color: 0x00FF00, opacity: 50 });
                     }
 
                     // Power latch check
