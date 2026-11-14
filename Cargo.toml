@@ -14,6 +14,7 @@ members = [
     "crates/rc-storage",
     "crates/rc-sensors",
     "apps/firmware-tracklink-v3",
+    "apps/firmware-tracklink-v2",
     "apps/firmware-rk-ultra",
     "apps/firmware-mikro-v2",
     "apps/firmware-gtrack",

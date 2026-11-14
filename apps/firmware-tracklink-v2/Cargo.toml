@@ -1,0 +1,29 @@
+[package]
+name = "firmware-tracklink-v2"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Production firmware binary for TrackLink V2 board"
+
+[features]
+default = ["std"]
+std = ["rc-brain/std", "bsp-tracklink-v2/std", "rc-drivers-esp32s3/std"]
+embedded = [
+    "esp-hal/esp32s3",
+    "esp-hal/unstable",
+    "esp-hal/rt",
+    "rc-drivers-esp32s3/embedded",
+    "esp-bootloader-esp-idf/esp32s3"
+]
+
+[dependencies]
+rc-brain = { path = "../../crates/rc-brain", default-features = false }
+bsp-tracklink-v2 = { path = "../../crates/boards/bsp-tracklink-v2", default-features = false }
+bsp-core = { path = "../../crates/boards/bsp-core", default-features = false }
+rc-core = { path = "../../crates/rc-core", default-features = false }
+rc-drivers-esp32s3 = { path = "../../crates/rc-drivers-esp32s3", default-features = false }
+rk-rs = { workspace = true }
+esp-hal = { workspace = true, optional = true }
+esp-bootloader-esp-idf = { workspace = true, optional = true }

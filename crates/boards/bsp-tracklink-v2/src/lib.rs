@@ -6,6 +6,7 @@
 #![no_std]
 
 use bsp_core::*;
+use rc_drivers_esp32s3::BoardHardware;
 
 pub const PIN_VOCABULARY: &[(&str, u8)] = &[
     ("L0", 42), // BUILTIN LED
@@ -20,6 +21,13 @@ pub const PIN_VOCABULARY: &[(&str, u8)] = &[
 ];
 
 pub struct TrackLinkV2;
+
+impl TrackLinkV2 {
+    /// Initialize the physical hardware structure for TrackLink V2.
+    pub fn init_hardware() -> BoardHardware {
+        BoardHardware::from_board::<Self>()
+    }
+}
 
 impl Board for TrackLinkV2 {
     const NAME: &'static str = "TRACKLINK_V2";

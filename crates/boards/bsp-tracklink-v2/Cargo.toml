@@ -9,7 +9,8 @@ description = "Board Support Package for TrackLink V2 (Legacy single-driver loco
 
 [features]
 default = []
-std = ["bsp-core/std"]
+std = ["bsp-core/std", "rc-drivers-esp32s3/std"]
 
 [dependencies]
 bsp-core = { path = "../bsp-core", default-features = false }
+rc-drivers-esp32s3 = { path = "../../rc-drivers-esp32s3", default-features = false }

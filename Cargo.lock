@@ -109,6 +109,7 @@ name = "bsp-tracklink-v2"
 version = "0.1.0"
 dependencies = [
  "bsp-core",
+ "rc-drivers-esp32s3",
 ]
 
 [[package]]
@@ -819,6 +820,20 @@ dependencies = [
  "bsp-rk-ultra",
  "rc-brain",
  "rc-core",
+ "rk-rs",
+]
+
+[[package]]
+name = "firmware-tracklink-v2"
+version = "0.1.0"
+dependencies = [
+ "bsp-core",
+ "bsp-tracklink-v2",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "rc-brain",
+ "rc-core",
+ "rc-drivers-esp32s3",
  "rk-rs",
 ]
 
