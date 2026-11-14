@@ -10,10 +10,13 @@ description = "ESP32-S3 hardware drivers for RC Engine: Power latch, Battery ADC
 [features]
 default = []
 std = ["bsp-core/std", "rc-dsp/std"]
+embedded = ["esp-hal/esp32s3", "esp-hal/unstable", "dep:nb"]
 
 [dependencies]
 bsp-core = { path = "../boards/bsp-core", default-features = false }
 rc-dsp = { path = "../rc-dsp", default-features = false }
+esp-hal = { workspace = true, optional = true }
+nb = { workspace = true, optional = true }
 heapless = { workspace = true }
 embassy-time = { workspace = true }
 embassy-sync = { workspace = true }

@@ -9,11 +9,21 @@ description = "Production firmware binary for TrackLink V3 board"
 
 [features]
 default = ["std"]
-std = ["rc-brain/std", "bsp-tracklink-v3/std"]
+std = ["rc-brain/std", "bsp-tracklink-v3/std", "rc-drivers-esp32s3/std"]
+embedded = [
+    "esp-hal/esp32s3",
+    "esp-hal/unstable",
+    "esp-hal/rt",
+    "rc-drivers-esp32s3/embedded",
+    "esp-bootloader-esp-idf/esp32s3"
+]
 
 [dependencies]
-rc-brain = { path = "../../crates/rc-brain" }
-bsp-tracklink-v3 = { path = "../../crates/boards/bsp-tracklink-v3" }
-bsp-core = { path = "../../crates/boards/bsp-core" }
-rc-core = { path = "../../crates/rc-core" }
+rc-brain = { path = "../../crates/rc-brain", default-features = false }
+bsp-tracklink-v3 = { path = "../../crates/boards/bsp-tracklink-v3", default-features = false }
+bsp-core = { path = "../../crates/boards/bsp-core", default-features = false }
+rc-core = { path = "../../crates/rc-core", default-features = false }
+rc-drivers-esp32s3 = { path = "../../crates/rc-drivers-esp32s3", default-features = false }
 rk-rs = { workspace = true }
+esp-hal = { workspace = true, optional = true }
+esp-bootloader-esp-idf = { workspace = true, optional = true }
