@@ -10,7 +10,18 @@ description = "ESP32-S3 hardware drivers for RC Engine: Power latch, Battery ADC
 [features]
 default = []
 std = ["bsp-core/std", "rc-dsp/std"]
-embedded = ["esp-hal/esp32s3", "esp-hal/unstable", "dep:nb"]
+embedded = [
+    "esp-hal/esp32s3",
+    "esp-hal/unstable",
+    "dep:nb",
+    "dep:esp-rtos",
+    "dep:esp-radio",
+    "dep:esp-alloc",
+    "dep:trouble-host",
+    "dep:bt-hci",
+    "dep:static_cell",
+    "dep:embassy-executor"
+]
 
 [dependencies]
 bsp-core = { path = "../boards/bsp-core", default-features = false }
@@ -20,5 +31,13 @@ nb = { workspace = true, optional = true }
 heapless = { workspace = true }
 embassy-time = { workspace = true }
 embassy-sync = { workspace = true }
+esp-rtos = { workspace = true, optional = true, features = ["esp32s3", "embassy", "esp-radio", "esp-alloc"] }
+esp-radio = { workspace = true, optional = true, features = ["esp32s3", "ble", "unstable"] }
+esp-alloc = { workspace = true, optional = true, features = ["esp32s3", "compat", "global-allocator"] }
+trouble-host = { workspace = true, optional = true, features = ["peripheral", "gatt", "derive", "default-packet-pool"] }
+bt-hci = { workspace = true, optional = true }
+static_cell = { workspace = true, optional = true }
+embassy-executor = { workspace = true, optional = true }
+rk-rs = { workspace = true }
 
 [dev-dependencies]

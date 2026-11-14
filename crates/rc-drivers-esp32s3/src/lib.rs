@@ -16,6 +16,11 @@ pub mod esp_hardware;
 #[cfg(feature = "embedded")]
 pub use esp_hardware::*;
 
+#[cfg(feature = "embedded")]
+pub mod ble;
+#[cfg(feature = "embedded")]
+pub use ble::*;
+
 /// Power state machine tracking button presses and latch hold.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PowerState {

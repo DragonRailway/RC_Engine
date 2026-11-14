@@ -1,4 +1,3 @@
 fn main() {
-    #[cfg(feature = "embedded")]
-    println!("cargo:rustc-link-arg=-Tlinkall.x");
+    // Note: -Tlinkall.x is already set in .cargo/config.toml under rustflags for xtensa-esp32s3-none-elf
 }

@@ -15,7 +15,14 @@ embedded = [
     "esp-hal/unstable",
     "esp-hal/rt",
     "rc-drivers-esp32s3/embedded",
-    "esp-bootloader-esp-idf/esp32s3"
+    "esp-bootloader-esp-idf/esp32s3",
+    "dep:esp-rtos",
+    "dep:esp-radio",
+    "dep:esp-alloc",
+    "dep:trouble-host",
+    "dep:bt-hci",
+    "dep:static_cell",
+    "dep:embassy-executor"
 ]
 
 [dependencies]
@@ -27,3 +34,10 @@ rc-drivers-esp32s3 = { path = "../../crates/rc-drivers-esp32s3", default-feature
 rk-rs = { workspace = true }
 esp-hal = { workspace = true, optional = true }
 esp-bootloader-esp-idf = { workspace = true, optional = true }
+esp-rtos = { workspace = true, optional = true, features = ["esp32s3", "embassy", "esp-radio", "esp-alloc"] }
+esp-radio = { workspace = true, optional = true, features = ["esp32s3", "ble", "unstable"] }
+esp-alloc = { workspace = true, optional = true, features = ["esp32s3", "compat", "global-allocator"] }
+trouble-host = { workspace = true, optional = true, features = ["peripheral", "gatt", "derive", "default-packet-pool"] }
+bt-hci = { workspace = true, optional = true }
+static_cell = { workspace = true, optional = true }
+embassy-executor = { workspace = true, optional = true }
