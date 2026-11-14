@@ -46,6 +46,7 @@ use bsp_core::Board;
 use bsp_tracklink_v2::TrackLinkV2;
 use rc_brain::*;
 use rk_rs::{WidgetDescriptor, RK_MAX_WIDGETS};
+use rk_rs::{build_conf_payload, build_packet, Command, Orientation};
 
 #[cfg(feature = "embedded")]
 #[main]
@@ -138,7 +139,31 @@ async fn main(spawner: embassy_executor::Spawner) {
 
         if let Ok(conn) = acceptor.accept().await {
             if let Ok(mut gatt_conn) = conn.with_attribute_server(&server) {
+                let mut conf_pushed = false;
                 loop {
+                    if !conf_pushed && server.service.widget.should_notify(&gatt_conn) {
+                        let mut p_buf = [0u8; 128];
+                        if let Ok(p_len) = build_conf_payload(
+                            &mut p_buf,
+                            Orientation::Landscape,
+                            "dragon",
+                            0,
+                            1,
+                            &[],
+                            0,
+                            runtime.rk_runner.widgets,
+                        ) {
+                            let mut pkt_buf = [0u8; 192];
+                            if let Ok(pkt_len) = build_packet(&mut pkt_buf, Command::ConfData, &p_buf[..p_len]) {
+                                let mut notif_val = [0u8; 64];
+                                let copy_len = pkt_len.min(64);
+                                notif_val[..copy_len].copy_from_slice(&pkt_buf[..copy_len]);
+                                let _ = server.service.widget.notify(&gatt_conn, &notif_val, false).await;
+                                conf_pushed = true;
+                            }
+                        }
+                    }
+
                     match gatt_conn.next().await {
                         GattConnectionEvent::Disconnected { .. } => break,
                         GattConnectionEvent::Gatt { event } => {
