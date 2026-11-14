@@ -86,7 +86,7 @@ async fn main(spawner: embassy_executor::Spawner) {
     led_l2.set_low();
     led_l0.set_low();
 
-    // Setup Locomotive RadioKit UI layout:
+    // Setup Locomotive RadioKit UI layout (Portrait mode):
     // Wid 10: Throttle (Slider 0..100)
     // Wid 11: Reverser (Button toggle: FWD / REV)
     // Wid 12: Headlight (Button toggle: Headlight / Reversing Light)
@@ -95,12 +95,12 @@ async fn main(spawner: embassy_executor::Spawner) {
     let mut storage = [WidgetDescriptor::default(); RK_MAX_WIDGETS];
     let mut runner = RadioKitBuilder::new("TrackLink-V2")
         .theme("rk")
-        .orientation(Orientation::Landscape)
-        .add_slider(10, "Throttle", 67, 105, 20, 114, CenteringMode::Min)
-        .add_button(11, "Reverser", 67, 173, 25, None)
-        .add_button(12, "Headlight", 31, 97, 25, None)
-        .add_button(13, "Bell", 31, 172, 25, Some("bell"))
-        .add_button(14, "Engine", 67, 41, 25, Some("power"))
+        .orientation(Orientation::Portrait)
+        .add_slider(10, "Throttle", 75, 105, 26, 104, CenteringMode::Min)
+        .add_button(11, "Reverser", 75, 170, 20, None)
+        .add_button(12, "Headlight", 28, 105, 20, None)
+        .add_button(13, "Bell", 28, 140, 20, Some("bell"))
+        .add_button(14, "Engine", 28, 170, 20, Some("power"))
         .build(&mut storage);
 
     // Initialize BLE Stack with esp-radio + trouble-host
